@@ -32,7 +32,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link href="/categories/popups" className="hover:text-yellow-500 transition-colors">
-                  Pop-ups
+                  Pop-up Duo
                 </Link>
               </li>
               <li>

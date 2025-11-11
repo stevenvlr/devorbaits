@@ -24,20 +24,20 @@ export default function Home() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link 
-              href="/categories"
-              className="px-8 py-4 bg-white text-noir-950 font-semibold rounded-lg hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-2 group"
-            >
-              Découvrir nos produits
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <Link 
-              href="/bar-popup"
-              className="px-8 py-4 bg-transparent border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-noir-950 transition-all duration-300"
-            >
-              Bar à Pop-up
-            </Link>
-          </div>
+  <Link 
+    href="/categories"
+    className="px-8 py-4 bg-white text-noir-950 font-semibold rounded-lg hover:bg-gray-100 transition-all duration-300 flex items-center justify-center gap-2 group"
+  >
+    Découvrir nos produits
+    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+  </Link>
+  <Link 
+    href="/categories/bouillettes"
+    className="px-8 py-4 bg-transparent border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-noir-950 transition-all duration-300"
+  >
+    Bouillettes Artisanales
+  </Link>
+</div>
         </div>
       </section>
 
@@ -85,7 +85,7 @@ export default function Home() {
           <div className="grid md:grid-cols-3 gap-6">
             {[
               { name: 'Bouillettes', href: '/categories/bouillettes', desc: 'Diamètres 10, 16, 20mm' },
-              { name: 'Pop-ups', href: '/categories/popups', desc: 'Appâts flottants personnalisables' },
+              { name: 'Pop-up Duo', href: '/categories/popups', desc: 'Appâts flottants personnalisables' },
               { name: 'Équilibrés', href: '/categories/equilibres', desc: '10mm, 8mm, 16mm, Wafers' },
               { name: 'Huiles', href: '/categories/huiles', desc: 'Huiles d\'attraction' },
               { name: 'Farines', href: '/categories/farines', desc: 'Farines de base' },

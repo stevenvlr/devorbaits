@@ -10,8 +10,8 @@ export default function CategoriesPage() {
       features: ['10mm', '16mm', '20mm', 'Arômes variés']
     },
     {
-      name: 'Pop-ups',
-      href: '/categories/popups',
+      name: 'Pop-up Duo',
+      href: '/categories/popup duo',
       desc: 'Appâts flottants personnalisables',
       features: ['Personnalisable', 'Plusieurs tailles']
     },

@@ -14,7 +14,7 @@ export default function PopupsPage() {
             <Factory className="w-4 h-4 text-yellow-500" />
             <span className="text-sm font-medium text-yellow-500">FABRICATION FRANÇAISE</span>
           </div>
-          <h1 className="text-5xl font-bold mb-4">Pop-ups</h1>
+          <h1 className="text-5xl font-bold mb-4">Pop-up Duo </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
             Appâts flottants personnalisables pour une présentation optimale.
           </p>

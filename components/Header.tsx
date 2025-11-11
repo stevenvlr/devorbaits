@@ -10,7 +10,7 @@ export default function Header() {
 
   const categories = [
     { name: 'Bouillettes', href: '/categories/bouillettes' },
-    { name: 'Pop-ups', href: '/categories/popups' },
+    { name: 'Pop-up Duo ', href: '/categories/popups' },
     { name: 'Équilibrés', href: '/categories/equilibres' },
     { name: 'Huiles', href: '/categories/huiles' },
     { name: 'Farines', href: '/categories/farines' },
