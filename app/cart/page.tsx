@@ -1,13 +1,82 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { ShoppingCart, Trash2, ArrowLeft, Factory } from 'lucide-react'
+import { ShoppingCart, Trash2, ArrowLeft, Factory, AlertCircle, MapPin, ChevronDown, ChevronUp } from 'lucide-react'
+import { useCart } from '@/contexts/CartContext'
+import { confirmOrder as confirmOrderAmicale } from '@/lib/amicale-blanc-stock'
+import { confirmOrder } from '@/lib/stock-manager'
+import { SAVEURS_POPUP_DUO, FORMES_POPUP_DUO, AROMES, COULEURS_FLUO, COULEURS_PASTEL, TAILLES_FLUO, TAILLES_PASTEL } from '@/lib/constants'
 
 export default function CartPage() {
-  // TODO: Connecter au contexte du panier
-  const cartItems: any[] = []
+  // #region agent log
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/cart/page.tsx:11',message:'CartPage rendered',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+  }
+  // #endregion
+   const { cartItems, removeFromCart, total, clearCart, updatePromoItem } = useCart()
+  const [hasMixedRetrait, setHasMixedRetrait] = useState(false)
+  const [produitsAmicaleBlanc, setProduitsAmicaleBlanc] = useState<typeof cartItems>([])
+  const [produitsAutres, setProduitsAutres] = useState<typeof cartItems>([])
+  const [expandedPromoItems, setExpandedPromoItems] = useState<Set<string>>(new Set())
 
-  const total = cartItems.reduce((sum, item) => sum + (item.prix * item.quantite), 0)
+  // Vérifier si le panier contient un mélange de produits
+  useEffect(() => {
+    const produitsAvecRetrait = cartItems.filter(item => item.pointRetrait === 'amicale-blanc')
+    const produitsSansRetrait = cartItems.filter(item => !item.pointRetrait || item.pointRetrait !== 'amicale-blanc')
+    
+    const hasAmicaleBlanc = produitsAvecRetrait.length > 0
+    const hasAutres = produitsSansRetrait.length > 0
+    
+    setHasMixedRetrait(hasAmicaleBlanc && hasAutres)
+    setProduitsAmicaleBlanc(produitsAvecRetrait)
+    setProduitsAutres(produitsSansRetrait)
+  }, [cartItems])
+  
+  // Confirmer la commande
+  const handleConfirmOrder = () => {
+    // Préparer les items pour la confirmation (amicale-blanc)
+    const itemsAmicaleBlanc = cartItems
+      .filter(item => item.pointRetrait === 'amicale-blanc' && item.productId)
+      .map(item => ({
+        productId: item.productId!,
+        quantity: item.quantite
+      }))
+    
+    // Préparer les items pour la confirmation (livraison)
+    const itemsLivraison = cartItems
+      .filter(item => !item.pointRetrait && item.productId)
+      .map(item => ({
+        productId: item.productId!,
+        quantity: item.quantite,
+        variantId: item.variantId
+      }))
+    
+    if (itemsAmicaleBlanc.length > 0) {
+      // Confirmer la commande et déduire le stock (amicale-blanc)
+      confirmOrderAmicale(itemsAmicaleBlanc)
+    }
+    
+    if (itemsLivraison.length > 0) {
+      // Confirmer la commande et déduire le stock (livraison)
+      confirmOrder(itemsLivraison)
+    }
+    
+    // Afficher un message de confirmation
+    alert('Commande passée avec succès ! Le stock a été mis à jour.')
+    
+    // Vider le panier
+    clearCart()
+  }
+
+
+  // #region agent log
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cart/page.tsx:68',message:'CartPage render',data:{pathname:window.location.pathname,cartItemsCount:cartItems.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    }
+  }, [cartItems.length]);
+  // #endregion
 
   return (
     <div className="min-h-screen bg-noir-950 py-12">
@@ -15,6 +84,13 @@ export default function CartPage() {
         <div className="mb-8">
           <Link
             href="/"
+            onClick={() => {
+              // #region agent log
+              if (typeof window !== 'undefined') {
+                fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cart/page.tsx:75',message:'Link to home clicked',data:{from:'/cart'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+              }
+              // #endregion
+            }}
             className="inline-flex items-center gap-2 text-gray-400 hover:text-yellow-500 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -48,34 +124,208 @@ export default function CartPage() {
         ) : (
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-4">
-              {cartItems.map((item, index) => (
-                <div
-                  key={index}
-                  className="bg-noir-800/50 border border-noir-700 rounded-xl p-6 flex items-center justify-between"
-                >
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold mb-2">{item.produit}</h3>
-                    <div className="text-sm text-gray-400 space-y-1">
-                      {item.diametre && <p>Diamètre: {item.diametre}</p>}
-                      {item.taille && <p>Taille: {item.taille}</p>}
-                      {item.arome && <p>Arôme: {item.arome}</p>}
-                      {item.couleur && <p>Couleur: {item.couleur}</p>}
-                      {item.conditionnement && <p>Conditionnement: {item.conditionnement}</p>}
-                      <p>Quantité: {item.quantite}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-yellow-500">
-                        {(item.prix * item.quantite).toFixed(2)} €
+              {/* Message d'information si mélange de produits */}
+              {hasMixedRetrait && (
+                <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-xl p-6 mb-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-bold text-yellow-500 mb-2">Information importante</h3>
+                      <p className="text-gray-300 text-sm mb-3">
+                        Certains des produits sélectionnés ne seront pas disponibles à l'amicale des pêcheurs au blanc :
                       </p>
+                      <ul className="text-sm text-gray-400 space-y-2">
+                        {produitsAutres.map((produit, index) => (
+                          <li key={index} className="bg-noir-900/50 rounded-lg p-3 border border-noir-700">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></span>
+                              <span className="font-semibold text-white">{produit.produit}</span>
+                            </div>
+                            <div className="ml-4 space-y-0.5 text-xs">
+                              {produit.arome && <p>Arôme: {produit.arome}</p>}
+                              {produit.diametre && <p>Diamètre: {produit.diametre}</p>}
+                              {produit.taille && <p>Taille: {produit.taille}</p>}
+                              {produit.conditionnement && <p>Conditionnement: {produit.conditionnement}</p>}
+                              {produit.couleur && <p>Couleur: {produit.couleur}</p>}
+                              {produit.type && <p>Type: {produit.type}</p>}
+                              <p>Quantité: {produit.quantite}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                    <button className="p-2 text-gray-400 hover:text-red-500 transition-colors">
-                      <Trash2 className="w-5 h-5" />
-                    </button>
                   </div>
                 </div>
-              ))}
+              )}
+
+              {cartItems.map((item, index) => {
+                const isExpanded = expandedPromoItems.has(item.id)
+                const isPopupDuo = item.produit === 'Pop-up Duo'
+                const isBarPopup = item.produit === 'Pop-up personnalisé'
+                
+                return (
+                  <div
+                    key={index}
+                    className={`bg-noir-800/50 border rounded-xl p-6 ${
+                      item.isGratuit ? 'border-yellow-500/50 bg-yellow-500/5' : 'border-noir-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-xl font-bold">{item.produit}</h3>
+                          {item.isGratuit && (
+                            <span className="px-3 py-1 bg-yellow-500 text-noir-950 text-xs font-bold rounded-full">
+                              OFFERT
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-400 space-y-1">
+                          {item.diametre && <p>Diamètre: {item.diametre}</p>}
+                          {item.taille && <p>Taille: {item.taille}</p>}
+                          {item.arome && <p>Arôme: {item.arome}</p>}
+                          {item.couleur && <p>Couleur: {item.couleur}</p>}
+                          {item.conditionnement && <p>Conditionnement: {item.conditionnement}</p>}
+                          <p>Quantité: {item.quantite}</p>
+                          {item.isGratuit && (
+                            <p className="text-yellow-500 text-xs font-semibold mt-2">
+                              ✨ Promotion 4+1 : 1 article offert pour 4 achetés
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          {item.isGratuit ? (
+                            <p className="text-2xl font-bold text-yellow-500">
+                              GRATUIT
+                            </p>
+                          ) : (
+                            <p className="text-2xl font-bold text-yellow-500">
+                              {(item.prix * item.quantite).toFixed(2)} €
+                            </p>
+                          )}
+                        </div>
+                        {!item.isGratuit && (
+                          <button 
+                            onClick={() => removeFromCart(item.id)}
+                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Interface pour choisir l'article offert */}
+                    {item.isGratuit && (isPopupDuo || isBarPopup) && (
+                      <div className="mt-4 pt-4 border-t border-yellow-500/30">
+                        <button
+                          onClick={() => {
+                            const newExpanded = new Set(expandedPromoItems)
+                            if (isExpanded) {
+                              newExpanded.delete(item.id)
+                            } else {
+                              newExpanded.add(item.id)
+                            }
+                            setExpandedPromoItems(newExpanded)
+                          }}
+                          className="flex items-center gap-2 text-yellow-500 hover:text-yellow-400 transition-colors mb-3"
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          <span className="text-sm font-semibold">
+                            {isExpanded ? 'Masquer' : 'Choisir les caractéristiques de l\'article offert'}
+                          </span>
+                        </button>
+                        
+                        {isExpanded && (
+                          <div className="space-y-4 bg-noir-900/50 rounded-lg p-4">
+                            {isPopupDuo && (
+                              <>
+                                <div>
+                                  <label className="block text-sm font-semibold mb-2 text-gray-300">Saveur</label>
+                                  <select
+                                    value={item.arome || ''}
+                                    onChange={(e) => updatePromoItem(item.id, { arome: e.target.value })}
+                                    className="w-full bg-noir-800 border border-noir-700 rounded-lg px-3 py-2 text-white"
+                                  >
+                                    {SAVEURS_POPUP_DUO.map((saveur) => (
+                                      <option key={saveur} value={saveur}>
+                                        {saveur}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold mb-2 text-gray-300">Forme</label>
+                                  <select
+                                    value={item.taille || ''}
+                                    onChange={(e) => updatePromoItem(item.id, { taille: e.target.value })}
+                                    className="w-full bg-noir-800 border border-noir-700 rounded-lg px-3 py-2 text-white"
+                                  >
+                                    {FORMES_POPUP_DUO.map((forme) => (
+                                      <option key={forme} value={forme}>
+                                        {forme}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </>
+                            )}
+                            
+                            {isBarPopup && (
+                              <>
+                                <div>
+                                  <label className="block text-sm font-semibold mb-2 text-gray-300">Taille</label>
+                                  <select
+                                    value={item.taille || ''}
+                                    onChange={(e) => updatePromoItem(item.id, { taille: e.target.value })}
+                                    className="w-full bg-noir-800 border border-noir-700 rounded-lg px-3 py-2 text-white"
+                                  >
+                                    {[...TAILLES_FLUO, ...TAILLES_PASTEL].map((taille) => (
+                                      <option key={taille} value={taille}>
+                                        {taille}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold mb-2 text-gray-300">Couleur</label>
+                                  <select
+                                    value={item.couleur || ''}
+                                    onChange={(e) => updatePromoItem(item.id, { couleur: e.target.value })}
+                                    className="w-full bg-noir-800 border border-noir-700 rounded-lg px-3 py-2 text-white"
+                                  >
+                                    {[...COULEURS_FLUO, ...COULEURS_PASTEL].map((couleur) => (
+                                      <option key={couleur.name} value={couleur.name}>
+                                        {couleur.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-semibold mb-2 text-gray-300">Arôme</label>
+                                  <select
+                                    value={item.arome || ''}
+                                    onChange={(e) => updatePromoItem(item.id, { arome: e.target.value })}
+                                    className="w-full bg-noir-800 border border-noir-700 rounded-lg px-3 py-2 text-white"
+                                  >
+                                    {AROMES.map((arome) => (
+                                      <option key={arome} value={arome}>
+                                        {arome}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             <div className="lg:sticky lg:top-24 h-fit">
@@ -87,6 +337,16 @@ export default function CartPage() {
                     <span>Sous-total:</span>
                     <span className="text-white">{total.toFixed(2)} €</span>
                   </div>
+                  {cartItems.some(item => item.isGratuit) && (
+                    <div className="flex justify-between text-yellow-500">
+                      <span>Articles offerts (4+1):</span>
+                      <span className="font-semibold">
+                        {cartItems
+                          .filter(item => item.isGratuit)
+                          .reduce((sum, item) => sum + item.quantite, 0)} article(s)
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-gray-400">
                     <span>Livraison:</span>
                     <span className="text-white">Calculé à l'étape suivante</span>
@@ -99,9 +359,12 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <button className="w-full bg-yellow-500 text-noir-950 font-bold py-4 rounded-lg hover:bg-yellow-400 transition-colors">
+                <Link
+                  href="/checkout"
+                  className="btn btn-primary btn-lg w-full flex items-center justify-center"
+                >
                   Passer la commande
-                </button>
+                </Link>
               </div>
             </div>
           </div>

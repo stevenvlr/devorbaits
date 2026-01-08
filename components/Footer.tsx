@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Factory, Mail, Phone, MapPin } from 'lucide-react'
 
 export default function Footer() {
@@ -8,9 +9,14 @@ export default function Footer() {
         <div className="grid md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <Factory className="w-6 h-6 text-yellow-500" />
-              <span className="text-xl font-bold">Carpe Premium</span>
+            <div className="flex items-center mb-4">
+              <Image 
+                src="/images/logodevorbaits.png" 
+                alt="Devorbaits France" 
+                width={320} 
+                height={128}
+                className="h-28 w-auto"
+              />
             </div>
             <p className="text-gray-400 text-sm mb-4">
               Appâts premium pour la pêche à la carpe. Fabrication française de qualité.
@@ -27,17 +33,17 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-gray-400">
               <li>
                 <Link href="/categories/bouillettes" className="hover:text-yellow-500 transition-colors">
-                  Bouillettes
+                  Gammes d'appât
                 </Link>
               </li>
               <li>
                 <Link href="/categories/popups" className="hover:text-yellow-500 transition-colors">
-                  Pop-up Duo
+                  Pop-up duo
                 </Link>
               </li>
               <li>
                 <Link href="/categories/equilibres" className="hover:text-yellow-500 transition-colors">
-                  Équilibrés
+                  Équilibrées
                 </Link>
               </li>
               <li>
@@ -46,13 +52,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/categories/farines" className="hover:text-yellow-500 transition-colors">
-                  Farines
-                </Link>
-              </li>
-              <li>
-                <Link href="/bar-popup" className="hover:text-yellow-500 transition-colors">
-                  Bar à Pop-up
+                <Link href="/categories/personnalisables" className="hover:text-yellow-500 transition-colors">
+                  Les Personnalisables
                 </Link>
               </li>
             </ul>
@@ -82,6 +83,11 @@ export default function Footer() {
                   CGV
                 </Link>
               </li>
+              <li>
+                <Link href="/admin" className="hover:text-yellow-500 transition-colors">
+                  Administration
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -91,7 +97,7 @@ export default function Footer() {
             <ul className="space-y-3 text-sm text-gray-400">
               <li className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-yellow-500" />
-                <span>contact@carpepremium.fr</span>
+                <span>contact@devorbaits.fr</span>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-yellow-500" />
@@ -106,7 +112,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-noir-800 mt-8 pt-8 text-center text-sm text-gray-500">
-          <p>&copy; {new Date().getFullYear()} Carpe Premium. Tous droits réservés. Fabriqué en France avec passion.</p>
+          <p>&copy; {new Date().getFullYear()} Devorbaits. Tous droits réservés. Fabriqué en France avec passion.</p>
         </div>
       </div>
     </footer>

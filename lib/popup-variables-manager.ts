@@ -1,6 +1,5 @@
 // Gestionnaire des variables pour Pop-up Duo et Bar à Pop-up
 // Supabase uniquement
-import { isSupabaseConfigured } from './supabase'
 import { 
   loadPopupVariable,
   savePopupVariable,
@@ -179,6 +178,9 @@ export async function addPopupDuoSaveur(saveur: string): Promise<{ success: bool
     // Synchroniser automatiquement avec Flash Boost et Spray Plus
     try {
       const { addFlashBoostArome, addSprayPlusArome } = await import('./flash-spray-variables-manager')
+      const { createStockForFlashBoostArome, createStockForSprayPlusArome } = await import('./stock-variables-helper')
+      
+      // Ajouter les arômes
       const syncResults = await Promise.allSettled([
         addFlashBoostArome(trimmed),
         addSprayPlusArome(trimmed)
@@ -192,6 +194,24 @@ export async function addPopupDuoSaveur(saveur: string): Promise<{ success: bool
         console.warn(`⚠️ Erreurs lors de la synchronisation avec Flash Boost/Spray Plus:`, syncErrors)
       } else {
         console.log(`✅ Saveur "${trimmed}" synchronisée avec Flash Boost et Spray Plus`)
+      }
+      
+      // Créer automatiquement les produits Flash boost et Spray plus avec leurs variantes
+      try {
+        console.log(`📦 Création automatique des produits Flash boost et Spray plus pour "${trimmed}"...`)
+        const [flashBoostResult, sprayPlusResult] = await Promise.allSettled([
+          createStockForFlashBoostArome(trimmed),
+          createStockForSprayPlusArome(trimmed)
+        ])
+        
+        if (flashBoostResult.status === 'fulfilled') {
+          console.log(`✅ Produit Flash boost "${trimmed}" créé avec ${flashBoostResult.value.created} variante(s)`)
+        }
+        if (sprayPlusResult.status === 'fulfilled') {
+          console.log(`✅ Produit Spray plus "${trimmed}" créé avec ${sprayPlusResult.value.created} variante(s)`)
+        }
+      } catch (error: any) {
+        console.warn(`⚠️ Erreur lors de la création automatique des produits:`, error?.message || error)
       }
     } catch (error: any) {
       console.warn(`⚠️ Erreur lors de la synchronisation avec Flash Boost/Spray Plus:`, error?.message || error)

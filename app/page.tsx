@@ -1,12 +1,52 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ArrowRight, Factory, Shield, Award } from 'lucide-react'
+import { loadHomepageImage, onHomepageImageUpdate } from '@/lib/homepage-manager'
 
 export default function Home() {
+  const [heroImage, setHeroImage] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadImage = () => {
+      const saved = loadHomepageImage()
+      setHeroImage(saved)
+    }
+    
+    loadImage()
+    const unsubscribe = onHomepageImageUpdate(loadImage)
+    return () => unsubscribe()
+  }, [])
+
   return (
     <div className="animate-fadeIn">
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center justify-center bg-gradient-to-b from-noir-950 via-noir-900 to-noir-950">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMzMzMzMyIgc3Ryb2tlLXdpZHRoPSIwLjUiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
+        
+        {/* Image en arrière-plan */}
+        <div className="absolute inset-0 z-0">
+          {heroImage ? (
+            <img
+              src={heroImage}
+              alt="Photo d'accueil"
+              className="w-full h-full object-cover opacity-80"
+            />
+          ) : (
+            <Image
+              src="/images/acueil-photo.jpg"
+              alt="Photo d'accueil"
+              fill
+              className="object-cover opacity-80"
+              priority
+            />
+          )}
+        </div>
+        
+        {/* Overlay sombre pour améliorer la lisibilité du texte */}
+        <div className="absolute inset-0 bg-noir-950/60 z-0"></div>
         
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-noir-900/50 backdrop-blur-sm border border-noir-700 rounded-full mb-8">
@@ -19,7 +59,7 @@ export default function Home() {
           </h1>
           
           <p className="text-xl md:text-2xl text-gray-400 mb-12 max-w-3xl mx-auto">
-            Découvrez notre sélection de bouillettes, pop-ups et équilibrés artisanaux, 
+            Découvrez notre sélection de gammes, pop-ups et bar à pop-up artisanaux, 
             fabriqués en France avec passion et expertise.
           </p>
           
@@ -35,7 +75,7 @@ export default function Home() {
     href="/categories/bouillettes"
     className="px-8 py-4 bg-transparent border-2 border-white text-white font-semibold rounded-lg hover:bg-white hover:text-noir-950 transition-all duration-300"
   >
-    Bouillettes Artisanales
+    Gammes Artisanales
   </Link>
 </div>
         </div>
@@ -49,7 +89,7 @@ export default function Home() {
               <div className="inline-flex items-center justify-center w-16 h-16 bg-yellow-500/10 rounded-full mb-4">
                 <Factory className="w-8 h-8 text-yellow-500" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Fabrication Française</h3>
+              <h1 className="text-xl font-bold mb-3">Fabrication Française</h1>
               <p className="text-gray-400">
                 Tous nos produits sont fabriqués en France avec des ingrédients de qualité supérieure.
               </p>
@@ -59,7 +99,7 @@ export default function Home() {
               <div className="inline-flex items-center justify-center w-16 h-16 bg-yellow-500/10 rounded-full mb-4">
                 <Shield className="w-8 h-8 text-yellow-500" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Qualité Premium</h3>
+              <h2 className="text-xl font-bold mb-3">Qualité Premium</h2>
               <p className="text-gray-400">
                 Sélection rigoureuse des matières premières pour des résultats exceptionnels.
               </p>
@@ -84,12 +124,12 @@ export default function Home() {
           <h2 className="text-4xl font-bold text-center mb-12">Nos Catégories</h2>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { name: 'Bouillettes', href: '/categories/bouillettes', desc: 'Diamètres 10, 16, 20mm' },
+              { name: 'Gammes', href: '/categories/bouillettes', desc: 'Bouillettes, équilibrées, boosters, huiles, farines...' },
               { name: 'Pop-up Duo', href: '/categories/popups', desc: 'Appâts flottants personnalisables' },
-              { name: 'Équilibrés', href: '/categories/equilibres', desc: '10mm, 8mm, 16mm, Wafers' },
-              { name: 'Huiles', href: '/categories/huiles', desc: 'Huiles d\'attraction' },
-              { name: 'Farines', href: '/categories/farines', desc: 'Farines de base' },
+              { name: 'Huiles et liquides', href: '/categories/huiles', desc: 'Huiles d\'attraction' },
               { name: 'Bar à Pop-up', href: '/bar-popup', desc: 'Personnalisation sur mesure' },
+              { name: 'Les Personnalisables', href: '/categories/personnalisables', desc: 'Flash boost, Spray plus et plus' },
+              { name: "L'amicale des pêcheurs au blanc", href: '/categories/amicale-blanc', desc: 'Point de retrait local' },
             ].map((category) => (
               <Link
                 key={category.name}

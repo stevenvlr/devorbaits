@@ -2,28 +2,36 @@
 
 import { useState } from 'react'
 import { ShoppingCart, Factory } from 'lucide-react'
-import { AROMES, CONDITIONNEMENTS } from '@/lib/constants'
-
-const TAILLES_EQUILIBRES = ['10mm', '8mm', '16mm', 'Wafers 12x15mm']
+import { GAMMES_BOUILLETTES, TAILLES_EQUILIBRES } from '@/lib/constants'
+import { useCart } from '@/contexts/CartContext'
+import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
+import { getEquilibreId, getPrixPersonnalise } from '@/lib/price-utils'
 
 export default function EquilibresPage() {
   const [selectedTaille, setSelectedTaille] = useState(TAILLES_EQUILIBRES[0])
-  const [selectedArome, setSelectedArome] = useState(AROMES[0])
-  const [selectedConditionnement, setSelectedConditionnement] = useState(CONDITIONNEMENTS[0])
+  const [selectedArome, setSelectedArome] = useState(GAMMES_BOUILLETTES[0])
   const [quantity, setQuantity] = useState(1)
+  const { addToCart } = useCart()
+  const prixPersonnalises = usePrixPersonnalises()
 
-  const basePrice = 22.99
+  const getPrice = () => {
+    const productId = getEquilibreId(selectedArome, selectedTaille)
+    return getPrixPersonnalise(prixPersonnalises, productId, 8.99)
+  }
 
-  const addToCart = () => {
-    console.log({
-      produit: 'Équilibré',
+  const handleAddToCart = async () => {
+    await addToCart({
+      produit: 'Équilibrée',
       taille: selectedTaille,
       arome: selectedArome,
-      conditionnement: selectedConditionnement,
       quantite: quantity,
-      prix: basePrice * quantity
+      prix: getPrice()
     })
     alert('Produit ajouté au panier !')
+  }
+  
+  const handleQuantityChange = (newQuantity: number) => {
+    setQuantity(Math.max(1, newQuantity))
   }
 
   return (
@@ -34,9 +42,9 @@ export default function EquilibresPage() {
             <Factory className="w-4 h-4 text-yellow-500" />
             <span className="text-sm font-medium text-yellow-500">FABRICATION FRANÇAISE</span>
           </div>
-          <h1 className="text-5xl font-bold mb-4">Équilibrés</h1>
+          <h1 className="text-5xl font-bold mb-4">Équilibrées</h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Billets équilibrés de qualité pour une présentation optimale de vos appâts.
+            Billets équilibrées de qualité pour une présentation optimale de vos appâts.
           </p>
         </div>
 
@@ -64,7 +72,7 @@ export default function EquilibresPage() {
             <div>
               <label className="block text-lg font-semibold mb-4">Arôme</label>
               <div className="grid grid-cols-2 gap-3">
-                {AROMES.map((arome) => (
+                {GAMMES_BOUILLETTES.map((arome) => (
                   <button
                     key={arome}
                     onClick={() => setSelectedArome(arome)}
@@ -81,42 +89,24 @@ export default function EquilibresPage() {
             </div>
 
             <div>
-              <label className="block text-lg font-semibold mb-4">Conditionnement</label>
-              <div className="grid grid-cols-3 gap-4">
-                {CONDITIONNEMENTS.map((cond) => (
-                  <button
-                    key={cond}
-                    onClick={() => setSelectedConditionnement(cond)}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      selectedConditionnement === cond
-                        ? 'border-yellow-500 bg-yellow-500/10'
-                        : 'border-noir-700 hover:border-noir-600'
-                    }`}
-                  >
-                    <div className="text-xl font-bold">{cond}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
               <label className="block text-lg font-semibold mb-4">Quantité</label>
               <div className="flex items-center gap-4">
                 <button
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors"
+                  onClick={() => handleQuantityChange(quantity - 1)}
+                  disabled={quantity <= 1}
+                  className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   -
                 </button>
                 <input
                   type="number"
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
                   className="w-20 text-center bg-noir-800 border border-noir-700 rounded-lg py-2"
                   min="1"
                 />
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() => handleQuantityChange(quantity + 1)}
                   className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors"
                 >
                   +
@@ -139,24 +129,20 @@ export default function EquilibresPage() {
                   <span className="text-white">{selectedArome}</span>
                 </div>
                 <div className="flex justify-between text-gray-400">
-                  <span>Conditionnement:</span>
-                  <span className="text-white">{selectedConditionnement}</span>
-                </div>
-                <div className="flex justify-between text-gray-400">
                   <span>Quantité:</span>
                   <span className="text-white">{quantity}</span>
                 </div>
                 <div className="border-t border-noir-700 pt-4">
                   <div className="flex justify-between text-xl font-bold">
                     <span>Total:</span>
-                    <span className="text-yellow-500">{(basePrice * quantity).toFixed(2)} €</span>
+                    <span className="text-yellow-500">{(getPrice() * quantity).toFixed(2)} €</span>
                   </div>
                 </div>
               </div>
 
               <button
-                onClick={addToCart}
-                className="w-full bg-yellow-500 text-noir-950 font-bold py-4 rounded-lg hover:bg-yellow-400 transition-colors flex items-center justify-center gap-2"
+                onClick={handleAddToCart}
+                className="btn btn-primary btn-lg w-full"
               >
                 <ShoppingCart className="w-5 h-5" />
                 Ajouter au panier

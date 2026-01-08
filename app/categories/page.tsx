@@ -1,43 +1,43 @@
 import Link from 'next/link'
-import { ArrowRight, Factory } from 'lucide-react'
+import { ArrowRight, Factory, MapPin } from 'lucide-react'
 
 export default function CategoriesPage() {
   const categories = [
     {
-      name: 'Bouillettes',
+      name: 'Gammes d\'appât',
       href: '/categories/bouillettes',
-      desc: 'Diamètres 10, 16, 20mm - Le prix ne change pas selon le diamètre',
+      desc: 'Bouillettes, équilibrées, boosters, huiles, farines...',
       features: ['10mm', '16mm', '20mm', 'Arômes variés']
     },
     {
       name: 'Pop-up Duo',
-      href: '/categories/popup duo',
-      desc: 'Appâts flottants personnalisables',
-      features: ['Personnalisable', 'Plusieurs tailles']
+      href: '/categories/popups',
+      desc: 'Créations uniques artisanales',
+      features: ['Créations uniques', 'Plusieurs saveurs']
     },
     {
-      name: 'Équilibrés',
+      name: 'Équilibrées',
       href: '/categories/equilibres',
-      desc: '10mm, 8mm, 16mm, Wafers 12x15mm',
-      features: ['10mm', '8mm', '16mm', 'Wafers']
+      desc: '10mm, 16mm, 20mm, Dumbels 12/16mm',
+      features: ['10mm', '16mm', '20mm', 'Dumbels 12/16']
     },
     {
-      name: 'Huiles',
+      name: 'Huiles et liquides',
       href: '/categories/huiles',
       desc: 'Huiles d\'attraction de qualité',
       features: ['Huiles premium']
     },
     {
-      name: 'Farines',
-      href: '/categories/farines',
-      desc: 'Farines de base pour vos préparations',
-      features: ['Qualité supérieure']
+      name: 'Les Personnalisables',
+      href: '/categories/personnalisables',
+      desc: 'Personnalisez et renforcez vos appâts',
+      features: ['Bar à Pop-up', 'Flash boost', 'Spray plus']
     },
     {
-      name: 'Bar à Pop-up',
-      href: '/bar-popup',
-      desc: 'Personnalisez votre pop-up : taille, couleur et arôme',
-      features: ['Taille', 'Couleur', 'Arôme', 'Diamètre billes']
+      name: "L'amicale des pêcheurs au blanc",
+      href: '/categories/amicale-blanc',
+      desc: 'Commandez et récupérez à l\'étang',
+      features: ['Retrait sur place', 'Gammes d\'appât disponibles']
     },
   ]
 
@@ -51,7 +51,7 @@ export default function CategoriesPage() {
           </div>
           <h1 className="text-5xl font-bold mb-4">Nos Catégories</h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Découvrez notre gamme complète d'appâts pour la pêche à la carpe
+            Découvrez notre gamme d'appât complète pour la pêche à la carpe
           </p>
         </div>
 

@@ -1,0 +1,25 @@
+name: mon_theme_enfant
+display_name: Mon Thème Enfant Devorbaits
+version: 2.0.0
+author: Devorbaits
+parent: classic
+preview: preview.png
+assets:
+  css:
+    all:
+      - id: custom-css
+        path: assets/css/prestashop-theme-complet.css
+        media: all
+        priority: 200
+  js:
+    all:
+      - id: custom-js
+        path: assets/js/custom.js
+        priority: 200
+
+
+
+
+
+
+

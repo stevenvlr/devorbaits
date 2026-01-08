@@ -1,0 +1,49 @@
+# ============================================
+# MODE MAINTENANCE PRESTASHOP (VERSION SIMPLIFIÉE)
+# ============================================
+# 
+# Version simplifiée du mode maintenance
+# Redirige tous les visiteurs vers maintenance.php
+# SAUF : maintenance.php, fichiers statiques, et admin
+#
+# INSTRUCTIONS :
+# 1. Copiez ce code dans votre fichier .htaccess
+# 2. Placez-le AVANT les règles PrestaShop existantes
+# 3. Assurez-vous que maintenance.php existe à la racine
+# 4. Pour désactiver : supprimez ou commentez ce bloc
+#
+# ============================================
+
+<IfModule mod_rewrite.c>
+    # Activer le moteur de réécriture
+    RewriteEngine On
+
+    # ────────────────────────────────────────
+    # EXCEPTIONS - Pages autorisées
+    # ────────────────────────────────────────
+    
+    # Ne pas rediriger la page maintenance elle-même
+    RewriteCond %{REQUEST_URI} !maintenance\.php$
+    
+    # Ne pas rediriger les fichiers statiques
+    # (images, CSS, JavaScript, polices, PDF)
+    RewriteCond %{REQUEST_URI} !\.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot|pdf)$
+    
+    # Ne pas rediriger le back-office PrestaShop
+    # Permet l'accès à /admin même en maintenance
+    RewriteCond %{REQUEST_URI} !admin
+    
+    # ────────────────────────────────────────
+    # REDIRECTION - Toutes les autres pages
+    # ────────────────────────────────────────
+    
+    # Rediriger toutes les autres requêtes vers maintenance.php
+    # [L] = Last rule (arrête le traitement des autres règles)
+    RewriteRule .* maintenance.php [L]
+</IfModule>
+
+# ============================================
+# FIN DU MODE MAINTENANCE
+# ============================================
+
+

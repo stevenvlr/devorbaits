@@ -39,3 +39,46 @@ body {
 .animate-fadeIn {
   animation: fadeIn 0.6s ease-out;
 }
+
+/* Classes de boutons standardisées */
+@layer components {
+  .btn {
+    @apply font-bold rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-primary {
+    @apply bg-yellow-500 text-noir-950 hover:bg-yellow-400;
+  }
+  
+  .btn-secondary {
+    @apply bg-noir-700 text-white hover:bg-noir-600;
+  }
+  
+  .btn-success {
+    @apply bg-green-500 text-white hover:bg-green-400;
+  }
+  
+  .btn-danger {
+    @apply bg-red-500 text-white hover:bg-red-400;
+  }
+  
+  .btn-info {
+    @apply bg-blue-500 text-white hover:bg-blue-400;
+  }
+  
+  .btn-outline {
+    @apply bg-transparent border-2 border-yellow-500 text-yellow-500 hover:bg-yellow-500 hover:text-noir-950;
+  }
+  
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  
+  .btn-md {
+    @apply px-6 py-3 text-base;
+  }
+  
+  .btn-lg {
+    @apply px-8 py-4 text-lg;
+  }
+}
