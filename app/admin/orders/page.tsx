@@ -186,21 +186,28 @@ export default function OrdersAdminPage() {
     // Construire les détails de variante à partir des informations sauvegardées
     const variantParts: string[] = []
     
-    // Pour Pop-up Duo : saveur (arome) et forme (taille)
-    if (item.saveur) variantParts.push(item.saveur)
-    if (item.forme) variantParts.push(item.forme)
-    // Fallback pour les anciennes commandes
-    if (!item.saveur && item.arome) variantParts.push(item.arome)
-    if (!item.forme && item.taille) variantParts.push(item.taille)
-    
-    // Pour Bar à Pop-up : couleur, taille, arôme
-    if (item.couleur) variantParts.push(item.couleur)
-    if (item.taille && !variantParts.includes(item.taille)) variantParts.push(item.taille)
-    if (item.arome && !variantParts.includes(item.arome)) variantParts.push(item.arome)
-    
-    // Pour les bouillettes : diamètre, conditionnement, arôme
-    if (item.diametre) variantParts.push(item.diametre)
-    if (item.conditionnement) variantParts.push(item.conditionnement)
+    // Pour les bouillettes : gamme/arôme, diamètre, conditionnement
+    if (baseName === 'Bouillette' || baseName?.toLowerCase().includes('bouillette')) {
+      if (item.arome) variantParts.push(`Gamme: ${item.arome}`)
+      if (item.diametre) variantParts.push(`${item.diametre}mm`)
+      if (item.conditionnement) variantParts.push(item.conditionnement)
+    } else {
+      // Pour Pop-up Duo : saveur (arome) et forme (taille)
+      if (item.saveur) variantParts.push(item.saveur)
+      if (item.forme) variantParts.push(item.forme)
+      // Fallback pour les anciennes commandes
+      if (!item.saveur && item.arome) variantParts.push(item.arome)
+      if (!item.forme && item.taille) variantParts.push(item.taille)
+      
+      // Pour Bar à Pop-up : couleur, taille, arôme
+      if (item.couleur) variantParts.push(item.couleur)
+      if (item.taille && !variantParts.includes(item.taille)) variantParts.push(item.taille)
+      if (item.arome && !variantParts.includes(item.arome)) variantParts.push(item.arome)
+      
+      // Autres produits avec diamètre/conditionnement
+      if (item.diametre && !variantParts.some(p => p.includes('mm'))) variantParts.push(`${item.diametre}mm`)
+      if (item.conditionnement && !variantParts.includes(item.conditionnement)) variantParts.push(item.conditionnement)
+    }
     
     // Si on n'a pas trouvé d'informations de variante sauvegardées, essayer de les récupérer depuis les variantes du produit
     if (variantParts.length === 0 && item.variant_id) {
@@ -211,7 +218,7 @@ export default function OrdersAdminPage() {
           if (variant.label) {
             variantParts.push(variant.label)
           } else {
-            if (variant.diametre) variantParts.push(variant.diametre)
+            if (variant.diametre) variantParts.push(`${variant.diametre}mm`)
             if (variant.conditionnement) variantParts.push(variant.conditionnement)
             if (variant.taille) variantParts.push(variant.taille)
             if (variant.couleur) variantParts.push(variant.couleur)
