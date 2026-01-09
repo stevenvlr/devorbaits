@@ -61,26 +61,21 @@ export default function Footer() {
 
           {/* Info */}
           <div>
-            <h3 className="font-bold mb-4">Informations</h3>
+            <h3 className="font-bold mb-4">Informations légales</h3>
             <ul className="space-y-2 text-sm text-gray-400">
               <li>
-                <Link href="/about" className="hover:text-yellow-500 transition-colors">
-                  À propos
+                <Link href="/mentions-legales" className="hover:text-yellow-500 transition-colors">
+                  Mentions légales
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="hover:text-yellow-500 transition-colors">
-                  Contact
-                </Link>
-              </li>
-              <li>
-                <Link href="/shipping" className="hover:text-yellow-500 transition-colors">
-                  Livraison
-                </Link>
-              </li>
-              <li>
-                <Link href="/terms" className="hover:text-yellow-500 transition-colors">
+                <Link href="/cgv" className="hover:text-yellow-500 transition-colors">
                   CGV
+                </Link>
+              </li>
+              <li>
+                <Link href="/confidentialite" className="hover:text-yellow-500 transition-colors">
+                  Politique de confidentialité
                 </Link>
               </li>
               <li>
@@ -97,15 +92,19 @@ export default function Footer() {
             <ul className="space-y-3 text-sm text-gray-400">
               <li className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-yellow-500" />
-                <span>contact@devorbaits.fr</span>
+                <a href="mailto:devorbaits.contact@gmail.com" className="hover:text-yellow-500 transition-colors">
+                  devorbaits.contact@gmail.com
+                </a>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-yellow-500" />
-                <span>+33 1 XX XX XX XX</span>
+                <a href="tel:+33761288512" className="hover:text-yellow-500 transition-colors">
+                  07 61 28 85 12
+                </a>
               </li>
               <li className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-yellow-500 mt-0.5" />
-                <span>France</span>
+                <span>240 rue Douce, 60130 Wavignies</span>
               </li>
             </ul>
           </div>
