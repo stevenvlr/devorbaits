@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useMemo } from 'react'
 import { X, ChevronLeft, ChevronRight, ShoppingCart, Package } from 'lucide-react'
@@ -104,11 +104,16 @@ export default function ProductDetailModal({
       // Fallback vers le système de panier
       await addToCart({
         produit: product.name,
-        arome: product.gamme || '',
+        arome: product.gamme || selectedVariant?.arome || '',
         quantite: quantity,
         prix: price,
         productId: product.id,
-        variantId: selectedVariant?.id
+        variantId: selectedVariant?.id,
+        // Inclure les informations de variante pour les bouillettes et autres produits
+        diametre: selectedVariant?.diametre,
+        conditionnement: selectedVariant?.conditionnement,
+        taille: selectedVariant?.taille,
+        couleur: selectedVariant?.couleur
       })
     }
     alert(`${product.name}${selectedVariant ? ` - ${selectedVariant.label}` : ''} ajouté au panier !`)

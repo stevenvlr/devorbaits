@@ -189,8 +189,32 @@ export default function OrdersAdminPage() {
     // Pour les bouillettes : gamme/arôme, diamètre, conditionnement
     if (baseName === 'Bouillette' || baseName?.toLowerCase().includes('bouillette')) {
       if (item.arome) variantParts.push(`Gamme: ${item.arome}`)
-      if (item.diametre) variantParts.push(`${item.diametre}mm`)
-      if (item.conditionnement) variantParts.push(item.conditionnement)
+      
+      // Extraire diamètre et conditionnement du variant_id si pas dans les champs directs
+      // Format: "variant-16-5kg" -> diamètre: 16, conditionnement: 5kg
+      if (item.diametre) {
+        variantParts.push(`${item.diametre}mm`)
+      } else if (item.variant_id && item.variant_id.includes('-')) {
+        const parts = item.variant_id.split('-')
+        if (parts.length >= 2) {
+          const diametre = parts[1] // ex: "16" de "variant-16-5kg"
+          if (diametre && !isNaN(Number(diametre))) {
+            variantParts.push(`${diametre}mm`)
+          }
+        }
+      }
+      
+      if (item.conditionnement) {
+        variantParts.push(item.conditionnement)
+      } else if (item.variant_id && item.variant_id.includes('-')) {
+        const parts = item.variant_id.split('-')
+        if (parts.length >= 3) {
+          const conditionnement = parts[2] // ex: "5kg" de "variant-16-5kg"
+          if (conditionnement) {
+            variantParts.push(conditionnement)
+          }
+        }
+      }
     } else {
       // Pour Pop-up Duo : saveur (arome) et forme (taille)
       if (item.saveur) variantParts.push(item.saveur)
