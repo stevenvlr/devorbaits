@@ -57,6 +57,7 @@ export default function CheckoutPage() {
   const [selectedPickupPoint, setSelectedPickupPoint] = useState<PickupPoint | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('paypal')
   const [orderReference, setOrderReference] = useState<string>('')
+  const [cgvAccepted, setCgvAccepted] = useState(false)
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -287,6 +288,11 @@ export default function CheckoutPage() {
 
   // Vérifier si le formulaire est valide pour le paiement
   const isFormValid = () => {
+    // Les CGV doivent toujours être acceptées
+    if (!cgvAccepted) {
+      return false
+    }
+    
     if (retraitMode === 'livraison') {
       return livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville
     }
@@ -1092,6 +1098,46 @@ export default function CheckoutPage() {
                 </div>
               )}
 
+              {/* Acceptation des CGV */}
+              <div className="space-y-3 border-t border-noir-700 pt-4">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <div className="relative flex items-center justify-center mt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={cgvAccepted}
+                      onChange={(e) => setCgvAccepted(e.target.checked)}
+                      className="w-5 h-5 rounded border-2 border-noir-600 bg-noir-900 text-yellow-500 focus:ring-yellow-500 focus:ring-2 cursor-pointer"
+                    />
+                  </div>
+                  <span className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                    J'accepte les{' '}
+                    <Link 
+                      href="/cgv" 
+                      target="_blank"
+                      className="text-yellow-500 hover:text-yellow-400 underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Conditions Générales de Vente
+                    </Link>
+                    {' '}et la{' '}
+                    <Link 
+                      href="/confidentialite" 
+                      target="_blank"
+                      className="text-yellow-500 hover:text-yellow-400 underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Politique de Confidentialité
+                    </Link>
+                    {' '}<span className="text-red-400">*</span>
+                  </span>
+                </label>
+                {!cgvAccepted && (
+                  <p className="text-xs text-gray-500 ml-8">
+                    Vous devez accepter les CGV pour continuer
+                  </p>
+                )}
+              </div>
+
               {/* Choix du mode de paiement */}
               <div className="space-y-4 border-t border-noir-700 pt-4">
                 <h3 className="font-semibold flex items-center gap-2">
@@ -1222,7 +1268,9 @@ export default function CheckoutPage() {
                     />
                     {!isFormValid() && (
                       <p className="text-sm text-gray-400 text-center mt-2">
-                        {retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
+                        {!cgvAccepted
+                          ? 'Veuillez accepter les CGV'
+                          : retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
                           ? 'Veuillez sélectionner un créneau'
                           : 'Veuillez compléter les informations requises'}
                       </p>
@@ -1239,7 +1287,9 @@ export default function CheckoutPage() {
                     }`}
                   >
                     <CreditCard className="w-5 h-5" />
-                    {retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
+                    {!cgvAccepted
+                      ? 'Acceptez les CGV'
+                      : retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
                       ? 'Sélectionnez un créneau'
                       : 'Paiement par carte'}
                   </button>
