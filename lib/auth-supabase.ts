@@ -210,24 +210,15 @@ export async function registerUser(userData: Omit<User, 'id' | 'dateCreation'> &
       return { success: false, error: 'Erreur : compte non créé. Vérifiez votre email (peut-être un email de confirmation requis).' }
     }
 
-    // Créer ou mettre à jour le profil
-    // Utiliser une fonction database pour éviter les problèmes de timing
-    console.log('[registerUser] Création/mise à jour du profil pour:', authData.user.id, userData.email)
- 
-    // Le trigger crée automatiquement le profil de base (id + email + role)
-    // On attend que le trigger s'exécute, puis on met à jour avec toutes les infos
-    let profileData = null
-    let profileError = null
+    // Le trigger Supabase crée automatiquement le profil de base
+    // On attend un peu puis on met à jour avec les infos supplémentaires (nom, prénom, etc.)
+    console.log('[registerUser] Attente du trigger pour créer le profil de base...')
     
-    // Attendre que le trigger crée le profil de base (plusieurs tentatives)
+    // Attendre que le trigger crée le profil (jusqu'à 3 secondes)
     let profileExists = false
-    let attempts = 0
-    const maxAttempts = 5
-    
-    while (!profileExists && attempts < maxAttempts) {
+    for (let i = 0; i < 6; i++) {
       await new Promise(resolve => setTimeout(resolve, 500))
       
-      // Vérifier si le profil existe déjà (créé par le trigger)
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('id')
@@ -236,93 +227,36 @@ export async function registerUser(userData: Omit<User, 'id' | 'dateCreation'> &
       
       if (existingProfile) {
         profileExists = true
-        console.log('✅ Profil créé par le trigger, mise à jour avec les infos complètes...')
+        console.log('✅ Profil créé par le trigger')
         break
       }
-      
-      attempts++
-      console.log(`⏳ Attente du trigger... (tentative ${attempts}/${maxAttempts})`)
+      console.log(`⏳ Attente du trigger... (${i + 1}/6)`)
     }
     
-    // Essayer d'abord avec la fonction database (plus fiable)
-    const { data: functionData, error: functionError } = await supabase.rpc('create_user_profile', {
-      p_user_id: authData.user.id,
-      p_email: userData.email,
-      p_nom: userData.nom,
-      p_prenom: userData.prenom,
-      p_telephone: userData.telephone || null,
-      p_adresse: userData.adresse || null,
-      p_code_postal: userData.codePostal || null,
-      p_ville: userData.ville || null
-    })
-    
-    if (!functionError && functionData) {
-      profileData = functionData
-      console.log('✅ Profil créé/mis à jour avec la fonction database')
-    } else {
-      // Si la fonction n'existe pas ou échoue, utiliser upsert
-      console.warn('⚠️ Fonction create_user_profile non disponible, utilisation de upsert:', functionError?.message)
-      
-      // Le trigger devrait avoir créé le profil de base, on met juste à jour avec les infos complètes
-      const { data: upsertData, error: upsertError } = await supabase
+    // Mettre à jour le profil avec les infos supplémentaires (nom, prénom, etc.)
+    if (profileExists) {
+      const { error: updateError } = await supabase
         .from('profiles')
-        .upsert({
-          id: authData.user.id,
-          email: userData.email,
+        .update({
           nom: userData.nom,
           prenom: userData.prenom,
-          telephone: userData.telephone,
-          adresse: userData.adresse,
-          code_postal: userData.codePostal,
-          ville: userData.ville,
-          role: 'user'
-        }, {
-          onConflict: 'id'
+          telephone: userData.telephone || null,
+          adresse: userData.adresse || null,
+          code_postal: userData.codePostal || null,
+          ville: userData.ville || null
         })
-        .select()
-        .single()
+        .eq('id', authData.user.id)
       
-      profileData = upsertData
-      profileError = upsertError
-      
-      if (!upsertError && upsertData) {
-        console.log('✅ Profil créé/mis à jour avec upsert')
+      if (updateError) {
+        console.warn('⚠️ Erreur mise à jour profil (non bloquante):', updateError.message)
+      } else {
+        console.log('✅ Profil mis à jour avec les infos complètes')
       }
+    } else {
+      console.warn('⚠️ Le profil n\'a pas été créé par le trigger, l\'utilisateur devra compléter ses infos plus tard')
     }
     
-    const finalError = profileError || functionError
-    if (finalError) {
-      console.error('❌ Erreur Supabase Profiles:', finalError)
-      console.error('❌ Code erreur:', finalError.code)
-      console.error('❌ Message:', finalError.message)
-      console.error('❌ Détails:', finalError.details)
-      console.error('❌ Hint:', finalError.hint)
-      
-      // Si l'erreur vient de la table profiles, c'est probablement RLS
-      if (finalError.code === '42501' || finalError.message.includes('permission') || finalError.message.includes('policy') || finalError.message.includes('RLS')) {
-        return { 
-          success: false, 
-          error: `Erreur de permissions RLS (code: ${finalError.code}). Vérifiez que les politiques RLS sur la table "profiles" permettent l'insertion. Exécutez le script supabase-fix-profiles-rls.sql dans Supabase SQL Editor.` 
-        }
-      }
-      
-      // Erreur de contrainte de clé étrangère (l'utilisateur n'existe pas encore dans auth.users)
-      if (finalError.code === '23503' || finalError.message.includes('foreign key') || finalError.message.includes('fkey')) {
-        return { 
-          success: false, 
-          error: `Erreur de contrainte de clé étrangère. L'utilisateur n'est peut-être pas encore créé dans auth.users. Exécutez le script supabase-create-profile-function.sql dans Supabase SQL Editor pour créer une fonction qui gère cela automatiquement. Erreur: ${finalError.message || finalError.code}` 
-        }
-      }
-      
-      // Erreur de contrainte (email déjà utilisé, etc.)
-      if (finalError.code === '23505' || finalError.message.includes('duplicate') || finalError.message.includes('unique')) {
-        return { success: false, error: 'Cet email est déjà utilisé. Essayez de vous connecter.' }
-      }
-      
-      return { success: false, error: `Erreur lors de la création du profil: ${finalError.message || finalError.code || 'Erreur inconnue'}` }
-    }
-    
-    console.log('✅ Profil créé avec succès:', profileData)
+    console.log('✅ Inscription réussie')
 
     const user = supabaseUserToUser(authData.user, {
       nom: userData.nom,
