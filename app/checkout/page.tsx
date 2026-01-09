@@ -500,11 +500,6 @@ export default function CheckoutPage() {
       }
     }
 
-
-      // On sauvegarde juste les données de commande pour plus tard
-      return
-    }
-
     // Paiement par carte bleue (Monetico)
     try {
       await submitMoneticoPayment(orderData)
@@ -513,147 +508,6 @@ export default function CheckoutPage() {
       alert('Erreur lors de la redirection vers le paiement. Veuillez réessayer.')
     }
   }
-
-  // Fonction pour préparer et sauvegarder la commande en attente
-  const preparePendingOrder = (ref: string) => {
-    const pendingOrder = {
-      reference: ref,
-      cartItems,
-      total: finalTotal,
-      originalTotal: total,
-      shippingCost: calculatedShippingCost,
-      promoCode: promoValidation && promoValidation.valid ? promoCode : null,
-      discount: promoValidation && promoValidation.valid ? promoValidation.discount : null,
-      retraitMode,
-      rdvDate: retraitMode === 'wavignies-rdv' ? rdvDate : null,
-      rdvTimeSlot: retraitMode === 'wavignies-rdv' ? rdvTimeSlot : null,
-      livraisonAddress: retraitMode === 'livraison' ? livraisonAddress : null,
-      pickupPoint: retraitMode === 'point-relais' ? selectedPickupPoint : null,
-      createdAt: new Date().toISOString(),
-    }
-    localStorage.setItem(`pending-order-${ref}`, JSON.stringify(pendingOrder))
-  }
-
-
-  }, [paymentMethod, orderReference, user])
-
-
-    // Utiliser la référence existante ou en générer une nouvelle
-    const currentOrderReference = orderReference || generateOrderReference()
-    if (!orderReference) {
-      setOrderReference(currentOrderReference)
-    }
-
-    // Récupérer la commande en attente
-    const pendingOrderKey = `pending-order-${currentOrderReference}`
-    let pendingOrderData = localStorage.getItem(pendingOrderKey)
-    
-    // Si la commande en attente n'existe pas, la créer maintenant
-    if (!pendingOrderData) {
-      const pendingOrder = {
-        reference: currentOrderReference,
-        cartItems,
-        total: finalTotal,
-        originalTotal: total,
-        shippingCost: calculatedShippingCost,
-        promoCode: promoValidation && promoValidation.valid ? promoCode : null,
-        discount: promoValidation && promoValidation.valid ? promoValidation.discount : null,
-        retraitMode,
-        rdvDate: retraitMode === 'wavignies-rdv' ? rdvDate : null,
-        rdvTimeSlot: retraitMode === 'wavignies-rdv' ? rdvTimeSlot : null,
-        livraisonAddress: retraitMode === 'livraison' ? livraisonAddress : null,
-        pickupPoint: retraitMode === 'point-relais' ? selectedPickupPoint : null,
-        createdAt: new Date().toISOString(),
-      }
-      localStorage.setItem(pendingOrderKey, JSON.stringify(pendingOrder))
-      pendingOrderData = JSON.stringify(pendingOrder)
-    }
-
-    try {
-      const pendingOrder = JSON.parse(pendingOrderData)
-      
-      // Enregistrer l'utilisation du code promo si valide
-      if (promoValidation && promoValidation.valid && promoCode) {
-        const promoCodeObj = await getPromoCodeByCode(promoCode)
-        if (promoCodeObj) {
-          recordPromoCodeUsage(
-            promoCodeObj.id,
-            user.id || null,
-            currentOrderReference,
-            promoValidation.discount || 0
-          )
-        }
-      }
-
-      // Créer les items de commande
-      const orderItems = cartItems.map((item) => ({
-        product_id: item.productId || item.produit || `product-${item.id}`,
-        variant_id: item.variantId || undefined,
-        quantity: item.quantite,
-        price: item.prix,
-        arome: item.arome,
-        taille: item.taille,
-        couleur: item.couleur,
-        diametre: item.diametre,
-        conditionnement: item.conditionnement,
-        produit: item.produit
-      }))
-
-      // Créer la commande
-      const order = await createOrder(
-        user.id,
-        currentOrderReference,
-        finalTotal,
-        orderItems,
-   
-        calculatedShippingCost
-      )
-
-      // Mettre à jour le statut à 'completed'
-      if (order.id) {
-        await updateOrderStatus(order.id, 'completed')
-      }
-
-      // Si c'est une livraison ou un point relais, créer l'expédition Boxtal
-      if ((retraitMode === 'livraison' || retraitMode === 'point-relais') && order.id) {
-        // Sauvegarder l'adresse de livraison dans le profil utilisateur
-        if (retraitMode === 'livraison' && user?.id && livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville) {
-          try {
-            await updateUserProfile(user.id, {
-              adresse: livraisonAddress.adresse,
-              codePostal: livraisonAddress.codePostal,
-              ville: livraisonAddress.ville,
-              telephone: livraisonAddress.telephone || user.telephone
-            })
-          } catch (profileError) {
-            console.warn('⚠️ Erreur lors de la sauvegarde de l\'adresse:', profileError)
-          }
-        }
-
-        // Créer automatiquement l'expédition Boxtal
-        try {
-          const pickupPointCode = retraitMode === 'point-relais' && selectedPickupPoint ? selectedPickupPoint.code : undefined
-          const boxtalResult = await createBoxtalShipmentAuto(order.id, pickupPointCode)
-          if (boxtalResult.success) {
-            console.log('✅ Expédition Boxtal créée avec succès')
-          } else {
-            console.error('❌ Erreur création expédition Boxtal:', boxtalResult.message)
-            alert(`⚠️ Commande créée mais erreur lors de la création de l'expédition Boxtal:\n${boxtalResult.message}`)
-          }
-        } catch (boxtalError: any) {
-          console.error('❌ Erreur lors de la création de l\'expédition Boxtal:', boxtalError)
-          alert(`⚠️ Commande créée mais erreur lors de la création de l'expédition Boxtal:\n${boxtalError?.message || 'Erreur inconnue'}`)
-        }
-      }
-
-      // Supprimer la commande en attente
-      localStorage.removeItem(pendingOrderKey)
-
-      // Vider le panier
-      clearCart()
-
-
-
 
 
   if (!isAuthenticated) {
@@ -1266,19 +1120,11 @@ export default function CheckoutPage() {
                       <p className="text-sm text-gray-400">Paiement sécurisé par Monetico</p>
                     </div>
                   </label>
-
-                    />
-                  ) : (
-                    <div className="bg-gray-500/10 border border-gray-500/50 rounded-lg p-4 text-center">
-                      <p className="text-sm text-gray-400">
-                        {retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
-                          ? 'Veuillez sélectionner un créneau'
-                          : 'Veuillez compléter les informations requises'}
-                      </p>
-                    </div>
-                  )}
                 </div>
-              ) : (
+              </div>
+
+              {/* Bouton de paiement */}
+              <div className="mt-6">
                 <button
                   onClick={handleSubmit}
                   disabled={!isFormValid()}
@@ -1293,7 +1139,7 @@ export default function CheckoutPage() {
                     ? 'Sélectionnez un créneau'
                     : 'Paiement par carte'}
                 </button>
-              )}
+              </div>
             </div>
           </div>
         </div>
