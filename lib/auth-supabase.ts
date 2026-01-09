@@ -189,7 +189,15 @@ export async function registerUser(userData: Omit<User, 'id' | 'dateCreation'> &
       email: userData.email,
       password: userData.password,
       options: {
-        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/account/login` : undefined
+        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/account/login` : undefined,
+        data: {
+          nom: userData.nom,
+          prenom: userData.prenom,
+          telephone: userData.telephone || null,
+          adresse: userData.adresse || null,
+          code_postal: userData.codePostal || null,
+          ville: userData.ville || null
+        }
       }
     })
  

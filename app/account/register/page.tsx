@@ -39,7 +39,7 @@ export default function RegisterPage() {
       return
     }
 
-    if (!formData.email || !formData.nom || !formData.prenom) {
+    if (!formData.email || !formData.nom || !formData.prenom || !formData.telephone) {
       setError('Veuillez remplir tous les champs obligatoires')
       return
     }
@@ -55,7 +55,7 @@ export default function RegisterPage() {
         password: formData.password,
         nom: formData.nom,
         prenom: formData.prenom,
-        telephone: formData.telephone || undefined,
+        telephone: formData.telephone,
         adresse: formData.adresse || undefined,
         codePostal: formData.codePostal || undefined,
         ville: formData.ville || undefined
@@ -200,13 +200,14 @@ export default function RegisterPage() {
               <div>
                 <label className="block text-sm font-medium mb-2 text-gray-300">
                   <Phone className="w-4 h-4 inline mr-2" />
-                  Téléphone
+                  Téléphone *
                 </label>
                 <input
                   type="tel"
                   value={formData.telephone}
                   onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
                   className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-3 text-white focus:border-yellow-500 focus:outline-none"
+                  required
                 />
               </div>
             </div>
