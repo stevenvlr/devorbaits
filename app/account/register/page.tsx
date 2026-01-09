@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, UserPlus, Mail, Lock, User, Phone, MapPin } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { registerUser, loginUser } from '@/lib/auth-supabase'
+import { registerUser } from '@/lib/auth-supabase'
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { register, login } = useAuth()
+  const { } = useAuth() // Auth context for future use
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -68,24 +68,8 @@ export default function RegisterPage() {
       setLoading(false)
 
       if (result.success && result.user) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/account/register/page.tsx:65',message:'handleSubmit - before auto login',data:{email:formData.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
-        
-        // Connecter automatiquement l'utilisateur après l'inscription
-        const loginResult = await loginUser(formData.email, formData.password)
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/account/register/page.tsx:66',message:'handleSubmit - after auto login',data:{loginSuccess:loginResult.success,hasError:!!loginResult.error,loginError:loginResult.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
-        
-        if (loginResult.success) {
-          router.push('/account')
-        } else {
-          // Si la connexion auto échoue, rediriger quand même vers login
-          console.warn('Connexion auto échouée:', loginResult.error)
-          router.push('/account/login?registered=true')
-        }
+        // Rediriger vers la page de vérification d'email
+        router.push(`/account/verify-email?email=${encodeURIComponent(formData.email)}`)
       } else {
         setError(result.error || 'Erreur lors de l\'inscription. Veuillez réessayer.')
       }
