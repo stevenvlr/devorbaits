@@ -1194,7 +1194,9 @@ export default function CheckoutPage() {
                           if (order.id) {
                             await updateOrderStatus(order.id, 'completed')
                             
-                            // Créer l'expédition Boxtal si nécessaire
+                            // Boxtal désactivé temporairement
+                            // TODO: Réactiver quand Boxtal sera configuré
+                            /*
                             if (retraitMode === 'livraison' || retraitMode === 'point-relais') {
                               try {
                                 const pickupPointCode = retraitMode === 'point-relais' && selectedPickupPoint ? selectedPickupPoint.code : undefined
@@ -1203,6 +1205,7 @@ export default function CheckoutPage() {
                                 console.error('Erreur Boxtal:', boxtalError)
                               }
                             }
+                            */
                           }
 
                           clearCart()
