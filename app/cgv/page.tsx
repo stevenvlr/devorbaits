@@ -140,8 +140,9 @@ export default function CGV() {
                 (généralement 2 à 5 jours ouvrés après expédition).
               </p>
               <p>
-                En cas de retard de livraison, le client sera informé dans les plus brefs délais. Tout retard de 
-                livraison ne pourra donner lieu à des dommages et intérêts.
+                En cas de retard de livraison, le client sera informé dans les plus brefs délais. En cas de retard 
+                de livraison supérieur à 30 jours, le client peut demander l'annulation de la commande conformément 
+                à l'article L.216-2 du Code de la consommation.
               </p>
               <p>
                 À réception, le client doit vérifier l'état du colis. En cas de dommage, il convient de formuler 
