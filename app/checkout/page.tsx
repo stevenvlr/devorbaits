@@ -25,9 +25,10 @@ import { createBoxtalShipmentAuto, getBoxtalShippingCost, type PickupPoint } fro
 import PickupPointSelector from '@/components/PickupPointSelector'
 import { calculateFinalShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
+import PayPalButton from '@/components/PayPalButton'
 
 type RetraitMode = 'livraison' | 'point-relais' | 'amicale-blanc' | 'wavignies-rdv'
-type PaymentMethod = 'card' 
+type PaymentMethod = 'card' | 'paypal' 
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -54,7 +55,7 @@ export default function CheckoutPage() {
   const [promoError, setPromoError] = useState<string | null>(null)
   const [shippingCost, setShippingCost] = useState<number>(0)
   const [selectedPickupPoint, setSelectedPickupPoint] = useState<PickupPoint | null>(null)
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('paypal')
   const [orderReference, setOrderReference] = useState<string>('')
 
   // Rediriger si non connecté
@@ -1098,6 +1099,31 @@ export default function CheckoutPage() {
                   Mode de paiement
                 </h3>
                 <div className="space-y-3">
+                  {/* Option PayPal */}
+                  <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
+                    style={{
+                      borderColor: paymentMethod === 'paypal' ? '#EAB308' : '#374151',
+                      backgroundColor: paymentMethod === 'paypal' ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
+                    }}>
+                    <input
+                      type="radio"
+                      name="payment-method"
+                      value="paypal"
+                      checked={paymentMethod === 'paypal'}
+                      onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0070BA">
+                          <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
+                        </svg>
+                        <span className="font-semibold text-lg">PayPal</span>
+                      </div>
+                      <p className="text-sm text-gray-400">Paiement sécurisé via PayPal</p>
+                    </div>
+                  </label>
+
                   {/* Option Carte bleue */}
                   <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
                     style={{
@@ -1125,20 +1151,95 @@ export default function CheckoutPage() {
 
               {/* Bouton de paiement */}
               <div className="mt-6">
-                <button
-                  onClick={handleSubmit}
-                  disabled={!isFormValid()}
-                  className={`w-full font-bold py-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg ${
-                    isFormValid()
-                      ? 'bg-yellow-500 text-noir-950 hover:bg-yellow-400 cursor-pointer'
-                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  <CreditCard className="w-5 h-5" />
-                  {retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
-                    ? 'Sélectionnez un créneau'
-                    : 'Paiement par carte'}
-                </button>
+                {paymentMethod === 'paypal' ? (
+                  <div className={!isFormValid() ? 'opacity-50 pointer-events-none' : ''}>
+                    <PayPalButton
+                      amount={finalTotal}
+                      reference={orderReference || generateOrderReference()}
+                      disabled={!isFormValid()}
+                      onBeforePayment={() => {
+                        // Générer la référence si pas encore fait
+                        if (!orderReference) {
+                          const ref = generateOrderReference()
+                          setOrderReference(ref)
+                        }
+                      }}
+                      onSuccess={async (orderId, paymentId) => {
+                        try {
+                          // Créer la commande après paiement PayPal réussi
+                          const orderItems = cartItems.map((item) => ({
+                            product_id: item.productId || item.produit || `product-${item.id}`,
+                            variant_id: item.variantId || undefined,
+                            quantity: item.quantite,
+                            price: item.prix,
+                            arome: item.arome,
+                            taille: item.taille,
+                            couleur: item.couleur,
+                            diametre: item.diametre,
+                            conditionnement: item.conditionnement,
+                            produit: item.produit
+                          }))
+
+                          const currentRef = orderReference || generateOrderReference()
+                          
+                          const order = await createOrder(
+                            user?.id || '',
+                            currentRef,
+                            finalTotal,
+                            orderItems,
+                            'paypal',
+                            calculatedShippingCost
+                          )
+
+                          if (order.id) {
+                            await updateOrderStatus(order.id, 'completed')
+                            
+                            // Créer l'expédition Boxtal si nécessaire
+                            if (retraitMode === 'livraison' || retraitMode === 'point-relais') {
+                              try {
+                                const pickupPointCode = retraitMode === 'point-relais' && selectedPickupPoint ? selectedPickupPoint.code : undefined
+                                await createBoxtalShipmentAuto(order.id, pickupPointCode)
+                              } catch (boxtalError) {
+                                console.error('Erreur Boxtal:', boxtalError)
+                              }
+                            }
+                          }
+
+                          clearCart()
+                          router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&paypal=true`)
+                        } catch (error) {
+                          console.error('Erreur création commande:', error)
+                          alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
+                        }
+                      }}
+                      onError={(error) => {
+                        alert(`Erreur PayPal: ${error}`)
+                      }}
+                    />
+                    {!isFormValid() && (
+                      <p className="text-sm text-gray-400 text-center mt-2">
+                        {retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
+                          ? 'Veuillez sélectionner un créneau'
+                          : 'Veuillez compléter les informations requises'}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={!isFormValid()}
+                    className={`w-full font-bold py-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg ${
+                      isFormValid()
+                        ? 'bg-yellow-500 text-noir-950 hover:bg-yellow-400 cursor-pointer'
+                        : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <CreditCard className="w-5 h-5" />
+                    {retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
+                      ? 'Sélectionnez un créneau'
+                      : 'Paiement par carte'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
