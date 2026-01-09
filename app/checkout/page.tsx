@@ -25,11 +25,9 @@ import { createBoxtalShipmentAuto, getBoxtalShippingCost, type PickupPoint } fro
 import PickupPointSelector from '@/components/PickupPointSelector'
 import { calculateFinalShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
-import { isPayPalConfigured } from '@/lib/paypal'
-import PayPalButton from '@/components/PayPalButton'
 
 type RetraitMode = 'livraison' | 'point-relais' | 'amicale-blanc' | 'wavignies-rdv'
-type PaymentMethod = 'card' | 'paypal'
+type PaymentMethod = 'card' 
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -502,9 +500,7 @@ export default function CheckoutPage() {
       }
     }
 
-    // Mode production : Rediriger vers Monetico ou PayPal selon le choix
-    if (paymentMethod === 'paypal') {
-      // Le paiement PayPal sera géré par le composant PayPalButton
+
       // On sauvegarde juste les données de commande pour plus tard
       return
     }
@@ -538,20 +534,9 @@ export default function CheckoutPage() {
     localStorage.setItem(`pending-order-${ref}`, JSON.stringify(pendingOrder))
   }
 
-  // Générer la référence de commande quand PayPal est sélectionné et le formulaire est valide
-  useEffect(() => {
-    if (paymentMethod === 'paypal' && !orderReference && user && isFormValid()) {
-      const ref = generateOrderReference()
-      setOrderReference(ref)
-    }
+
   }, [paymentMethod, orderReference, user])
 
-  // Gérer le succès du paiement PayPal
-  const handlePayPalSuccess = async (orderId: string, paymentId: string) => {
-    if (!user) {
-      alert('Erreur: utilisateur non connecté')
-      return
-    }
 
     // Utiliser la référence existante ou en générer une nouvelle
     const currentOrderReference = orderReference || generateOrderReference()
@@ -620,7 +605,7 @@ export default function CheckoutPage() {
         currentOrderReference,
         finalTotal,
         orderItems,
-        'paypal',
+   
         calculatedShippingCost
       )
 
@@ -667,18 +652,9 @@ export default function CheckoutPage() {
       // Vider le panier
       clearCart()
 
-      // Rediriger vers la page de succès
-      router.push(`/payment/success?reference=${currentOrderReference}&montant=${finalTotal.toFixed(2)}&payment_method=paypal&order_id=${orderId}`)
-    } catch (error: any) {
-      console.error('Erreur lors de la création de la commande PayPal:', error)
-      alert(`Erreur lors de la création de la commande: ${error?.message || 'Erreur inconnue'}`)
-    }
-  }
 
-  // Gérer les erreurs PayPal
-  const handlePayPalError = (error: string) => {
-    alert(`Erreur PayPal: ${error}`)
-  }
+
+
 
   if (!isAuthenticated) {
     return null
@@ -1291,47 +1267,6 @@ export default function CheckoutPage() {
                     </div>
                   </label>
 
-                  {/* Option PayPal */}
-                  {isPayPalConfigured() && (
-                    <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
-                      style={{
-                        borderColor: paymentMethod === 'paypal' ? '#EAB308' : '#374151',
-                        backgroundColor: paymentMethod === 'paypal' ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
-                      }}>
-                      <input
-                        type="radio"
-                        name="payment-method"
-                        value="paypal"
-                        checked={paymentMethod === 'paypal'}
-                        onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Wallet className="w-5 h-5 text-yellow-500" />
-                          <span className="font-semibold text-lg">PayPal</span>
-                        </div>
-                        <p className="text-sm text-gray-400">Paiement rapide et sécurisé</p>
-                      </div>
-                    </label>
-                  )}
-                </div>
-              </div>
-
-              {/* Bouton Paiement ou Bouton PayPal */}
-              {paymentMethod === 'paypal' ? (
-                <div className="border-t border-noir-700 pt-4">
-                  {isFormValid() && orderReference ? (
-                    <PayPalButton
-                      amount={finalTotal}
-                      reference={orderReference}
-                      onSuccess={handlePayPalSuccess}
-                      onError={handlePayPalError}
-                      disabled={!isFormValid()}
-                      onBeforePayment={() => {
-                        // Préparer la commande en attente avant le paiement
-                        preparePendingOrder(orderReference)
-                      }}
                     />
                   ) : (
                     <div className="bg-gray-500/10 border border-gray-500/50 rounded-lg p-4 text-center">
