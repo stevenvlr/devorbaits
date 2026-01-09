@@ -224,8 +224,11 @@ export default function CGV() {
                 En cas de défaut de conformité, le client peut choisir entre le remplacement ou le remboursement du produit.
               </p>
               <p>
-                Pour faire valoir ces garanties, le client doit contacter Devorbaits par email à 
+                Pour faire valoir ces garanties, le client doit contacter Devorbaits par email à
                 devorbaits.contact@gmail.com en décrivant le défaut constaté et en joignant des photos si possible.
+              </p>
+              <p>
+                La responsabilité de Devorbaits ne saurait être engagée en cas de mauvaise utilisation des produits.
               </p>
             </div>
           </section>
