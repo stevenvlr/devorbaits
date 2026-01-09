@@ -1,6 +1,11 @@
 // Fonctions d'accès Supabase pour popup-variables-manager
-import { loadPopupVariablesFromSupabase, savePopupVariablesToSupabase } from './popup-variables-supabase'
-import type { Couleur } from './popup-variables-supabase'
+import {
+  loadPopupVariablesFromSupabase,
+  savePopupVariablesToSupabase,
+  loadPopupVariableItemsFromSupabase,
+  savePopupVariableItemsToSupabase
+} from './popup-variables-supabase'
+import type { Couleur, PopupVariableItem } from './popup-variables-supabase'
 
 /**
  * Charger une variable popup depuis Supabase
@@ -57,6 +62,23 @@ export async function savePopupCouleurs(category: string, couleurs: Couleur[]): 
   const success = await savePopupVariablesToSupabase(category, couleurs)
   if (!success) {
     throw new Error(`Échec de la sauvegarde des couleurs ${category}`)
+  }
+}
+
+/**
+ * Charger une variable popup (items) depuis Supabase
+ */
+export async function loadPopupItems(category: string): Promise<PopupVariableItem[]> {
+  return await loadPopupVariableItemsFromSupabase(category)
+}
+
+/**
+ * Sauvegarder une variable popup (items) dans Supabase
+ */
+export async function savePopupItems(category: string, items: PopupVariableItem[]): Promise<void> {
+  const success = await savePopupVariableItemsToSupabase(category, items)
+  if (!success) {
+    throw new Error(`Échec de la sauvegarde des items ${category}`)
   }
 }
 

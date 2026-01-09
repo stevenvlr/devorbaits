@@ -155,10 +155,11 @@ export default function BarPopupPage() {
   // Surveiller les changements du panier pour ouvrir le modal automatiquement
   useEffect(() => {
     // Calculer directement si on doit ouvrir le modal
-    const eligibleItems = cartItems.filter(item => !item.isGratuit && item.produit === 'Pop-up personnalisé')
+    // Utiliser startsWith pour matcher les noms de produits dynamiques (ex: "Bar à Pop-up Jaune fluo")
+    const eligibleItems = cartItems.filter(item => !item.isGratuit && (item.produit.startsWith('Bar à Pop-up') || item.produit === 'Pop-up personnalisé'))
     const total = eligibleItems.reduce((sum, item) => sum + item.quantite, 0)
     const neededGratuits = Math.floor(total / 4)
-    const existingGratuits = cartItems.filter(item => item.isGratuit && item.produit === 'Pop-up personnalisé').length
+    const existingGratuits = cartItems.filter(item => item.isGratuit && (item.produit.startsWith('Bar à Pop-up') || item.produit === 'Pop-up personnalisé')).length
     
     // Afficher le modal si on a 4 articles ou plus et qu'il manque des articles gratuits
     // ET que le modal n'est pas déjà ouvert

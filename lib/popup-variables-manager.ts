@@ -4,7 +4,9 @@ import {
   loadPopupVariable,
   savePopupVariable,
   loadPopupCouleurs,
-  savePopupCouleurs
+  savePopupCouleurs,
+  loadPopupItems,
+  savePopupItems
 } from './popup-variables-manager-supabase'
 
 // ============================================
@@ -54,6 +56,8 @@ export interface Couleur {
 
 const POPUP_DUO_SAVEURS_KEY = 'popup-duo-saveurs'
 const POPUP_DUO_FORMES_KEY = 'popup-duo-formes'
+const POPUP_DUO_FORMES_IMAGES_KEY = 'popup-duo-formes-images'
+const POPUP_DUO_VARIANT_IMAGES_KEY = 'popup-duo-variant-images'
 const BAR_POPUP_AROMES_KEY = 'bar-popup-aromes'
 const BAR_POPUP_COULEURS_FLUO_KEY = 'bar-popup-couleurs-fluo'
 const BAR_POPUP_COULEURS_PASTEL_KEY = 'bar-popup-couleurs-pastel'
@@ -360,6 +364,246 @@ export function onPopupDuoFormesUpdate(callback: () => void): () => void {
   const handler = () => callback()
   window.addEventListener('popup-duo-formes-updated', handler)
   return () => window.removeEventListener('popup-duo-formes-updated', handler)
+}
+
+// ============================================
+// POP-UP DUO - IMAGES PAR FORME
+// ============================================
+
+export type PopupDuoFormeImages = Record<string, string>
+
+/**
+ * Charge le mapping { forme -> imageBase64 } depuis Supabase.
+ */
+export async function loadPopupDuoFormeImages(): Promise<PopupDuoFormeImages> {
+  try {
+    const items = await loadPopupItems(POPUP_DUO_FORMES_IMAGES_KEY)
+    const result: PopupDuoFormeImages = {}
+    for (const item of items) {
+      const forme = typeof item?.value === 'string' ? item.value : ''
+      const image = item?.metadata?.image
+      if (isValidString(forme) && typeof image === 'string' && image.trim().length > 0) {
+        result[forme] = image
+      }
+    }
+    return result
+  } catch (error) {
+    console.error('Erreur lors du chargement des images Pop-up Duo (formes):', error)
+    return {}
+  }
+}
+
+/**
+ * Sauvegarde / met à jour l'image d'une forme Pop-up Duo.
+ */
+export async function savePopupDuoFormeImage(forme: string, image: string): Promise<{ success: boolean; error?: string }> {
+  if (!isValidString(forme)) return { success: false, error: 'La forme est invalide' }
+  if (!isValidString(image)) return { success: false, error: 'L’image est invalide' }
+
+  const trimmedForme = forme.trim()
+  const trimmedImage = image.trim()
+
+  try {
+    const existing = await loadPopupItems(POPUP_DUO_FORMES_IMAGES_KEY)
+    const next = [...existing]
+
+    const idx = next.findIndex(i => (i?.value || '').toLowerCase().trim() === trimmedForme.toLowerCase())
+    if (idx >= 0) {
+      next[idx] = { value: trimmedForme, metadata: { ...(next[idx]?.metadata || {}), image: trimmedImage } }
+    } else {
+      next.push({ value: trimmedForme, metadata: { image: trimmedImage } })
+    }
+
+    await savePopupItems(POPUP_DUO_FORMES_IMAGES_KEY, next)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('popup-duo-formes-images-updated'))
+    }
+    return { success: true }
+  } catch (error: any) {
+    const errorMessage = error?.message || 'Erreur inconnue lors de la sauvegarde'
+    console.error('Erreur lors de la sauvegarde des images Pop-up Duo (formes):', error)
+    return { success: false, error: errorMessage }
+  }
+}
+
+/**
+ * Supprime l'image associée à une forme Pop-up Duo.
+ */
+export async function removePopupDuoFormeImage(forme: string): Promise<{ success: boolean; error?: string }> {
+  if (!isValidString(forme)) return { success: false, error: 'La forme est invalide' }
+  const trimmedForme = forme.trim()
+
+  try {
+    const existing = await loadPopupItems(POPUP_DUO_FORMES_IMAGES_KEY)
+    const next = existing.filter(i => (i?.value || '').toLowerCase().trim() !== trimmedForme.toLowerCase())
+    await savePopupItems(POPUP_DUO_FORMES_IMAGES_KEY, next)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('popup-duo-formes-images-updated'))
+    }
+    return { success: true }
+  } catch (error: any) {
+    const errorMessage = error?.message || 'Erreur inconnue lors de la suppression'
+    console.error('Erreur lors de la suppression des images Pop-up Duo (formes):', error)
+    return { success: false, error: errorMessage }
+  }
+}
+
+export function onPopupDuoFormeImagesUpdate(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const handler = () => callback()
+  window.addEventListener('popup-duo-formes-images-updated', handler)
+  return () => window.removeEventListener('popup-duo-formes-images-updated', handler)
+}
+
+// ============================================
+// POP-UP DUO - IMAGES PAR VARIANTE (SAVEUR + FORME)
+// ============================================
+
+export type PopupDuoVariantImages = Record<string, string> // key = normalized "saveur||forme"
+
+function normalizePopupDuoVariantKey(saveur: string, forme: string): string {
+  return `${saveur}`.trim().toLowerCase() + '||' + `${forme}`.trim().toLowerCase()
+}
+
+function parsePopupDuoVariantKey(value: string): { saveur: string; forme: string } | null {
+  if (!isValidString(value)) return null
+  const parts = value.split('||')
+  if (parts.length < 2) return null
+  const saveur = parts[0]?.trim() || ''
+  const forme = parts.slice(1).join('||').trim() // tolère '||' dans la forme (rare)
+  if (!isValidString(saveur) || !isValidString(forme)) return null
+  return { saveur, forme }
+}
+
+/**
+ * Charge le mapping { "saveur||forme" -> imageBase64 } depuis Supabase.
+ */
+export async function loadPopupDuoVariantImages(): Promise<PopupDuoVariantImages> {
+  try {
+    const items = await loadPopupItems(POPUP_DUO_VARIANT_IMAGES_KEY)
+    const result: PopupDuoVariantImages = {}
+    for (const item of items) {
+      const parsed = parsePopupDuoVariantKey(item?.value || '')
+      const image = item?.metadata?.image
+      if (parsed && typeof image === 'string' && image.trim().length > 0) {
+        result[normalizePopupDuoVariantKey(parsed.saveur, parsed.forme)] = image
+      }
+    }
+    return result
+  } catch (error) {
+    console.error('Erreur lors du chargement des images Pop-up Duo (saveur+forme):', error)
+    return {}
+  }
+}
+
+/**
+ * Sauvegarde / met à jour l'image d'une variante Pop-up Duo (saveur + forme).
+ */
+export async function savePopupDuoVariantImage(
+  saveur: string,
+  forme: string,
+  image: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!isValidString(saveur)) return { success: false, error: 'La saveur est invalide' }
+  if (!isValidString(forme)) return { success: false, error: 'La forme est invalide' }
+  if (!isValidString(image)) return { success: false, error: 'L’image est invalide' }
+
+  const s = saveur.trim()
+  const f = forme.trim()
+  const img = image.trim()
+  const normalizedKey = normalizePopupDuoVariantKey(s, f)
+
+  try {
+    const existing = await loadPopupItems(POPUP_DUO_VARIANT_IMAGES_KEY)
+    const next = [...existing]
+
+    const idx = next.findIndex(i => {
+      const parsed = parsePopupDuoVariantKey(i?.value || '')
+      if (!parsed) return false
+      return normalizePopupDuoVariantKey(parsed.saveur, parsed.forme) === normalizedKey
+    })
+
+    const storedValue = `${s}||${f}`
+    if (idx >= 0) {
+      next[idx] = { value: storedValue, metadata: { ...(next[idx]?.metadata || {}), image: img } }
+    } else {
+      next.push({ value: storedValue, metadata: { image: img } })
+    }
+
+    await savePopupItems(POPUP_DUO_VARIANT_IMAGES_KEY, next)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('popup-duo-variant-images-updated'))
+    }
+    return { success: true }
+  } catch (error: any) {
+    const errorMessage = error?.message || 'Erreur inconnue lors de la sauvegarde'
+    console.error('Erreur lors de la sauvegarde des images Pop-up Duo (saveur+forme):', error)
+    return { success: false, error: errorMessage }
+  }
+}
+
+export async function removePopupDuoVariantImage(
+  saveur: string,
+  forme: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!isValidString(saveur)) return { success: false, error: 'La saveur est invalide' }
+  if (!isValidString(forme)) return { success: false, error: 'La forme est invalide' }
+  const normalizedKey = normalizePopupDuoVariantKey(saveur, forme)
+
+  try {
+    const existing = await loadPopupItems(POPUP_DUO_VARIANT_IMAGES_KEY)
+    const next = existing.filter(i => {
+      const parsed = parsePopupDuoVariantKey(i?.value || '')
+      if (!parsed) return true
+      return normalizePopupDuoVariantKey(parsed.saveur, parsed.forme) !== normalizedKey
+    })
+    await savePopupItems(POPUP_DUO_VARIANT_IMAGES_KEY, next)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('popup-duo-variant-images-updated'))
+    }
+    return { success: true }
+  } catch (error: any) {
+    const errorMessage = error?.message || 'Erreur inconnue lors de la suppression'
+    console.error('Erreur lors de la suppression des images Pop-up Duo (saveur+forme):', error)
+    return { success: false, error: errorMessage }
+  }
+}
+
+export async function removePopupDuoVariantImagesForSaveur(saveur: string): Promise<void> {
+  if (!isValidString(saveur)) return
+  const s = saveur.trim().toLowerCase()
+  const existing = await loadPopupItems(POPUP_DUO_VARIANT_IMAGES_KEY)
+  const next = existing.filter(i => {
+    const parsed = parsePopupDuoVariantKey(i?.value || '')
+    if (!parsed) return true
+    return parsed.saveur.trim().toLowerCase() !== s
+  })
+  await savePopupItems(POPUP_DUO_VARIANT_IMAGES_KEY, next)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('popup-duo-variant-images-updated'))
+  }
+}
+
+export async function removePopupDuoVariantImagesForForme(forme: string): Promise<void> {
+  if (!isValidString(forme)) return
+  const f = forme.trim().toLowerCase()
+  const existing = await loadPopupItems(POPUP_DUO_VARIANT_IMAGES_KEY)
+  const next = existing.filter(i => {
+    const parsed = parsePopupDuoVariantKey(i?.value || '')
+    if (!parsed) return true
+    return parsed.forme.trim().toLowerCase() !== f
+  })
+  await savePopupItems(POPUP_DUO_VARIANT_IMAGES_KEY, next)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('popup-duo-variant-images-updated'))
+  }
+}
+
+export function onPopupDuoVariantImagesUpdate(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const handler = () => callback()
+  window.addEventListener('popup-duo-variant-images-updated', handler)
+  return () => window.removeEventListener('popup-duo-variant-images-updated', handler)
 }
 
 // ============================================

@@ -2,17 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import { ShoppingCart, Factory, Package, Zap, Droplet } from 'lucide-react'
-import { loadPopupDuoSaveurs, loadPopupDuoFormes, onPopupDuoSaveursUpdate, onPopupDuoFormesUpdate } from '@/lib/popup-variables-manager'
+import { loadPopupDuoSaveurs, loadPopupDuoFormes, loadPopupDuoFormeImages, loadPopupDuoVariantImages, onPopupDuoSaveursUpdate, onPopupDuoFormesUpdate, onPopupDuoFormeImagesUpdate, onPopupDuoVariantImagesUpdate } from '@/lib/popup-variables-manager'
 import { useCart } from '@/contexts/CartContext'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
 import { getPopUpDuoId, getPrixPersonnalise } from '@/lib/price-utils'
 import { getAvailableStock, getAvailableStockSync, onStockUpdate } from '@/lib/stock-manager'
-import { onProductsUpdate, type Product, type ProductVariant } from '@/lib/products-manager'
+import { onProductsUpdate, type Product, type ProductVariant, getProductFirstImage } from '@/lib/products-manager'
 import PromoItemModal, { PromoCharacteristics } from '@/components/PromoItemModal'
 
 export default function PopupsPage() {
   const [saveurs, setSaveurs] = useState<string[]>([])
   const [formes, setFormes] = useState<string[]>([])
+  const [formeImages, setFormeImages] = useState<Record<string, string>>({})
+  const [variantImages, setVariantImages] = useState<Record<string, string>>({})
   const [selectedSaveur, setSelectedSaveur] = useState('')
   const [selectedForme, setSelectedForme] = useState('')
   
@@ -23,12 +25,16 @@ export default function PopupsPage() {
         console.log('🔍 Chargement des saveurs et formes Pop-up Duo...')
         const loadedSaveurs = await loadPopupDuoSaveurs()
         const loadedFormes = await loadPopupDuoFormes()
+        const loadedFormeImages = await loadPopupDuoFormeImages()
+        const loadedVariantImages = await loadPopupDuoVariantImages()
         const saveursArray = Array.isArray(loadedSaveurs) ? loadedSaveurs : []
         const formesArray = Array.isArray(loadedFormes) ? loadedFormes : []
         console.log(`✅ Saveurs chargées: ${saveursArray.length}`, saveursArray)
         console.log(`✅ Formes chargées: ${formesArray.length}`, formesArray)
         setSaveurs(saveursArray)
         setFormes(formesArray)
+        setFormeImages(loadedFormeImages && typeof loadedFormeImages === 'object' ? loadedFormeImages : {})
+        setVariantImages(loadedVariantImages && typeof loadedVariantImages === 'object' ? loadedVariantImages : {})
         if (saveursArray.length > 0 && !selectedSaveur) {
           setSelectedSaveur(saveursArray[0])
         }
@@ -39,16 +45,22 @@ export default function PopupsPage() {
         console.error('❌ Erreur lors du chargement des saveurs/formes:', error)
         setSaveurs([])
         setFormes([])
+        setFormeImages({})
+        setVariantImages({})
       }
     }
     
     loadData()
     const unsubscribeSaveurs = onPopupDuoSaveursUpdate(loadData)
     const unsubscribeFormes = onPopupDuoFormesUpdate(loadData)
+    const unsubscribeFormeImages = onPopupDuoFormeImagesUpdate(loadData)
+    const unsubscribeVariantImages = onPopupDuoVariantImagesUpdate(loadData)
     
     return () => {
       unsubscribeSaveurs()
       unsubscribeFormes()
+      unsubscribeFormeImages()
+      unsubscribeVariantImages()
     }
   }, [])
   const [quantity, setQuantity] = useState(1)
@@ -452,10 +464,11 @@ export default function PopupsPage() {
   // Surveiller les changements du panier pour ouvrir le modal automatiquement
   useEffect(() => {
     // Calculer directement si on doit ouvrir le modal
-    const eligibleItems = cartItems.filter(item => !item.isGratuit && item.produit === 'Pop-up Duo')
+    // Utiliser startsWith pour matcher les noms de produits dynamiques (ex: "Pop-up Duo Mûre cassis")
+    const eligibleItems = cartItems.filter(item => !item.isGratuit && item.produit.startsWith('Pop-up Duo'))
     const total = eligibleItems.reduce((sum, item) => sum + item.quantite, 0)
     const neededGratuits = Math.floor(total / 4)
-    const existingGratuits = cartItems.filter(item => item.isGratuit && item.produit === 'Pop-up Duo').length
+    const existingGratuits = cartItems.filter(item => item.isGratuit && item.produit.startsWith('Pop-up Duo')).length
     
     // Afficher le modal si on a 4 articles ou plus et qu'il manque des articles gratuits
     // ET que le modal n'est pas déjà ouvert
@@ -843,7 +856,17 @@ export default function PopupsPage() {
               <div className="mb-4">
                 <h3 className="text-sm font-semibold mb-2">Aperçu</h3>
                 <div className="flex items-center justify-center aspect-square max-w-xs mx-auto bg-noir-900 rounded-lg border border-noir-700">
-                  <Package className="w-24 h-24 text-gray-500" />
+                  {(() => {
+                    const variantKey = `${selectedSaveur}`.trim().toLowerCase() + '||' + `${selectedForme}`.trim().toLowerCase()
+                    const variantImage = (selectedSaveur && selectedForme) ? variantImages?.[variantKey] : undefined
+                    const formeImage = selectedForme ? formeImages?.[selectedForme] : undefined
+                    const productImage = popupDuoProduct ? getProductFirstImage(popupDuoProduct) : null
+                    const img = variantImage || formeImage || productImage
+                    if (img) {
+                      return <img src={img} alt={`Pop-up Duo ${selectedSaveur} ${selectedForme}`} className="w-full h-full object-cover rounded-lg" />
+                    }
+                    return <Package className="w-24 h-24 text-gray-500" />
+                  })()}
                 </div>
               </div>
 

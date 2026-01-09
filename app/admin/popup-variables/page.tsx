@@ -6,6 +6,9 @@ import {
   // Pop-up Duo
   loadPopupDuoSaveurs, addPopupDuoSaveur, removePopupDuoSaveur, onPopupDuoSaveursUpdate,
   loadPopupDuoFormes, addPopupDuoForme, removePopupDuoForme, onPopupDuoFormesUpdate,
+  loadPopupDuoFormeImages, savePopupDuoFormeImage, removePopupDuoFormeImage, onPopupDuoFormeImagesUpdate,
+  loadPopupDuoVariantImages, savePopupDuoVariantImage, removePopupDuoVariantImage, onPopupDuoVariantImagesUpdate,
+  removePopupDuoVariantImagesForSaveur, removePopupDuoVariantImagesForForme,
   // Bar à Pop-up
   loadBarPopupAromes, addBarPopupArome, removeBarPopupArome, onBarPopupAromesUpdate,
   loadBarPopupCouleursFluo, addBarPopupCouleurFluo, removeBarPopupCouleurFluo, onBarPopupCouleursFluoUpdate,
@@ -26,6 +29,10 @@ export default function PopupVariablesAdminPage() {
   // Pop-up Duo
   const [popupDuoSaveurs, setPopupDuoSaveurs] = useState<string[]>([])
   const [popupDuoFormes, setPopupDuoFormes] = useState<string[]>([])
+  const [popupDuoFormeImages, setPopupDuoFormeImages] = useState<Record<string, string>>({})
+  const [popupDuoVariantImages, setPopupDuoVariantImages] = useState<Record<string, string>>({})
+  const [selectedImageSaveur, setSelectedImageSaveur] = useState('')
+  const [selectedImageForme, setSelectedImageForme] = useState('')
   const [newSaveur, setNewSaveur] = useState('')
   const [newForme, setNewForme] = useState('')
   
@@ -57,7 +64,7 @@ export default function PopupVariablesAdminPage() {
         fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:44',message:'calling Promise.all for popup variables',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
       }
       // #endregion
-      const [saveurs, formes, aromesData, couleursFluoData, couleursPastelData, taillesFluoData, taillesPastelData] = await Promise.all([
+      const [saveurs, formes, aromesData, couleursFluoData, couleursPastelData, taillesFluoData, taillesPastelData, formeImages, variantImages] = await Promise.all([
         loadPopupDuoSaveurs().catch(err => {
           // #region agent log
           if (typeof window !== 'undefined') {
@@ -100,6 +107,14 @@ export default function PopupVariablesAdminPage() {
         loadBarPopupTaillesPastel().catch(err => {
           console.error('Erreur loadBarPopupTaillesPastel:', err)
           return []
+        }),
+        loadPopupDuoFormeImages().catch(err => {
+          console.error('Erreur loadPopupDuoFormeImages:', err)
+          return {}
+        }),
+        loadPopupDuoVariantImages().catch(err => {
+          console.error('Erreur loadPopupDuoVariantImages:', err)
+          return {}
         })
       ])
       
@@ -117,6 +132,16 @@ export default function PopupVariablesAdminPage() {
       setCouleursPastel(Array.isArray(couleursPastelData) ? couleursPastelData : [])
       setTaillesFluo(Array.isArray(taillesFluoData) ? taillesFluoData : [])
       setTaillesPastel(Array.isArray(taillesPastelData) ? taillesPastelData : [])
+      setPopupDuoFormeImages(formeImages && typeof formeImages === 'object' ? (formeImages as Record<string, string>) : {})
+      setPopupDuoVariantImages(variantImages && typeof variantImages === 'object' ? (variantImages as Record<string, string>) : {})
+
+      // Initialiser les sélections (si vides)
+      if (!selectedImageSaveur && Array.isArray(saveurs) && saveurs.length > 0) {
+        setSelectedImageSaveur(saveurs[0])
+      }
+      if (!selectedImageForme && Array.isArray(formes) && formes.length > 0) {
+        setSelectedImageForme(formes[0])
+      }
       
       // Vérifier si toutes les données sont vides (problème de connexion Supabase)
       if (saveurs.length === 0 && formes.length === 0 && aromesData.length === 0) {
@@ -155,6 +180,8 @@ export default function PopupVariablesAdminPage() {
     const unsubscribes = [
       onPopupDuoSaveursUpdate(loadAllData),
       onPopupDuoFormesUpdate(loadAllData),
+      onPopupDuoFormeImagesUpdate(loadAllData),
+      onPopupDuoVariantImagesUpdate(loadAllData),
       onBarPopupAromesUpdate(loadAllData),
       onBarPopupCouleursFluoUpdate(loadAllData),
       onBarPopupCouleursPastelUpdate(loadAllData),
@@ -195,7 +222,10 @@ export default function PopupVariablesAdminPage() {
     if (confirm(`Êtes-vous sûr de vouloir supprimer la saveur "${saveur}" ?`)) {
       const success = await removePopupDuoSaveur(saveur)
       setMessage(success ? { type: 'success', text: `Saveur "${saveur}" supprimée.` } : { type: 'error', text: 'Erreur lors de la suppression.' })
-      if (success) await loadAllData()
+      if (success) {
+        await removePopupDuoVariantImagesForSaveur(saveur).catch(() => {})
+        await loadAllData()
+      }
     }
   }
 
@@ -227,7 +257,71 @@ export default function PopupVariablesAdminPage() {
     if (confirm(`Êtes-vous sûr de vouloir supprimer la forme "${forme}" ?`)) {
       const success = await removePopupDuoForme(forme)
       setMessage(success ? { type: 'success', text: `Forme "${forme}" supprimée.` } : { type: 'error', text: 'Erreur lors de la suppression.' })
-      if (success) await loadAllData()
+      if (success) {
+        // Nettoyage best-effort : supprimer aussi l'image associée si elle existe
+        await removePopupDuoFormeImage(forme).catch(() => {})
+        await removePopupDuoVariantImagesForForme(forme).catch(() => {})
+        await loadAllData()
+      }
+    }
+  }
+
+  const fileToDataUrl = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = () => reject(new Error('Erreur de lecture du fichier'))
+      reader.onload = () => resolve(String(reader.result || ''))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleUploadFormeImage = async (forme: string, file: File) => {
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      const res = await savePopupDuoFormeImage(forme, dataUrl)
+      if (res.success) {
+        setMessage({ type: 'success', text: `Image enregistrée pour la forme "${forme}".` })
+        await loadAllData()
+      } else {
+        setMessage({ type: 'error', text: res.error || 'Erreur lors de l’enregistrement de l’image.' })
+      }
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.message || 'Erreur lors de l’upload.' })
+    }
+  }
+
+  const handleRemoveFormeImage = async (forme: string) => {
+    const res = await removePopupDuoFormeImage(forme)
+    if (res.success) {
+      setMessage({ type: 'success', text: `Image supprimée pour la forme "${forme}".` })
+      await loadAllData()
+    } else {
+      setMessage({ type: 'error', text: res.error || 'Erreur lors de la suppression de l’image.' })
+    }
+  }
+
+  const handleUploadVariantImage = async (saveur: string, forme: string, file: File) => {
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      const res = await savePopupDuoVariantImage(saveur, forme, dataUrl)
+      if (res.success) {
+        setMessage({ type: 'success', text: `Image enregistrée pour "${saveur}" + "${forme}".` })
+        await loadAllData()
+      } else {
+        setMessage({ type: 'error', text: res.error || 'Erreur lors de l’enregistrement de l’image.' })
+      }
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.message || 'Erreur lors de l’upload.' })
+    }
+  }
+
+  const handleRemoveVariantImage = async (saveur: string, forme: string) => {
+    const res = await removePopupDuoVariantImage(saveur, forme)
+    if (res.success) {
+      setMessage({ type: 'success', text: `Image supprimée pour "${saveur}" + "${forme}".` })
+      await loadAllData()
+    } else {
+      setMessage({ type: 'error', text: res.error || 'Erreur lors de la suppression de l’image.' })
     }
   }
 
@@ -480,16 +574,139 @@ export default function PopupVariablesAdminPage() {
               <ul className="space-y-2">
                 {(Array.isArray(popupDuoFormes) ? popupDuoFormes : []).map((forme) => (
                   <li key={forme} className="flex items-center justify-between bg-noir-900/50 rounded-lg p-3">
-                    <span className="text-white font-medium">{forme}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-lg border border-noir-700 overflow-hidden bg-noir-950 flex items-center justify-center">
+                        {popupDuoFormeImages?.[forme] ? (
+                          <img src={popupDuoFormeImages[forme]} alt={`Forme ${forme}`} className="w-full h-full object-cover" />
+                        ) : (
+                          <Package className="w-6 h-6 text-gray-600" />
+                        )}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-white font-medium">{forme}</span>
+                        <div className="flex items-center gap-3 mt-1">
+                          <label className="text-xs text-yellow-400 hover:text-yellow-300 cursor-pointer">
+                            Choisir une image
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) {
+                                  handleUploadFormeImage(forme, file)
+                                }
+                                // Permet de re-sélectionner le même fichier
+                                e.currentTarget.value = ''
+                              }}
+                            />
+                          </label>
+                          {popupDuoFormeImages?.[forme] && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFormeImage(forme)}
+                              className="text-xs text-red-400 hover:text-red-300"
+                            >
+                              Supprimer image
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Conseil: image légère (compressée) pour éviter de ralentir l’admin.
+                        </p>
+                      </div>
+                    </div>
                     <button
                       onClick={() => handleRemoveForme(forme)}
                       className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                      title="Supprimer la forme"
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>
                   </li>
                 ))}
               </ul>
+            </div>
+
+            <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <Package className="w-6 h-6 text-yellow-500" />
+                Pop-up Duo - Images (Saveur + Forme)
+              </h2>
+
+              <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-gray-300">Saveur</label>
+                  <select
+                    value={selectedImageSaveur}
+                    onChange={(e) => setSelectedImageSaveur(e.target.value)}
+                    className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                  >
+                    {(Array.isArray(popupDuoSaveurs) ? popupDuoSaveurs : []).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-gray-300">Forme</label>
+                  <select
+                    value={selectedImageForme}
+                    onChange={(e) => setSelectedImageForme(e.target.value)}
+                    className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                  >
+                    {(Array.isArray(popupDuoFormes) ? popupDuoFormes : []).map(f => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {(() => {
+                const key = `${selectedImageSaveur}`.trim().toLowerCase() + '||' + `${selectedImageForme}`.trim().toLowerCase()
+                const img = popupDuoVariantImages?.[key]
+                return (
+                  <div className="flex items-start gap-4">
+                    <div className="w-28 h-28 rounded-xl border border-noir-700 overflow-hidden bg-noir-950 flex items-center justify-center">
+                      {img ? (
+                        <img src={img} alt="Aperçu variante" className="w-full h-full object-cover" />
+                      ) : (
+                        <Package className="w-8 h-8 text-gray-600" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <label className="text-sm text-yellow-400 hover:text-yellow-300 cursor-pointer">
+                          Choisir une image
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file && selectedImageSaveur && selectedImageForme) {
+                                handleUploadVariantImage(selectedImageSaveur, selectedImageForme, file)
+                              }
+                              e.currentTarget.value = ''
+                            }}
+                          />
+                        </label>
+                        {img && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveVariantImage(selectedImageSaveur, selectedImageForme)}
+                            className="text-sm text-red-400 hover:text-red-300"
+                          >
+                            Supprimer image
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-400">
+                        Cette image est prioritaire sur “image par forme”.
+                      </p>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           </div>
 
