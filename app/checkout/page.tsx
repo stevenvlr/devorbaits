@@ -1192,7 +1192,8 @@ export default function CheckoutPage() {
                           )
 
                           if (order.id) {
-                            await updateOrderStatus(order.id, 'completed')
+                            // La commande reste en "pending" (en attente) par défaut
+                            // Le statut sera changé manuellement depuis l'admin
                             
                             // Boxtal désactivé temporairement
                             // TODO: Réactiver quand Boxtal sera configuré
