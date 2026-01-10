@@ -123,6 +123,52 @@ export async function uploadProductImage(productId: string, file: File, imageInd
 }
 
 /**
+ * Upload une image partagée (Flash Boost / Spray Plus) vers Supabase Storage.
+ * IMPORTANT: Cette fonction ne fait PAS de fallback base64 car les URLs doivent être courtes.
+ * Retourne l'URL publique ou lance une erreur si l'upload échoue.
+ */
+export async function uploadSharedImage(type: 'flash-boost' | 'spray-plus', file: File): Promise<string> {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase n\'est pas configuré. Veuillez configurer Supabase Storage.')
+  }
+
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    throw new Error('Impossible de créer le client Supabase')
+  }
+
+  try {
+    const fileExt = file.name.split('.').pop() || 'jpg'
+    const fileName = `${type}-${Date.now()}.${fileExt}`
+    const filePath = `shared/${fileName}`
+
+    console.log(`📤 Upload vers Supabase Storage: ${filePath}`)
+
+    const { error } = await supabase.storage
+      .from('images')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      })
+
+    if (error) {
+      console.error('❌ Erreur Supabase Storage:', error)
+      throw new Error(`Erreur Storage: ${error.message}. Vérifiez que le bucket 'images' existe et que les politiques permettent l'upload.`)
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('images')
+      .getPublicUrl(filePath)
+
+    console.log(`✅ Image uploadée avec succès: ${publicUrl}`)
+    return publicUrl
+  } catch (error: any) {
+    console.error('❌ Erreur upload image partagée:', error)
+    throw error
+  }
+}
+
+/**
  * Convertit un fichier en URL base64
  */
 function convertToBase64(file: File): Promise<string> {

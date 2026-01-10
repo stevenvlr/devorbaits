@@ -13,7 +13,7 @@ import {
   loadFlashBoostImage, saveFlashBoostImage, onFlashBoostImageUpdate,
   loadSprayPlusImage, saveSprayPlusImage, onSprayPlusImageUpdate,
 } from '@/lib/flash-spray-variables-manager'
-import { uploadProductImage } from '@/lib/storage-supabase'
+import { uploadSharedImage } from '@/lib/storage-supabase'
 import { getAllAromesAndSaveurs } from '@/lib/all-aromes-saveurs-manager'
 import {
   createStockForFlashBoostArome,
@@ -232,11 +232,11 @@ export default function FlashSprayVariablesAdminPage() {
 
     setIsUploadingFlashBoost(true)
     try {
-      console.log('📤 Upload de l\'image Flash Boost...')
-      const imageUrl = await uploadProductImage('flash-boost-shared', file, 0)
-      console.log('✅ Image uploadée, URL:', imageUrl?.substring(0, 50) + '...')
+      console.log('📤 Upload de l\'image Flash Boost vers Supabase Storage...')
+      const imageUrl = await uploadSharedImage('flash-boost', file)
+      console.log('✅ Image uploadée, URL:', imageUrl)
       
-      console.log('💾 Sauvegarde dans Supabase...')
+      console.log('💾 Sauvegarde de l\'URL dans la base de données...')
       const success = await saveFlashBoostImage(imageUrl)
       
       if (success) {
@@ -265,11 +265,11 @@ export default function FlashSprayVariablesAdminPage() {
 
     setIsUploadingSprayPlus(true)
     try {
-      console.log('📤 Upload de l\'image Spray Plus...')
-      const imageUrl = await uploadProductImage('spray-plus-shared', file, 0)
-      console.log('✅ Image uploadée, URL:', imageUrl?.substring(0, 50) + '...')
+      console.log('📤 Upload de l\'image Spray Plus vers Supabase Storage...')
+      const imageUrl = await uploadSharedImage('spray-plus', file)
+      console.log('✅ Image uploadée, URL:', imageUrl)
       
-      console.log('💾 Sauvegarde dans Supabase...')
+      console.log('💾 Sauvegarde de l\'URL dans la base de données...')
       const success = await saveSprayPlusImage(imageUrl)
       
       if (success) {
