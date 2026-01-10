@@ -9,6 +9,7 @@ import {
   loadBarPopupCouleursPastel, onBarPopupCouleursPastelUpdate,
   loadBarPopupTaillesFluo, onBarPopupTaillesFluoUpdate,
   loadBarPopupTaillesPastel, onBarPopupTaillesPastelUpdate,
+  loadBarPopupCouleurImages, getBarPopupCouleurImage, onBarPopupCouleurImagesUpdate,
   type Couleur
 } from '@/lib/popup-variables-manager'
 // Note: Les constantes COULEURS_FLUO, COULEURS_PASTEL, AROMES ne sont plus utilisées directement
@@ -34,18 +35,21 @@ export default function BarPopupPage() {
   const [showPromoModal, setShowPromoModal] = useState(false)
   const [barPopupProduct, setBarPopupProduct] = useState<Product | null>(null)
   const [barPopupVariant, setBarPopupVariant] = useState<ProductVariant | null>(null)
+  const [couleurImages, setCouleurImages] = useState<Record<string, string>>({})
+  const [selectedCouleurImage, setSelectedCouleurImage] = useState<string | null>(null)
 
   // Charger les variables depuis le gestionnaire
   useEffect(() => {
     const loadData = async () => {
       try {
         console.log('🔍 Chargement des variables Bar à Pop-up...')
-        const [loadedAromes, loadedCouleursFluo, loadedCouleursPastel, loadedTaillesFluo, loadedTaillesPastel] = await Promise.all([
+        const [loadedAromes, loadedCouleursFluo, loadedCouleursPastel, loadedTaillesFluo, loadedTaillesPastel, loadedCouleurImages] = await Promise.all([
           loadBarPopupAromes(),
           loadBarPopupCouleursFluo(),
           loadBarPopupCouleursPastel(),
           loadBarPopupTaillesFluo(),
-          loadBarPopupTaillesPastel()
+          loadBarPopupTaillesPastel(),
+          loadBarPopupCouleurImages()
         ])
         
         // S'assurer que toutes les valeurs sont des tableaux
@@ -66,6 +70,7 @@ export default function BarPopupPage() {
         setCouleursPastel(couleursPastelArray)
         setTaillesFluo(taillesFluoArray)
         setTaillesPastel(taillesPastelArray)
+        setCouleurImages(loadedCouleurImages && typeof loadedCouleurImages === 'object' ? loadedCouleurImages : {})
         
         if (couleursFluoArray.length > 0 && !selectedCouleur) {
           setSelectedCouleur(couleursFluoArray[0])
@@ -89,7 +94,8 @@ export default function BarPopupPage() {
       onBarPopupCouleursFluoUpdate(loadData),
       onBarPopupCouleursPastelUpdate(loadData),
       onBarPopupTaillesFluoUpdate(loadData),
-      onBarPopupTaillesPastelUpdate(loadData)
+      onBarPopupTaillesPastelUpdate(loadData),
+      onBarPopupCouleurImagesUpdate(loadData)
     ]
     
     return () => {
@@ -151,6 +157,15 @@ export default function BarPopupPage() {
       setSelectedTaille(availableTailles[0])
     }
   }, [selectedCouleur, availableTailles, selectedTaille])
+
+  // Mettre à jour l'image quand la couleur sélectionnée change
+  useEffect(() => {
+    if (selectedCouleur && couleurImages[selectedCouleur.name]) {
+      setSelectedCouleurImage(couleurImages[selectedCouleur.name])
+    } else {
+      setSelectedCouleurImage(null)
+    }
+  }, [selectedCouleur, couleurImages])
 
   // Surveiller les changements du panier pour ouvrir le modal automatiquement
   useEffect(() => {
@@ -401,13 +416,21 @@ export default function BarPopupPage() {
               {/* Preview Visuel */}
               <div className="mb-8">
                 <h3 className="text-lg font-semibold mb-4">Aperçu</h3>
-                <div className="flex items-center justify-center h-64 bg-noir-900 rounded-lg border border-noir-700">
-                  <div
-                    className="w-24 h-24 rounded-full shadow-lg"
-                    style={{ backgroundColor: selectedCouleur?.value || '#FFFFFF' }}
-                  >
-                    {/* Simulation d'un pop-up */}
-                  </div>
+                <div className="flex items-center justify-center h-64 bg-noir-900 rounded-lg border border-noir-700 overflow-hidden">
+                  {selectedCouleurImage ? (
+                    <img 
+                      src={selectedCouleurImage} 
+                      alt={selectedCouleur?.name || 'Pop-up'} 
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div
+                      className="w-24 h-24 rounded-full shadow-lg"
+                      style={{ backgroundColor: selectedCouleur?.value || '#FFFFFF' }}
+                    >
+                      {/* Simulation d'un pop-up si pas d'image */}
+                    </div>
+                  )}
                 </div>
               </div>
 

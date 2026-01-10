@@ -123,11 +123,11 @@ export async function uploadProductImage(productId: string, file: File, imageInd
 }
 
 /**
- * Upload une image partagée (Flash Boost / Spray Plus) vers Supabase Storage.
+ * Upload une image partagée vers Supabase Storage.
  * IMPORTANT: Cette fonction ne fait PAS de fallback base64 car les URLs doivent être courtes.
  * Retourne l'URL publique ou lance une erreur si l'upload échoue.
  */
-export async function uploadSharedImage(type: 'flash-boost' | 'spray-plus', file: File): Promise<string> {
+export async function uploadSharedImage(type: string, file: File): Promise<string> {
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase n\'est pas configuré. Veuillez configurer Supabase Storage.')
   }

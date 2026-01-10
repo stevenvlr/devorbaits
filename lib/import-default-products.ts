@@ -433,7 +433,7 @@ export async function importAmicaleBlancProducts(): Promise<{ success: number; s
           variants.push({
             id: `variant-${taille}-${arome}`,
             label: `${taille} - ${arome}`,
-            price: 5.99,
+            price: 6.99,
             available: true,
             taille: taille,
             arome: arome,
@@ -450,7 +450,7 @@ export async function importAmicaleBlancProducts(): Promise<{ success: number; s
       await addProduct({
         name: productName,
         category: 'bar à pop-up',
-        price: 5.99,
+        price: 6.99,
         description: getProductDescription(productName, 'bar à pop-up', couleur.name),
         available: true,
         variants: variants

@@ -5,7 +5,7 @@ import { BarChart3, TrendingUp, ShoppingCart, Package, DollarSign, Filter } from
 import { getAllOrders, type Order } from '@/lib/revenue-supabase'
 import { getPageViewsCount } from '@/lib/analytics-supabase'
 
-type DateFilterType = 'all' | 'month' | 'year' | 'custom'
+type DateFilterType = 'all' | 'day' | 'month' | 'year' | 'custom'
 
 type RevenueLine = {
   date: string
@@ -24,6 +24,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [visitsCount, setVisitsCount] = useState<number>(0)
   const [dateFilterType, setDateFilterType] = useState<DateFilterType>('all')
+  const [selectedDay, setSelectedDay] = useState(new Date().toISOString().slice(0, 10)) // Format YYYY-MM-DD
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [startDate, setStartDate] = useState('')
@@ -48,6 +49,13 @@ export default function AnalyticsPage() {
 
   const getDateRangeForViews = () => {
     // Retourne { startIso, endIso } inclusifs (end en fin de journée)
+    if (dateFilterType === 'day') {
+      const start = new Date(selectedDay)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(selectedDay)
+      end.setHours(23, 59, 59, 999)
+      return { startIso: start.toISOString(), endIso: end.toISOString() }
+    }
     if (dateFilterType === 'month') {
       const start = new Date(selectedYear, selectedMonth - 1, 1)
       const end = new Date(selectedYear, selectedMonth, 0)
@@ -81,13 +89,22 @@ export default function AnalyticsPage() {
     }
     loadViews()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFilterType, selectedMonth, selectedYear, startDate, endDate])
+  }, [dateFilterType, selectedDay, selectedMonth, selectedYear, startDate, endDate])
 
   // Filtrer les commandes selon les critères de date
   const getFilteredOrders = () => {
     let filtered = orders.filter(order => order.status === 'completed') // Seulement les commandes terminées
 
-    if (dateFilterType === 'month') {
+    if (dateFilterType === 'day') {
+      const dayStart = new Date(selectedDay)
+      dayStart.setHours(0, 0, 0, 0)
+      const dayEnd = new Date(selectedDay)
+      dayEnd.setHours(23, 59, 59, 999)
+      filtered = filtered.filter(order => {
+        const orderDate = new Date(order.created_at)
+        return orderDate >= dayStart && orderDate <= dayEnd
+      })
+    } else if (dateFilterType === 'month') {
       filtered = filtered.filter(order => {
         const orderDate = new Date(order.created_at)
         return orderDate.getMonth() + 1 === selectedMonth && orderDate.getFullYear() === selectedYear
@@ -115,6 +132,7 @@ export default function AnalyticsPage() {
   const filteredOrders = useMemo(() => getFilteredOrders(), [
     orders,
     dateFilterType,
+    selectedDay,
     selectedMonth,
     selectedYear,
     startDate,
@@ -318,11 +336,25 @@ export default function AnalyticsPage() {
                 className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
               >
                 <option value="all">Toutes les périodes</option>
+                <option value="day">Par jour</option>
                 <option value="month">Par mois</option>
                 <option value="year">Par année</option>
                 <option value="custom">Dates personnalisées</option>
               </select>
             </div>
+
+            {/* Filtre par jour */}
+            {dateFilterType === 'day' && (
+              <div>
+                <label className="block text-sm font-medium mb-2 text-gray-300">Jour</label>
+                <input
+                  type="date"
+                  value={selectedDay}
+                  onChange={(e) => setSelectedDay(e.target.value)}
+                  className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                />
+              </div>
+            )}
 
             {/* Filtre par mois */}
             {dateFilterType === 'month' && (
@@ -460,6 +492,7 @@ export default function AnalyticsPage() {
                   <p className="text-sm text-gray-400 mb-1">Période sélectionnée</p>
                   <p className="text-lg font-semibold text-white">
                     {dateFilterType === 'all' && 'Toutes les périodes'}
+                    {dateFilterType === 'day' && new Date(selectedDay).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     {dateFilterType === 'month' && `${months[selectedMonth - 1]} ${selectedYear}`}
                     {dateFilterType === 'year' && `Année ${selectedYear}`}
                     {dateFilterType === 'custom' && startDate && endDate && `${new Date(startDate).toLocaleDateString('fr-FR')} - ${new Date(endDate).toLocaleDateString('fr-FR')}`}

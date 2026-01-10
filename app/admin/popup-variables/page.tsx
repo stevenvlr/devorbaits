@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Package, Palette } from 'lucide-react'
+import { Plus, Trash2, Package, Palette, Upload, ImageIcon } from 'lucide-react'
 import {
   // Pop-up Duo
   loadPopupDuoSaveurs, addPopupDuoSaveur, removePopupDuoSaveur, onPopupDuoSaveursUpdate,
@@ -15,8 +15,11 @@ import {
   loadBarPopupCouleursPastel, addBarPopupCouleurPastel, removeBarPopupCouleurPastel, onBarPopupCouleursPastelUpdate,
   loadBarPopupTaillesFluo, addBarPopupTailleFluo, removeBarPopupTailleFluo, onBarPopupTaillesFluoUpdate,
   loadBarPopupTaillesPastel, addBarPopupTaillePastel, removeBarPopupTaillePastel, onBarPopupTaillesPastelUpdate,
+  // Images par couleur
+  loadBarPopupCouleurImages, saveBarPopupCouleurImage, onBarPopupCouleurImagesUpdate,
   type Couleur
 } from '@/lib/popup-variables-manager'
+import { uploadSharedImage } from '@/lib/storage-supabase'
 import {
   createStockForPopupDuoSaveur,
   createStockForPopupDuoForme,
@@ -42,6 +45,8 @@ export default function PopupVariablesAdminPage() {
   const [couleursPastel, setCouleursPastel] = useState<Couleur[]>([])
   const [taillesFluo, setTaillesFluo] = useState<string[]>([])
   const [taillesPastel, setTaillesPastel] = useState<string[]>([])
+  const [couleurImages, setCouleurImages] = useState<Record<string, string>>({})
+  const [uploadingCouleur, setUploadingCouleur] = useState<string | null>(null)
   const [newArome, setNewArome] = useState('')
   const [newCouleurFluo, setNewCouleurFluo] = useState('')
   const [newCouleurFluoValue, setNewCouleurFluoValue] = useState('#FFFF00') // Jaune fluo par défaut
@@ -64,7 +69,7 @@ export default function PopupVariablesAdminPage() {
         fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:44',message:'calling Promise.all for popup variables',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
       }
       // #endregion
-      const [saveurs, formes, aromesData, couleursFluoData, couleursPastelData, taillesFluoData, taillesPastelData, formeImages, variantImages] = await Promise.all([
+      const [saveurs, formes, aromesData, couleursFluoData, couleursPastelData, taillesFluoData, taillesPastelData, formeImages, variantImages, couleurImagesData] = await Promise.all([
         loadPopupDuoSaveurs().catch(err => {
           // #region agent log
           if (typeof window !== 'undefined') {
@@ -115,6 +120,10 @@ export default function PopupVariablesAdminPage() {
         loadPopupDuoVariantImages().catch(err => {
           console.error('Erreur loadPopupDuoVariantImages:', err)
           return {}
+        }),
+        loadBarPopupCouleurImages().catch(err => {
+          console.error('Erreur loadBarPopupCouleurImages:', err)
+          return {}
         })
       ])
       
@@ -134,6 +143,7 @@ export default function PopupVariablesAdminPage() {
       setTaillesPastel(Array.isArray(taillesPastelData) ? taillesPastelData : [])
       setPopupDuoFormeImages(formeImages && typeof formeImages === 'object' ? (formeImages as Record<string, string>) : {})
       setPopupDuoVariantImages(variantImages && typeof variantImages === 'object' ? (variantImages as Record<string, string>) : {})
+      setCouleurImages(couleurImagesData && typeof couleurImagesData === 'object' ? (couleurImagesData as Record<string, string>) : {})
 
       // Initialiser les sélections (si vides)
       if (!selectedImageSaveur && Array.isArray(saveurs) && saveurs.length > 0) {
@@ -186,7 +196,8 @@ export default function PopupVariablesAdminPage() {
       onBarPopupCouleursFluoUpdate(loadAllData),
       onBarPopupCouleursPastelUpdate(loadAllData),
       onBarPopupTaillesFluoUpdate(loadAllData),
-      onBarPopupTaillesPastelUpdate(loadAllData)
+      onBarPopupTaillesPastelUpdate(loadAllData),
+      onBarPopupCouleurImagesUpdate(loadAllData)
     ]
     
     return () => {
@@ -486,6 +497,42 @@ export default function PopupVariablesAdminPage() {
       if (success) await loadAllData()
     }
   }
+
+  // Bar à Pop-up - Upload image par couleur
+  const handleUploadCouleurImage = async (couleurName: string, file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'L\'image est trop grande (max 5MB)' })
+      return
+    }
+
+    setUploadingCouleur(couleurName)
+    try {
+      console.log(`📤 Upload de l'image pour la couleur "${couleurName}"...`)
+      // Créer un ID unique pour cette couleur
+      const safeColorName = couleurName.toLowerCase().replace(/[^a-z0-9]/g, '-')
+      const imageUrl = await uploadSharedImage(`bar-popup-${safeColorName}` as any, file)
+      console.log('✅ Image uploadée:', imageUrl)
+      
+      const success = await saveBarPopupCouleurImage(couleurName, imageUrl)
+      if (success) {
+        setCouleurImages(prev => ({ ...prev, [couleurName]: imageUrl }))
+        setMessage({ type: 'success', text: `Image sauvegardée pour "${couleurName}" !` })
+      } else {
+        setMessage({ type: 'error', text: 'Erreur lors de la sauvegarde de l\'image' })
+      }
+    } catch (error: any) {
+      console.error('❌ Erreur upload:', error)
+      setMessage({ type: 'error', text: `Erreur: ${error?.message || 'Erreur inconnue'}` })
+    } finally {
+      setUploadingCouleur(null)
+    }
+  }
+
+  // Toutes les couleurs combinées pour l'affichage
+  const allCouleurs = [
+    ...(Array.isArray(couleursFluo) ? couleursFluo : []),
+    ...(Array.isArray(couleursPastel) ? couleursPastel : [])
+  ]
 
   return (
     <div className="min-h-screen bg-noir-950 py-12">
@@ -935,6 +982,76 @@ export default function PopupVariablesAdminPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+
+            {/* Bar à Pop-up - Images par couleur */}
+            <div className="bg-noir-800/50 border border-yellow-500/30 rounded-xl p-6">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <ImageIcon className="w-6 h-6 text-yellow-500" />
+                Bar à Pop-up - Images par couleur
+              </h2>
+              <p className="text-gray-400 mb-4 text-sm">
+                Uploadez une image pour chaque couleur. Cette image sera affichée dans le configurateur Bar à Pop-up.
+              </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                {allCouleurs.map((couleur) => (
+                  <div key={couleur.name} className="bg-noir-900/50 rounded-lg p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div 
+                        className="w-8 h-8 rounded border border-noir-700 flex-shrink-0"
+                        style={{ backgroundColor: couleur.value || '#FFFFFF' }}
+                      />
+                      <span className="text-white font-medium text-sm">{couleur.name}</span>
+                      <span className="text-xs text-gray-500">({couleur.type})</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <div className="w-20 h-20 rounded-lg border border-noir-700 overflow-hidden bg-noir-950 flex items-center justify-center flex-shrink-0">
+                        {couleurImages[couleur.name] ? (
+                          <img 
+                            src={couleurImages[couleur.name]} 
+                            alt={couleur.name} 
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <ImageIcon className="w-8 h-8 text-gray-600" />
+                        )}
+                      </div>
+                      
+                      <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-noir-800 border border-noir-700 rounded-lg cursor-pointer hover:bg-noir-700 transition-colors text-sm ${uploadingCouleur === couleur.name ? 'opacity-50' : ''}`}>
+                        <Upload className="w-4 h-4" />
+                        <span>
+                          {uploadingCouleur === couleur.name 
+                            ? 'Upload...' 
+                            : couleurImages[couleur.name] 
+                              ? 'Changer' 
+                              : 'Ajouter'}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploadingCouleur === couleur.name}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) {
+                              handleUploadCouleurImage(couleur.name, file)
+                            }
+                            e.currentTarget.value = ''
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {allCouleurs.length === 0 && (
+                <p className="text-center text-gray-500 py-8">
+                  Aucune couleur définie. Ajoutez des couleurs fluo ou pastel ci-dessus.
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -82,3 +82,42 @@ export async function savePopupItems(category: string, items: PopupVariableItem[
   }
 }
 
+/**
+ * Charger un objet Record<string, string> depuis Supabase
+ * Les données sont stockées comme un JSON stringifié dans une seule entrée
+ */
+export async function loadPopupRecord(category: string): Promise<Record<string, string>> {
+  try {
+    const result = await loadPopupVariablesFromSupabase(category)
+    if (Array.isArray(result) && result.length > 0) {
+      // Le premier élément est le JSON stringifié
+      if (typeof result[0] === 'string') {
+        try {
+          const parsed = JSON.parse(result[0])
+          if (typeof parsed === 'object' && parsed !== null) {
+            return parsed as Record<string, string>
+          }
+        } catch {
+          // Pas un JSON valide
+        }
+      }
+    }
+    return {}
+  } catch (error) {
+    console.error(`Erreur lors du chargement du record ${category}:`, error)
+    return {}
+  }
+}
+
+/**
+ * Sauvegarder un objet Record<string, string> dans Supabase
+ * Les données sont stockées comme un JSON stringifié dans une seule entrée
+ */
+export async function savePopupRecord(category: string, record: Record<string, string>): Promise<void> {
+  const jsonString = JSON.stringify(record)
+  const success = await savePopupVariablesToSupabase(category, [jsonString])
+  if (!success) {
+    throw new Error(`Échec de la sauvegarde du record ${category}`)
+  }
+}
+

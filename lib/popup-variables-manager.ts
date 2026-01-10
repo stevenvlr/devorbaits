@@ -6,7 +6,9 @@ import {
   loadPopupCouleurs,
   savePopupCouleurs,
   loadPopupItems,
-  savePopupItems
+  savePopupItems,
+  loadPopupRecord,
+  savePopupRecord
 } from './popup-variables-manager-supabase'
 
 // ============================================
@@ -1198,4 +1200,96 @@ export function onBarPopupTaillesPastelUpdate(callback: () => void): () => void 
   const handler = () => callback()
   window.addEventListener('bar-popup-tailles-pastel-updated', handler)
   return () => window.removeEventListener('bar-popup-tailles-pastel-updated', handler)
+}
+
+// ============================================
+// BAR À POP-UP - IMAGES PAR COULEUR
+// ============================================
+
+const BAR_POPUP_COULEUR_IMAGES_KEY = 'bar-popup-couleur-images'
+
+// Cache local pour les images
+let barPopupCouleurImagesCache: Record<string, string> = {}
+
+/**
+ * Charge toutes les images des couleurs Bar à Pop-up
+ */
+export async function loadBarPopupCouleurImages(): Promise<Record<string, string>> {
+  try {
+    const images = await loadPopupRecord(BAR_POPUP_COULEUR_IMAGES_KEY)
+    barPopupCouleurImagesCache = images
+    return barPopupCouleurImagesCache
+  } catch (error) {
+    console.error('Erreur lors du chargement des images Bar à Pop-up:', error)
+    return {}
+  }
+}
+
+/**
+ * Version synchrone - retourne le cache
+ */
+export function getBarPopupCouleurImagesSync(): Record<string, string> {
+  return barPopupCouleurImagesCache
+}
+
+/**
+ * Obtient l'image d'une couleur spécifique
+ */
+export function getBarPopupCouleurImage(couleurName: string): string | null {
+  return barPopupCouleurImagesCache[couleurName] || null
+}
+
+/**
+ * Sauvegarde l'image d'une couleur
+ */
+export async function saveBarPopupCouleurImage(couleurName: string, imageUrl: string): Promise<boolean> {
+  try {
+    const images = await loadBarPopupCouleurImages()
+    images[couleurName] = imageUrl
+    
+    await savePopupRecord(BAR_POPUP_COULEUR_IMAGES_KEY, images)
+    barPopupCouleurImagesCache = images
+    
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bar-popup-couleur-images-updated'))
+    }
+    
+    console.log(`✅ Image sauvegardée pour la couleur "${couleurName}"`)
+    return true
+  } catch (error) {
+    console.error(`Erreur lors de la sauvegarde de l'image pour "${couleurName}":`, error)
+    return false
+  }
+}
+
+/**
+ * Supprime l'image d'une couleur
+ */
+export async function removeBarPopupCouleurImage(couleurName: string): Promise<boolean> {
+  try {
+    const images = await loadBarPopupCouleurImages()
+    delete images[couleurName]
+    
+    await savePopupRecord(BAR_POPUP_COULEUR_IMAGES_KEY, images)
+    barPopupCouleurImagesCache = images
+    
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bar-popup-couleur-images-updated'))
+    }
+    
+    return true
+  } catch (error) {
+    console.error(`Erreur lors de la suppression de l'image pour "${couleurName}":`, error)
+    return false
+  }
+}
+
+/**
+ * Écoute les mises à jour des images de couleurs
+ */
+export function onBarPopupCouleurImagesUpdate(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const handler = () => callback()
+  window.addEventListener('bar-popup-couleur-images-updated', handler)
+  return () => window.removeEventListener('bar-popup-couleur-images-updated', handler)
 }
