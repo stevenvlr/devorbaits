@@ -2,7 +2,9 @@
 
 import { 
   loadFlashSprayVariablesFromSupabase, 
-  saveFlashSprayVariablesToSupabase 
+  saveFlashSprayVariablesToSupabase,
+  loadFlashSprayImageFromSupabase,
+  saveFlashSprayImageToSupabase
 } from './flash-spray-variables-supabase'
 import { GAMMES_BOUILLETTES } from './constants'
 
@@ -291,5 +293,103 @@ export function onSprayPlusFormatsUpdate(callback: () => void): () => void {
   const handler = () => callback()
   window.addEventListener('spray-plus-formats-updated', handler)
   return () => window.removeEventListener('spray-plus-formats-updated', handler)
+}
+
+// ============================================
+// IMAGES PARTAGÉES (Flash Boost / Spray Plus)
+// ============================================
+
+// Cache local pour éviter les appels répétés à Supabase
+let flashBoostImageCache: string | null = null
+let sprayPlusImageCache: string | null = null
+
+/**
+ * Charge l'image Flash Boost depuis Supabase
+ */
+export async function loadFlashBoostImage(): Promise<string | null> {
+  try {
+    const image = await loadFlashSprayImageFromSupabase('flash-boost')
+    flashBoostImageCache = image
+    return image
+  } catch (error) {
+    console.error('Erreur lors du chargement de l\'image Flash Boost:', error)
+    return null
+  }
+}
+
+/**
+ * Version synchrone - retourne le cache
+ */
+export function getFlashBoostImageSync(): string | null {
+  return flashBoostImageCache
+}
+
+/**
+ * Sauvegarde l'image Flash Boost dans Supabase
+ */
+export async function saveFlashBoostImage(imageUrl: string): Promise<boolean> {
+  const success = await saveFlashSprayImageToSupabase('flash-boost', imageUrl)
+  if (success) {
+    flashBoostImageCache = imageUrl
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('flash-boost-image-updated'))
+    }
+  }
+  return success
+}
+
+/**
+ * Charge l'image Spray Plus depuis Supabase
+ */
+export async function loadSprayPlusImage(): Promise<string | null> {
+  try {
+    const image = await loadFlashSprayImageFromSupabase('spray-plus')
+    sprayPlusImageCache = image
+    return image
+  } catch (error) {
+    console.error('Erreur lors du chargement de l\'image Spray Plus:', error)
+    return null
+  }
+}
+
+/**
+ * Version synchrone - retourne le cache
+ */
+export function getSprayPlusImageSync(): string | null {
+  return sprayPlusImageCache
+}
+
+/**
+ * Sauvegarde l'image Spray Plus dans Supabase
+ */
+export async function saveSprayPlusImage(imageUrl: string): Promise<boolean> {
+  const success = await saveFlashSprayImageToSupabase('spray-plus', imageUrl)
+  if (success) {
+    sprayPlusImageCache = imageUrl
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('spray-plus-image-updated'))
+    }
+  }
+  return success
+}
+
+/**
+ * Écoute les mises à jour de l'image Flash Boost
+ */
+export function onFlashBoostImageUpdate(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const handler = () => callback()
+  window.addEventListener('flash-boost-image-updated', handler)
+  return () => window.removeEventListener('flash-boost-image-updated', handler)
+}
+
+/**
+ * Écoute les mises à jour de l'image Spray Plus
+ */
+export function onSprayPlusImageUpdate(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const handler = () => callback()
+  window.addEventListener('spray-plus-image-updated', handler)
+  return () => window.removeEventListener('spray-plus-image-updated', handler)
 }
 

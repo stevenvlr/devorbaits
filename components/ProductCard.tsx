@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { ShoppingCart, Package } from 'lucide-react'
 import { Product, ProductVariant, getProductImages } from '@/lib/products-manager'
+import { loadFlashBoostImage, loadSprayPlusImage } from '@/lib/flash-spray-variables-manager'
 import { getAvailableStockSync, onStockUpdate } from '@/lib/stock-manager'
 import { useCart } from '@/contexts/CartContext'
 import ProductDetailModal from './ProductDetailModal'
@@ -33,6 +34,16 @@ export default function ProductCard({
     })
     return unsubscribe
   }, [])
+
+  // Précharger les images partagées pour Flash Boost et Spray Plus
+  useEffect(() => {
+    const categoryLower = product.category.toLowerCase()
+    if (categoryLower === 'flash boost') {
+      loadFlashBoostImage().then(() => forceUpdate(prev => prev + 1))
+    } else if (categoryLower === 'spray plus') {
+      loadSprayPlusImage().then(() => forceUpdate(prev => prev + 1))
+    }
+  }, [product.category])
 
   const hasVariants = product.variants && product.variants.length > 0
   

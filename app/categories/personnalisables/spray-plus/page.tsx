@@ -6,7 +6,7 @@ import { getAllAromesAndSaveurs } from '@/lib/all-aromes-saveurs-manager'
 import { useCart } from '@/contexts/CartContext'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
 import { getSprayPlusId, getPrixPersonnalise } from '@/lib/price-utils'
-import { loadSprayPlusFormats } from '@/lib/flash-spray-variables-manager'
+import { loadSprayPlusFormats, loadSprayPlusImage } from '@/lib/flash-spray-variables-manager'
 
 export default function SprayPlusPage() {
   const [allAromes, setAllAromes] = useState<string[]>([])
@@ -14,6 +14,7 @@ export default function SprayPlusPage() {
   const [formats, setFormats] = useState<string[]>(['30 ml'])
   const [selectedFormat, setSelectedFormat] = useState('30 ml')
   const [quantity, setQuantity] = useState(1)
+  const [productImage, setProductImage] = useState<string | null>(null)
   const { addToCart } = useCart()
   const prixPersonnalises = usePrixPersonnalises()
 
@@ -32,6 +33,10 @@ export default function SprayPlusPage() {
         setFormats(loadedFormats)
         setSelectedFormat(loadedFormats[0])
       }
+      
+      // Charger l'image partagée Spray Plus
+      const image = await loadSprayPlusImage()
+      setProductImage(image)
     }
     loadData()
   }, [])
@@ -161,8 +166,16 @@ export default function SprayPlusPage() {
               {/* Preview Visuel */}
               <div className="mb-8">
                 <h3 className="text-lg font-semibold mb-4">Aperçu</h3>
-                <div className="flex items-center justify-center h-64 bg-noir-900 rounded-lg border border-noir-700">
-                  <Package className="w-24 h-24 text-gray-500" />
+                <div className="flex items-center justify-center h-64 bg-noir-900 rounded-lg border border-noir-700 overflow-hidden">
+                  {productImage ? (
+                    <img 
+                      src={productImage} 
+                      alt="Spray Plus" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Package className="w-24 h-24 text-gray-500" />
+                  )}
                 </div>
               </div>
 

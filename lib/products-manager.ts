@@ -337,7 +337,28 @@ export function getProductImages(product: Product): string[] {
     return [product.image]
   }
   
-  // 3. Fallback : image de la gamme (si le produit a une gamme ET n'a pas d'image valide)
+  // 3. Fallback : image partagée par catégorie (Flash Boost / Spray Plus)
+  const categoryLower = product.category.toLowerCase()
+  if (typeof window !== 'undefined' && (categoryLower === 'flash boost' || categoryLower === 'spray plus')) {
+    try {
+      const flashSprayManager = require('./flash-spray-variables-manager')
+      let categoryImage: string | null = null
+      
+      if (categoryLower === 'flash boost') {
+        categoryImage = flashSprayManager.getFlashBoostImageSync()
+      } else if (categoryLower === 'spray plus') {
+        categoryImage = flashSprayManager.getSprayPlusImageSync()
+      }
+      
+      if (categoryImage && categoryImage.trim().length > 0) {
+        return [categoryImage]
+      }
+    } catch (e) {
+      // Ignorer les erreurs d'import (peut arriver en SSR)
+    }
+  }
+  
+  // 4. Fallback : image de la gamme (si le produit a une gamme ET n'a pas d'image valide)
   if (product.gamme && typeof window !== 'undefined') {
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'products-manager.ts:207',message:'attempting gamme image fallback',data:{productGamme:product.gamme,reason:'no valid product images'},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B,C'})}).catch(()=>{});

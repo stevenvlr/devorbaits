@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Zap, Droplet } from 'lucide-react'
+import { Plus, Trash2, Zap, Droplet, Upload, ImageIcon, X } from 'lucide-react'
 import {
   // Flash Boost
   loadFlashBoostAromes, addFlashBoostArome, removeFlashBoostArome, onFlashBoostAromesUpdate,
@@ -9,7 +9,11 @@ import {
   // Spray Plus
   loadSprayPlusAromes, addSprayPlusArome, removeSprayPlusArome, onSprayPlusAromesUpdate,
   loadSprayPlusFormats, addSprayPlusFormat, removeSprayPlusFormat, onSprayPlusFormatsUpdate,
+  // Images partagées
+  loadFlashBoostImage, saveFlashBoostImage, onFlashBoostImageUpdate,
+  loadSprayPlusImage, saveSprayPlusImage, onSprayPlusImageUpdate,
 } from '@/lib/flash-spray-variables-manager'
+import { uploadProductImage } from '@/lib/storage-supabase'
 import { getAllAromesAndSaveurs } from '@/lib/all-aromes-saveurs-manager'
 import {
   createStockForFlashBoostArome,
@@ -27,12 +31,16 @@ export default function FlashSprayVariablesAdminPage() {
   const [flashBoostFormats, setFlashBoostFormats] = useState<string[]>([])
   const [newFlashBoostArome, setNewFlashBoostArome] = useState('')
   const [newFlashBoostFormat, setNewFlashBoostFormat] = useState('')
+  const [flashBoostImage, setFlashBoostImage] = useState<string | null>(null)
+  const [isUploadingFlashBoost, setIsUploadingFlashBoost] = useState(false)
   
   // Spray Plus
   const [sprayPlusAromes, setSprayPlusAromes] = useState<string[]>([])
   const [sprayPlusFormats, setSprayPlusFormats] = useState<string[]>([])
   const [newSprayPlusArome, setNewSprayPlusArome] = useState('')
   const [newSprayPlusFormat, setNewSprayPlusFormat] = useState('')
+  const [sprayPlusImage, setSprayPlusImage] = useState<string | null>(null)
+  const [isUploadingSprayPlus, setIsUploadingSprayPlus] = useState(false)
   
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -43,7 +51,7 @@ export default function FlashSprayVariablesAdminPage() {
     }
     // #endregion
     try {
-      const [allAromesData, aromesFB, formatsFB, aromesSP, formatsSP] = await Promise.all([
+      const [allAromesData, aromesFB, formatsFB, aromesSP, formatsSP, imageFB, imageSP] = await Promise.all([
         getAllAromesAndSaveurs().catch(() => []),
         loadFlashBoostAromes().catch(err => {
           // #region agent log
@@ -65,7 +73,9 @@ export default function FlashSprayVariablesAdminPage() {
         loadSprayPlusFormats().catch(err => {
           console.error('Erreur loadSprayPlusFormats:', err)
           return []
-        })
+        }),
+        loadFlashBoostImage().catch(() => null),
+        loadSprayPlusImage().catch(() => null)
       ])
       
       // #region agent log
@@ -80,6 +90,8 @@ export default function FlashSprayVariablesAdminPage() {
       setFlashBoostFormats(Array.isArray(formatsFB) ? formatsFB : [])
       setSprayPlusAromes(Array.isArray(aromesSP) ? aromesSP : [])
       setSprayPlusFormats(Array.isArray(formatsSP) ? formatsSP : [])
+      setFlashBoostImage(imageFB)
+      setSprayPlusImage(imageSP)
     } catch (error: any) {
       // #region agent log
       if (typeof window !== 'undefined') {
@@ -106,7 +118,9 @@ export default function FlashSprayVariablesAdminPage() {
       onFlashBoostAromesUpdate(loadAllData),
       onFlashBoostFormatsUpdate(loadAllData),
       onSprayPlusAromesUpdate(loadAllData),
-      onSprayPlusFormatsUpdate(loadAllData)
+      onSprayPlusFormatsUpdate(loadAllData),
+      onFlashBoostImageUpdate(loadAllData),
+      onSprayPlusImageUpdate(loadAllData)
     ]
     
     return () => {
@@ -203,6 +217,62 @@ export default function FlashSprayVariablesAdminPage() {
       const success = await removeSprayPlusFormat(format)
       setMessage(success ? { type: 'success', text: `Format "${format}" supprimé.` } : { type: 'error', text: 'Erreur lors de la suppression.' })
       if (success) await loadAllData()
+    }
+  }
+
+  // Upload image Flash Boost
+  const handleFlashBoostImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'L\'image est trop grande (max 5MB)' })
+      return
+    }
+
+    setIsUploadingFlashBoost(true)
+    try {
+      const imageUrl = await uploadProductImage('flash-boost-shared', file, 0)
+      const success = await saveFlashBoostImage(imageUrl)
+      if (success) {
+        setFlashBoostImage(imageUrl)
+        setMessage({ type: 'success', text: 'Image Flash Boost sauvegardée ! Elle sera utilisée pour tous les produits Flash Boost.' })
+      } else {
+        setMessage({ type: 'error', text: 'Erreur lors de la sauvegarde de l\'image' })
+      }
+    } catch (error) {
+      console.error('Erreur upload Flash Boost:', error)
+      setMessage({ type: 'error', text: 'Erreur lors de l\'upload de l\'image' })
+    } finally {
+      setIsUploadingFlashBoost(false)
+    }
+  }
+
+  // Upload image Spray Plus
+  const handleSprayPlusImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'L\'image est trop grande (max 5MB)' })
+      return
+    }
+
+    setIsUploadingSprayPlus(true)
+    try {
+      const imageUrl = await uploadProductImage('spray-plus-shared', file, 0)
+      const success = await saveSprayPlusImage(imageUrl)
+      if (success) {
+        setSprayPlusImage(imageUrl)
+        setMessage({ type: 'success', text: 'Image Spray Plus sauvegardée ! Elle sera utilisée pour tous les produits Spray Plus.' })
+      } else {
+        setMessage({ type: 'error', text: 'Erreur lors de la sauvegarde de l\'image' })
+      }
+    } catch (error) {
+      console.error('Erreur upload Spray Plus:', error)
+      setMessage({ type: 'error', text: 'Erreur lors de l\'upload de l\'image' })
+    } finally {
+      setIsUploadingSprayPlus(false)
     }
   }
 
@@ -325,6 +395,58 @@ export default function FlashSprayVariablesAdminPage() {
                 ))}
               </ul>
             </div>
+
+            {/* Flash Boost - Image partagée */}
+            <div className="bg-noir-800/50 border border-yellow-500/30 rounded-xl p-6">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <ImageIcon className="w-6 h-6 text-yellow-500" />
+                Flash Boost - Image partagée
+              </h2>
+              <p className="text-gray-400 mb-4 text-sm">
+                Cette image sera utilisée pour <strong>tous les produits Flash Boost</strong> (toutes les gammes et variantes).
+                Vous n'avez besoin de l'uploader qu'une seule fois !
+              </p>
+              
+              {flashBoostImage ? (
+                <div className="relative">
+                  <img 
+                    src={flashBoostImage} 
+                    alt="Flash Boost" 
+                    className="w-full h-48 object-cover rounded-lg border border-noir-700"
+                  />
+                  <label className="absolute bottom-2 right-2 px-4 py-2 bg-yellow-500 text-noir-950 font-bold rounded-lg cursor-pointer hover:bg-yellow-400 transition-colors">
+                    <Upload className="w-4 h-4 inline mr-2" />
+                    Changer
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFlashBoostImageUpload}
+                      className="hidden"
+                      disabled={isUploadingFlashBoost}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className={`flex flex-col items-center justify-center h-48 bg-noir-900 border-2 border-dashed border-noir-700 rounded-lg cursor-pointer hover:border-yellow-500/50 transition-colors ${isUploadingFlashBoost ? 'opacity-50' : ''}`}>
+                  {isUploadingFlashBoost ? (
+                    <span className="text-gray-400">Upload en cours...</span>
+                  ) : (
+                    <>
+                      <Upload className="w-12 h-12 text-gray-500 mb-2" />
+                      <span className="text-gray-400">Cliquez pour uploader l'image Flash Boost</span>
+                      <span className="text-xs text-gray-500 mt-1">Max 5MB - JPG, PNG</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFlashBoostImageUpload}
+                    className="hidden"
+                    disabled={isUploadingFlashBoost}
+                  />
+                </label>
+              )}
+            </div>
           </div>
 
           {/* SPRAY PLUS */}
@@ -408,6 +530,58 @@ export default function FlashSprayVariablesAdminPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+
+            {/* Spray Plus - Image partagée */}
+            <div className="bg-noir-800/50 border border-yellow-500/30 rounded-xl p-6">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <ImageIcon className="w-6 h-6 text-yellow-500" />
+                Spray Plus - Image partagée
+              </h2>
+              <p className="text-gray-400 mb-4 text-sm">
+                Cette image sera utilisée pour <strong>tous les produits Spray Plus</strong> (toutes les gammes et variantes).
+                Vous n'avez besoin de l'uploader qu'une seule fois !
+              </p>
+              
+              {sprayPlusImage ? (
+                <div className="relative">
+                  <img 
+                    src={sprayPlusImage} 
+                    alt="Spray Plus" 
+                    className="w-full h-48 object-cover rounded-lg border border-noir-700"
+                  />
+                  <label className="absolute bottom-2 right-2 px-4 py-2 bg-yellow-500 text-noir-950 font-bold rounded-lg cursor-pointer hover:bg-yellow-400 transition-colors">
+                    <Upload className="w-4 h-4 inline mr-2" />
+                    Changer
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleSprayPlusImageUpload}
+                      className="hidden"
+                      disabled={isUploadingSprayPlus}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className={`flex flex-col items-center justify-center h-48 bg-noir-900 border-2 border-dashed border-noir-700 rounded-lg cursor-pointer hover:border-yellow-500/50 transition-colors ${isUploadingSprayPlus ? 'opacity-50' : ''}`}>
+                  {isUploadingSprayPlus ? (
+                    <span className="text-gray-400">Upload en cours...</span>
+                  ) : (
+                    <>
+                      <Upload className="w-12 h-12 text-gray-500 mb-2" />
+                      <span className="text-gray-400">Cliquez pour uploader l'image Spray Plus</span>
+                      <span className="text-xs text-gray-500 mt-1">Max 5MB - JPG, PNG</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleSprayPlusImageUpload}
+                    className="hidden"
+                    disabled={isUploadingSprayPlus}
+                  />
+                </label>
+              )}
             </div>
           </div>
         </div>
