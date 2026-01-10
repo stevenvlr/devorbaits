@@ -171,7 +171,7 @@ export default function FlashBoostPage() {
                     <img 
                       src={productImage} 
                       alt="Flash Boost" 
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   ) : (
                     <Package className="w-24 h-24 text-gray-500" />

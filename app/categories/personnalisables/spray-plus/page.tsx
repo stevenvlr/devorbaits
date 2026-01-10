@@ -171,7 +171,7 @@ export default function SprayPlusPage() {
                     <img 
                       src={productImage} 
                       alt="Spray Plus" 
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   ) : (
                     <Package className="w-24 h-24 text-gray-500" />

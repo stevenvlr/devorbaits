@@ -418,11 +418,11 @@ export default function FlashSprayVariablesAdminPage() {
               </p>
               
               {flashBoostImage ? (
-                <div className="relative">
+                <div className="relative bg-noir-900 rounded-lg border border-noir-700">
                   <img 
                     src={flashBoostImage} 
                     alt="Flash Boost" 
-                    className="w-full h-48 object-cover rounded-lg border border-noir-700"
+                    className="w-full h-48 object-contain rounded-lg"
                   />
                   <label className="absolute bottom-2 right-2 px-4 py-2 bg-yellow-500 text-noir-950 font-bold rounded-lg cursor-pointer hover:bg-yellow-400 transition-colors">
                     <Upload className="w-4 h-4 inline mr-2" />
@@ -554,11 +554,11 @@ export default function FlashSprayVariablesAdminPage() {
               </p>
               
               {sprayPlusImage ? (
-                <div className="relative">
+                <div className="relative bg-noir-900 rounded-lg border border-noir-700">
                   <img 
                     src={sprayPlusImage} 
                     alt="Spray Plus" 
-                    className="w-full h-48 object-cover rounded-lg border border-noir-700"
+                    className="w-full h-48 object-contain rounded-lg"
                   />
                   <label className="absolute bottom-2 right-2 px-4 py-2 bg-yellow-500 text-noir-950 font-bold rounded-lg cursor-pointer hover:bg-yellow-400 transition-colors">
                     <Upload className="w-4 h-4 inline mr-2" />
