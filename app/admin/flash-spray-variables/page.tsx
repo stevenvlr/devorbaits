@@ -232,17 +232,22 @@ export default function FlashSprayVariablesAdminPage() {
 
     setIsUploadingFlashBoost(true)
     try {
+      console.log('📤 Upload de l\'image Flash Boost...')
       const imageUrl = await uploadProductImage('flash-boost-shared', file, 0)
+      console.log('✅ Image uploadée, URL:', imageUrl?.substring(0, 50) + '...')
+      
+      console.log('💾 Sauvegarde dans Supabase...')
       const success = await saveFlashBoostImage(imageUrl)
+      
       if (success) {
         setFlashBoostImage(imageUrl)
         setMessage({ type: 'success', text: 'Image Flash Boost sauvegardée ! Elle sera utilisée pour tous les produits Flash Boost.' })
       } else {
-        setMessage({ type: 'error', text: 'Erreur lors de la sauvegarde de l\'image' })
+        setMessage({ type: 'error', text: 'Erreur lors de la sauvegarde dans la base de données. Vérifiez la console (F12) pour plus de détails.' })
       }
-    } catch (error) {
-      console.error('Erreur upload Flash Boost:', error)
-      setMessage({ type: 'error', text: 'Erreur lors de l\'upload de l\'image' })
+    } catch (error: any) {
+      console.error('❌ Erreur upload Flash Boost:', error)
+      setMessage({ type: 'error', text: `Erreur: ${error?.message || 'Erreur inconnue'}` })
     } finally {
       setIsUploadingFlashBoost(false)
     }
@@ -260,17 +265,22 @@ export default function FlashSprayVariablesAdminPage() {
 
     setIsUploadingSprayPlus(true)
     try {
+      console.log('📤 Upload de l\'image Spray Plus...')
       const imageUrl = await uploadProductImage('spray-plus-shared', file, 0)
+      console.log('✅ Image uploadée, URL:', imageUrl?.substring(0, 50) + '...')
+      
+      console.log('💾 Sauvegarde dans Supabase...')
       const success = await saveSprayPlusImage(imageUrl)
+      
       if (success) {
         setSprayPlusImage(imageUrl)
         setMessage({ type: 'success', text: 'Image Spray Plus sauvegardée ! Elle sera utilisée pour tous les produits Spray Plus.' })
       } else {
-        setMessage({ type: 'error', text: 'Erreur lors de la sauvegarde de l\'image' })
+        setMessage({ type: 'error', text: 'Erreur lors de la sauvegarde dans la base de données. Vérifiez la console (F12) pour plus de détails.' })
       }
-    } catch (error) {
-      console.error('Erreur upload Spray Plus:', error)
-      setMessage({ type: 'error', text: 'Erreur lors de l\'upload de l\'image' })
+    } catch (error: any) {
+      console.error('❌ Erreur upload Spray Plus:', error)
+      setMessage({ type: 'error', text: `Erreur: ${error?.message || 'Erreur inconnue'}` })
     } finally {
       setIsUploadingSprayPlus(false)
     }

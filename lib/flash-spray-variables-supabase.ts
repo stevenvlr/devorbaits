@@ -123,30 +123,44 @@ export async function saveFlashSprayImageToSupabase(
   try {
     const category = `${type}-image`
     
-    // Supprimer l'ancienne image si elle existe
-    await supabase
+    // Vérifier d'abord si une entrée existe
+    const { data: existing } = await supabase
       .from('popup_variables')
-      .delete()
+      .select('id')
       .eq('category', category)
+      .maybeSingle()
 
-    // Insérer la nouvelle image
-    const { error } = await supabase
-      .from('popup_variables')
-      .insert({
-        category,
-        value: imageUrl,
-        metadata: null
-      })
+    if (existing) {
+      // Mettre à jour l'entrée existante
+      const { error: updateError } = await supabase
+        .from('popup_variables')
+        .update({ value: imageUrl })
+        .eq('category', category)
 
-    if (error) {
-      console.error(`Erreur lors de la sauvegarde de l'image ${type}:`, error)
-      return false
+      if (updateError) {
+        console.error(`❌ Erreur UPDATE image ${type}:`, updateError.message, updateError.details, updateError.hint)
+        return false
+      }
+    } else {
+      // Créer une nouvelle entrée
+      const { error: insertError } = await supabase
+        .from('popup_variables')
+        .insert({
+          category,
+          value: imageUrl,
+          metadata: null
+        })
+
+      if (insertError) {
+        console.error(`❌ Erreur INSERT image ${type}:`, insertError.message, insertError.details, insertError.hint)
+        return false
+      }
     }
 
     console.log(`✅ Image ${type} sauvegardée avec succès`)
     return true
-  } catch (error) {
-    console.error(`Erreur lors de la sauvegarde de l'image ${type}:`, error)
+  } catch (error: any) {
+    console.error(`❌ Erreur lors de la sauvegarde de l'image ${type}:`, error?.message || error)
     return false
   }
 }
