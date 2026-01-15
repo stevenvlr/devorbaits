@@ -19,17 +19,20 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [hasRedirected, setHasRedirected] = useState(false)
 
   const redirect = searchParams.get('redirect') || '/account'
 
   // Si l'utilisateur est déjà connecté, rediriger vers son compte
+  // Utiliser hasRedirected pour éviter les boucles de redirection
   useEffect(() => {
-    console.log('[LoginPage] isAuthenticated:', isAuthenticated)
-    if (isAuthenticated) {
+    // Attendre que le contexte d'authentification se charge
+    if (isAuthenticated && !hasRedirected) {
       console.log('[LoginPage] Utilisateur déjà connecté, redirection vers /account')
-      router.push('/account')
+      setHasRedirected(true)
+      router.replace('/account')
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, router, hasRedirected])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

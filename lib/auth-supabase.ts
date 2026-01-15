@@ -334,25 +334,45 @@ export async function logoutUser(): Promise<void> {
  * Obtient l'utilisateur actuel
  */
 export async function getCurrentUser(): Promise<User | null> {
-  if (isSupabaseConfigured()) {
-    const supabase = getSupabaseClient()
-    if (!supabase) return null
+  try {
+    if (isSupabaseConfigured()) {
+      const supabase = getSupabaseClient()
+      if (!supabase) {
+        console.warn('⚠️ Supabase client non disponible')
+        return null
+      }
 
-    const { data: { user: supabaseUser } } = await supabase.auth.getUser()
-    if (!supabaseUser) return null
+      const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError) {
+        console.warn('⚠️ Erreur lors de la récupération de l\'utilisateur:', authError.message)
+        return null
+      }
+      
+      if (!supabaseUser) {
+        return null
+      }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', supabaseUser.id)
-      .single()
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', supabaseUser.id)
+        .single()
 
-    return supabaseUserToUser(supabaseUser, profile)
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.warn('⚠️ Erreur lors du chargement du profil:', profileError.message)
+      }
+
+      return supabaseUserToUser(supabaseUser, profile)
+    }
+
+    // Plus de fallback localStorage - Supabase uniquement
+    console.warn('⚠️ Supabase non configuré. Impossible de récupérer l\'utilisateur actuel.')
+    return null
+  } catch (error: any) {
+    console.error('❌ Erreur exception dans getCurrentUser:', error)
+    return null
   }
-
-  // Plus de fallback localStorage - Supabase uniquement
-  console.error('❌ Supabase non configuré. Impossible de récupérer l\'utilisateur actuel.')
-  return null
 }
 
 /**

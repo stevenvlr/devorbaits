@@ -27,18 +27,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Charger l'utilisateur depuis Supabase au démarrage
   useEffect(() => {
+    let isMounted = true
+    
     const loadUser = async () => {
       try {
         const currentUser = await getCurrentUser()
-        if (currentUser) {
+        if (isMounted && currentUser) {
           setUser(currentUser)
         }
       } catch (error) {
         console.error('Erreur lors du chargement de l\'utilisateur:', error)
+        // Ne pas mettre à jour l'état si le composant est démonté
+        if (isMounted) {
+          setUser(null)
+        }
       }
     }
     
     loadUser()
+    
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
