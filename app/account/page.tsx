@@ -40,32 +40,47 @@ export default function AccountPage() {
 
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false)
 
+  // Logs de débogage
   useEffect(() => {
-    // Vérifier l'authentification après un court délai
+    console.log('[AccountPage] État:', { isAuthenticated, hasUser: !!user, userEmail: user?.email })
+  }, [isAuthenticated, user])
+
+  useEffect(() => {
+    // Vérifier l'authentification après un délai
     const timer = setTimeout(() => {
       setHasCheckedAuth(true)
       // Rediriger seulement si on est sûr que l'utilisateur n'est PAS connecté
       if (!isAuthenticated || !user) {
         console.log('[AccountPage] Utilisateur non connecté, redirection vers /account/login')
         router.push('/account/login')
+      } else {
+        console.log('[AccountPage] Utilisateur connecté, affichage de la page')
       }
-    }, 500) // Délai court juste pour laisser le contexte se charger
+    }, 1500) // Délai pour laisser le contexte se charger
     
     return () => clearTimeout(timer)
   }, [isAuthenticated, user, router])
 
-  // Ne rien afficher pendant la vérification initiale
+  // Afficher un message de chargement pendant la vérification
   if (!hasCheckedAuth) {
     return (
       <div className="min-h-screen bg-noir-950 flex items-center justify-center">
-        <p className="text-gray-400">Chargement...</p>
+        <div className="text-center">
+          <p className="text-gray-400">Vérification de l'authentification...</p>
+        </div>
       </div>
     )
   }
 
-  // Si après vérification, l'utilisateur n'est toujours pas connecté, ne rien afficher (redirection en cours)
+  // Si l'utilisateur n'est pas connecté, ne rien afficher (redirection en cours)
   if (!isAuthenticated || !user) {
-    return null
+    return (
+      <div className="min-h-screen bg-noir-950 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-400">Redirection vers la page de connexion...</p>
+        </div>
+      </div>
+    )
   }
 
   useEffect(() => {

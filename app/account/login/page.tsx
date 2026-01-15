@@ -21,27 +21,29 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [hasCheckedRedirect, setHasCheckedRedirect] = useState(false)
 
   const redirect = searchParams.get('redirect') || '/account'
 
-  // Rediriger seulement si l'utilisateur est vraiment authentifié (une seule fois)
+  // Logs de débogage
   useEffect(() => {
-    // Attendre que le contexte soit chargé (user peut être null au début même si connecté)
-    if (hasCheckedRedirect) return
-    
-    // Vérifier après un court délai pour laisser Supabase charger
+    console.log('[LoginPage] État:', { isAuthenticated, hasUser: !!user, userEmail: user?.email })
+  }, [isAuthenticated, user])
+
+  // Redirection optionnelle si l'utilisateur est déjà connecté (seulement après un délai)
+  useEffect(() => {
+    // Attendre un peu pour que le contexte se charge
     const timer = setTimeout(() => {
-      setHasCheckedRedirect(true)
-      // Rediriger seulement si on est sûr que l'utilisateur est connecté
+      // Rediriger seulement si on est vraiment sûr que l'utilisateur est connecté
       if (isAuthenticated && user) {
         console.log('[LoginPage] Utilisateur déjà connecté, redirection vers /account')
         router.replace('/account')
+      } else {
+        console.log('[LoginPage] Utilisateur non connecté, affichage du formulaire')
       }
-    }, 500) // Délai court juste pour laisser le contexte se charger
+    }, 1500) // Délai plus long pour laisser Supabase charger
     
     return () => clearTimeout(timer)
-  }, [isAuthenticated, user, router, hasCheckedRedirect])
+  }, [isAuthenticated, user, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,6 +93,14 @@ function LoginForm() {
             </div>
             <h1 className="text-3xl font-bold mb-2">Connexion</h1>
             <p className="text-gray-400">Connectez-vous à votre compte</p>
+            {/* Message de débogage */}
+            {isAuthenticated && user && (
+              <div className="mt-4 bg-blue-500/10 border border-blue-500/50 rounded-lg p-3">
+                <p className="text-blue-300 text-sm">
+                  Vous êtes déjà connecté en tant que {user.email}. Redirection en cours...
+                </p>
+              </div>
+            )}
           </div>
 
           {error && (
