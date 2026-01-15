@@ -189,7 +189,14 @@ export default function BoxtalRelayMap({
       }
 
       try {
-        const BoxtalParcelPointMap = window.BoxtalParcelPointMap.BoxtalParcelPointMap
+        // Vérifier que BoxtalParcelPointMap est disponible
+        const boxtalGlobal = window.BoxtalParcelPointMap
+        if (!boxtalGlobal || !boxtalGlobal.BoxtalParcelPointMap) {
+          console.error('BoxtalParcelPointMap n\'est pas disponible')
+          return
+        }
+
+        const BoxtalParcelPointMap = boxtalGlobal.BoxtalParcelPointMap
 
         // Vérifier que le host existe
         if (!hostRef.current) {
