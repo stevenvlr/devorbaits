@@ -14,25 +14,40 @@ function LoginForm() {
   // #endregion
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { login, isAuthenticated } = useAuth()
+  const { login, isAuthenticated, user } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [hasRedirected, setHasRedirected] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   const redirect = searchParams.get('redirect') || '/account'
 
-  // Si l'utilisateur est déjà connecté, rediriger vers son compte
-  // Utiliser hasRedirected pour éviter les boucles de redirection
+  // Vérifier l'authentification une seule fois au chargement
   useEffect(() => {
-    // Attendre que le contexte d'authentification se charge
-    if (isAuthenticated && !hasRedirected) {
-      console.log('[LoginPage] Utilisateur déjà connecté, redirection vers /account')
-      setHasRedirected(true)
-      router.replace('/account')
-    }
-  }, [isAuthenticated, router, hasRedirected])
+    // Attendre un délai pour laisser le temps à Supabase de charger
+    const checkAuth = setTimeout(() => {
+      setIsCheckingAuth(false)
+      // Rediriger seulement si l'utilisateur est vraiment authentifié (user existe)
+      if (isAuthenticated && user) {
+        console.log('[LoginPage] Utilisateur déjà connecté, redirection vers /account')
+        router.replace('/account')
+      }
+    }, 2000) // Délai plus long pour laisser Supabase se charger complètement
+    
+    return () => clearTimeout(checkAuth)
+  }, [isAuthenticated, user, router]) // Inclure les dépendances mais avec le délai
+
+  // Ne rien afficher pendant la vérification initiale
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-noir-950 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-400">Chargement...</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

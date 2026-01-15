@@ -38,11 +38,28 @@ export default function AccountPage() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [success, setSuccess] = useState<{ [key: string]: string }>({})
 
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false)
+
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/account/login')
-    }
+    // Attendre un peu pour que l'authentification se charge
+    const timer = setTimeout(() => {
+      setHasCheckedAuth(true)
+      if (!isAuthenticated) {
+        router.push('/account/login')
+      }
+    }, 1000)
+    
+    return () => clearTimeout(timer)
   }, [isAuthenticated, router])
+
+  // Ne rien afficher pendant la vérification initiale
+  if (!hasCheckedAuth) {
+    return (
+      <div className="min-h-screen bg-noir-950 flex items-center justify-center">
+        <p className="text-gray-400">Chargement...</p>
+      </div>
+    )
+  }
 
   useEffect(() => {
     if (user) {
