@@ -40,13 +40,34 @@ export default function AccountPage() {
 
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false)
 
+  // Déclarer loadData AVANT les hooks pour pouvoir l'utiliser dans useEffect
+  const loadData = async () => {
+    if (!user) return
+    setLoading(true)
+    try {
+      const [userOrders, userPromos, allProducts] = await Promise.all([
+        getUserOrders(user.id),
+        Promise.resolve(getUserPromoCodes(user.id)),
+        loadProducts()
+      ])
+      setOrders(userOrders)
+      setPromoCodes(userPromos)
+      setProducts(allProducts)
+    } catch (error) {
+      console.error('Erreur lors du chargement des données:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // TOUS LES HOOKS DOIVENT ÊTRE APPELÉS AVANT TOUT RETURN CONDITIONNEL
   // Logs de débogage
   useEffect(() => {
     console.log('[AccountPage] État:', { isAuthenticated, hasUser: !!user, userEmail: user?.email })
   }, [isAuthenticated, user])
 
+  // Vérifier l'authentification après un délai
   useEffect(() => {
-    // Vérifier l'authentification après un délai
     const timer = setTimeout(() => {
       setHasCheckedAuth(true)
       // Rediriger seulement si on est sûr que l'utilisateur n'est PAS connecté
@@ -61,7 +82,22 @@ export default function AccountPage() {
     return () => clearTimeout(timer)
   }, [isAuthenticated, user, router])
 
-  // Afficher un message de chargement pendant la vérification
+  // Charger les données utilisateur (AVANT les returns conditionnels)
+  useEffect(() => {
+    if (user) {
+      loadData()
+      setProfileForm({
+        nom: user.nom || '',
+        prenom: user.prenom || '',
+        adresse: user.adresse || '',
+        codePostal: user.codePostal || '',
+        ville: user.ville || '',
+        telephone: user.telephone || ''
+      })
+    }
+  }, [user])
+
+  // Afficher un message de chargement pendant la vérification (APRÈS tous les hooks)
   if (!hasCheckedAuth) {
     return (
       <div className="min-h-screen bg-noir-950 flex items-center justify-center">
@@ -82,20 +118,6 @@ export default function AccountPage() {
       </div>
     )
   }
-
-  useEffect(() => {
-    if (user) {
-      loadData()
-      setProfileForm({
-        nom: user.nom || '',
-        prenom: user.prenom || '',
-        adresse: user.adresse || '',
-        codePostal: user.codePostal || '',
-        ville: user.ville || '',
-        telephone: user.telephone || ''
-      })
-    }
-  }, [user])
 
   const loadData = async () => {
     if (!user) return
