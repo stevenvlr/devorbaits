@@ -77,9 +77,11 @@ export async function GET(request: Request) {
         
         // Chercher les éléments de points relais dans le HTML
         // Format typique : divs avec des classes spécifiques
-        const pointMatches = html.matchAll(/<div[^>]*class="[^"]*relay[^"]*"[^>]*>([\s\S]*?)<\/div>/gi)
+        // Utilisation de exec() au lieu de matchAll() pour compatibilité ES5
+        const relayRegex = /<div[^>]*class="[^"]*relay[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
+        let match: RegExpExecArray | null
         
-        for (const match of pointMatches) {
+        while ((match = relayRegex.exec(html)) !== null) {
           const pointHtml = match[1]
           const nameMatch = pointHtml.match(/<h[23][^>]*>([^<]+)<\/h[23]>/i)
           const addressMatch = pointHtml.match(/<p[^>]*class="[^"]*address[^"]*"[^>]*>([^<]+)<\/p>/i)
