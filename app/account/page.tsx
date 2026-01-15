@@ -119,29 +119,6 @@ export default function AccountPage() {
     )
   }
 
-  const loadData = async () => {
-    if (!user) return
-    setLoading(true)
-    try {
-      const [userOrders, userPromos, allProducts] = await Promise.all([
-        getUserOrders(user.id),
-        Promise.resolve(getUserPromoCodes(user.id)),
-        loadProducts()
-      ])
-      setOrders(userOrders)
-      setPromoCodes(userPromos)
-      setProducts(allProducts)
-    } catch (error) {
-      console.error('Erreur lors du chargement des données:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (!isAuthenticated || !user) {
-    return null
-  }
-
   const handleLogout = async () => {
     try {
       await logout()
