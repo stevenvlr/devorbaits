@@ -15,23 +15,47 @@ export default function AdminGuard({ children }: AdminGuardProps) {
   const { user, isAuthenticated } = useAuth()
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hasChecked, setHasChecked] = useState(false)
+
+  // Logs de débogage
+  useEffect(() => {
+    console.log('[AdminGuard] État:', { isAuthenticated, hasUser: !!user, userEmail: user?.email, userRole: user?.role })
+  }, [isAuthenticated, user])
 
   useEffect(() => {
+    // Attendre un délai pour laisser le contexte d'authentification se charger
+    const timer = setTimeout(() => {
+      setHasChecked(true)
+    }, 1000) // Délai pour laisser Supabase charger
+    
+    return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    // Ne vérifier que si on a attendu le délai initial
+    if (!hasChecked) return
+
     const verifyAdmin = async () => {
+      // Si l'utilisateur n'est pas authentifié, rediriger vers login
       if (!isAuthenticated || !user) {
+        console.log('[AdminGuard] Utilisateur non authentifié, redirection vers login')
         router.push('/account/login?redirect=/admin')
+        setLoading(false)
         return
       }
 
       try {
+        console.log('[AdminGuard] Vérification des permissions admin pour:', user.email)
         const adminStatus = await checkIsAdmin()
+        console.log('[AdminGuard] Statut admin:', adminStatus)
         setIsAdmin(adminStatus)
         
         if (!adminStatus) {
+          console.log('[AdminGuard] Utilisateur non admin, redirection vers /account')
           router.push('/account?error=unauthorized')
         }
       } catch (error) {
-        console.error('Erreur lors de la vérification admin:', error)
+        console.error('[AdminGuard] Erreur lors de la vérification admin:', error)
         router.push('/account/login?redirect=/admin')
       } finally {
         setLoading(false)
@@ -39,7 +63,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
     }
 
     verifyAdmin()
-  }, [isAuthenticated, user, router])
+  }, [hasChecked, isAuthenticated, user, router])
 
   if (loading || isAdmin === null) {
     return (
