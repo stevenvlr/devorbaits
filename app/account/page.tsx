@@ -41,16 +41,18 @@ export default function AccountPage() {
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false)
 
   useEffect(() => {
-    // Attendre un peu pour que l'authentification se charge
+    // Vérifier l'authentification après un court délai
     const timer = setTimeout(() => {
       setHasCheckedAuth(true)
-      if (!isAuthenticated) {
+      // Rediriger seulement si on est sûr que l'utilisateur n'est PAS connecté
+      if (!isAuthenticated || !user) {
+        console.log('[AccountPage] Utilisateur non connecté, redirection vers /account/login')
         router.push('/account/login')
       }
-    }, 1000)
+    }, 500) // Délai court juste pour laisser le contexte se charger
     
     return () => clearTimeout(timer)
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, user, router])
 
   // Ne rien afficher pendant la vérification initiale
   if (!hasCheckedAuth) {
@@ -59,6 +61,11 @@ export default function AccountPage() {
         <p className="text-gray-400">Chargement...</p>
       </div>
     )
+  }
+
+  // Si après vérification, l'utilisateur n'est toujours pas connecté, ne rien afficher (redirection en cours)
+  if (!isAuthenticated || !user) {
+    return null
   }
 
   useEffect(() => {

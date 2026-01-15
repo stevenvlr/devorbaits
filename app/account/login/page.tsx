@@ -21,44 +21,27 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
-  const [mounted, setMounted] = useState(false)
+  const [hasCheckedRedirect, setHasCheckedRedirect] = useState(false)
 
-  // Obtenir le redirect après le montage pour éviter les problèmes avec useSearchParams
-  const redirect = mounted ? (searchParams.get('redirect') || '/account') : '/account'
+  const redirect = searchParams.get('redirect') || '/account'
 
-  // Marquer le composant comme monté
+  // Rediriger seulement si l'utilisateur est vraiment authentifié (une seule fois)
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Vérifier l'authentification une seule fois au chargement
-  useEffect(() => {
-    if (!mounted) return
+    // Attendre que le contexte soit chargé (user peut être null au début même si connecté)
+    if (hasCheckedRedirect) return
     
-    // Attendre un délai pour laisser le temps à Supabase de charger
-    const checkAuth = setTimeout(() => {
-      setIsCheckingAuth(false)
-      // Rediriger seulement si l'utilisateur est vraiment authentifié (user existe)
+    // Vérifier après un court délai pour laisser Supabase charger
+    const timer = setTimeout(() => {
+      setHasCheckedRedirect(true)
+      // Rediriger seulement si on est sûr que l'utilisateur est connecté
       if (isAuthenticated && user) {
         console.log('[LoginPage] Utilisateur déjà connecté, redirection vers /account')
         router.replace('/account')
       }
-    }, 2000) // Délai plus long pour laisser Supabase se charger complètement
+    }, 500) // Délai court juste pour laisser le contexte se charger
     
-    return () => clearTimeout(checkAuth)
-  }, [mounted, isAuthenticated, user, router]) // Inclure mounted dans les dépendances
-
-  // Ne rien afficher pendant la vérification initiale (APRÈS tous les hooks)
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen bg-noir-950 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-400">Chargement...</p>
-        </div>
-      </div>
-    )
-  }
+    return () => clearTimeout(timer)
+  }, [isAuthenticated, user, router, hasCheckedRedirect])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
