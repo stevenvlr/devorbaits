@@ -1,0 +1,9 @@
+# Configuration Cloudflare Pages pour Next.js
+# Ce fichier configure Cloudflare Pages pour déployer correctement votre application Next.js
+
+name = "devorbaits"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# Note: Pour Next.js standard, vous n'avez généralement pas besoin de bindings supplémentaires
+# Les routes API fonctionneront automatiquement avec cette configuration
