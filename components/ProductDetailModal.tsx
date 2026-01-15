@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import Image from 'next/image'
 import { X, ChevronLeft, ChevronRight, ShoppingCart, Package } from 'lucide-react'
 import { Product, ProductVariant, getProductImages } from '@/lib/products-manager'
 import { getAvailableStock } from '@/lib/stock-manager'
@@ -152,11 +153,11 @@ export default function ProductDetailModal({
 
       {/* Modal */}
       <div 
-        className="relative bg-noir-900 border border-noir-700 rounded-xl w-full h-[90vh] sm:h-[95vh] max-w-[95vw] sm:max-w-[90vw] overflow-hidden flex flex-col"
+        className="relative bg-noir-900 border border-noir-700 rounded-xl w-full h-[90vh] sm:h-[95vh] max-w-[95vw] sm:max-w-[90vw] lg:max-w-[1200px] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-noir-900 border-b border-noir-700 px-4 sm:px-6 py-4 flex items-center justify-between z-20">
+        <div className="sticky top-0 bg-noir-900 border-b border-noir-700 px-4 sm:px-6 py-4 flex items-center justify-between z-20 flex-shrink-0">
           <h2 className="text-xl sm:text-2xl font-bold truncate pr-4">{product.name}</h2>
           <button
             onClick={onClose}
@@ -168,16 +169,20 @@ export default function ProductDetailModal({
         </div>
 
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="grid lg:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-6">
+        <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-6 auto-rows-min">
             {/* Colonne gauche - Carrousel d'images */}
-            <div className="space-y-4">
+            <div className="space-y-4 flex-shrink-0">
               {images.length > 0 ? (
-                <div className="relative aspect-square bg-noir-800 rounded-lg overflow-hidden">
-                  <img
+                <div className="relative aspect-square bg-noir-800 rounded-lg overflow-hidden w-full">
+                  <Image
                     src={images[currentImageIndex]}
                     alt={`${product.name} - Image ${currentImageIndex + 1}`}
-                    className="w-full h-full object-cover"
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    className="object-cover"
+                    priority={currentImageIndex === 0}
+                    quality={85}
                   />
                   
                   {/* Navigation du carrousel */}
@@ -232,16 +237,20 @@ export default function ProductDetailModal({
                     <button
                       key={index}
                       onClick={() => setCurrentImageIndex(index)}
-                      className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                      className={`aspect-square rounded-lg overflow-hidden border-2 transition-all relative ${
                         index === currentImageIndex 
                           ? 'border-yellow-500' 
                           : 'border-noir-700 hover:border-noir-600'
                       }`}
                     >
-                      <img
+                      <Image
                         src={img}
                         alt={`Miniature ${index + 1}`}
-                        className="w-full h-full object-cover"
+                        fill
+                        sizes="(max-width: 1024px) 25vw, 12.5vw"
+                        className="object-cover"
+                        loading="lazy"
+                        quality={75}
                       />
                     </button>
                   ))}
@@ -250,7 +259,7 @@ export default function ProductDetailModal({
             </div>
 
             {/* Colonne droite - Informations */}
-            <div className="space-y-6">
+            <div className="space-y-6 min-w-0">
               {/* Prix */}
               <div>
                 <p className="text-3xl font-bold text-yellow-500">

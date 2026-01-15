@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Factory, Package } from 'lucide-react'
 import { encodeGamme } from '@/lib/constants'
 import { getProductsByCategorySync, onProductsUpdate, type Product, type ProductVariant } from '@/lib/products-manager'
@@ -126,12 +127,16 @@ export default function BouillettesPage() {
                   className="bg-noir-800/50 border border-noir-700 rounded-xl p-6 hover:border-yellow-500 hover:bg-yellow-500/10 transition-all group text-left"
                 >
                   {/* Image de la gamme */}
-                  <div className="aspect-square bg-noir-700 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
+                  <div className="aspect-square bg-noir-700 rounded-lg mb-4 flex items-center justify-center overflow-hidden relative">
                     {gammeImage ? (
-                      <img
+                      <Image
                         src={gammeImage}
                         alt={gamme}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        className="object-cover transition-transform duration-300 group-hover:scale-110"
+                        loading="lazy"
+                        quality={85}
                       />
                     ) : (
                       <Package className="w-16 h-16 text-gray-500 group-hover:text-yellow-500 transition-colors" />

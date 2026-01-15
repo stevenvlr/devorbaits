@@ -392,4 +392,3 @@ export function onSprayPlusImageUpdate(callback: () => void): () => void {
   window.addEventListener('spray-plus-image-updated', handler)
   return () => window.removeEventListener('spray-plus-image-updated', handler)
 }
-

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Factory, MapPin, Plus, Calendar, Tag, ImageIcon, BarChart3, Package, Ticket, Database, ShoppingCart, AlertCircle, Zap, Key, Truck } from 'lucide-react'
+import { Factory, MapPin, Plus, Calendar, Tag, ImageIcon, BarChart3, Package, Ticket, ShoppingCart, AlertCircle, Zap, Truck, Scale } from 'lucide-react'
 
 export default function AdminPage() {
   return (
@@ -209,61 +209,6 @@ export default function AdminPage() {
           </Link>
 
           <Link
-            href="/admin/products/debug-products"
-            className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 bg-red-500/10 rounded-lg flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
-                <Package className="w-8 h-8 text-red-500" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold mb-1">Debug Produits</h2>
-                <p className="text-sm text-gray-400">Vérifier les produits dans localStorage</p>
-              </div>
-            </div>
-            <p className="text-gray-300">
-              Page de diagnostic pour vérifier si les produits sont bien chargés depuis localStorage.
-            </p>
-          </Link>
-
-          <Link
-            href="/admin/products/verify-supabase"
-            className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 bg-teal-500/10 rounded-lg flex items-center justify-center group-hover:bg-teal-500/20 transition-colors">
-                <Database className="w-8 h-8 text-teal-500" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold mb-1">Vérifier Supabase</h2>
-                <p className="text-sm text-gray-400">Vérifier les produits dans Supabase</p>
-              </div>
-            </div>
-            <p className="text-gray-300">
-              Vérifiez que vos produits sont bien stockés dans Supabase 
-              et comparez avec les produits chargés sur le site.
-            </p>
-          </Link>
-
-          <Link
-            href="/admin/boxtal-config"
-            className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 bg-violet-500/10 rounded-lg flex items-center justify-center group-hover:bg-violet-500/20 transition-colors">
-                <Key className="w-8 h-8 text-violet-500" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold mb-1">Configuration Boxtal</h2>
-                <p className="text-sm text-gray-400">Configurer les clés API Boxtal v1</p>
-              </div>
-            </div>
-            <p className="text-gray-300">
-              Configurez vos clés API Boxtal, l'environnement (test/production) et l'adresse expéditeur.
-            </p>
-          </Link>
-
-          <Link
             href="/admin/shipping-prices"
             className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
           >
@@ -277,63 +222,28 @@ export default function AdminPage() {
               </div>
             </div>
             <p className="text-gray-300">
-              Configurez vos tarifs : prix fixes, marges sur Boxtal, ou tarifs par tranches de poids.
+              Configurez vos tarifs : prix fixes, marges, ou tarifs par tranches de poids.
             </p>
           </Link>
 
           <Link
-            href="/admin/boxtal/expeditions"
+            href="/admin/product-weights"
             className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
           >
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 bg-green-500/10 rounded-lg flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                <Truck className="w-8 h-8 text-green-500" />
+              <div className="w-16 h-16 bg-amber-500/10 rounded-lg flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                <Scale className="w-8 h-8 text-amber-500" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold mb-1">Expéditions Boxtal</h2>
-                <p className="text-sm text-gray-400">Voir toutes les expéditions créées</p>
+                <h2 className="text-2xl font-bold mb-1">Poids des Produits</h2>
+                <p className="text-sm text-gray-400">Gérer les poids pour l'expédition</p>
               </div>
             </div>
             <p className="text-gray-300">
-              Visualisez toutes les expéditions Boxtal créées, avec les numéros de suivi et les étiquettes.
+              Configurez les poids des produits (bouillettes, sprays, etc.) pour calculer précisément les frais d'expédition.
             </p>
           </Link>
 
-          <Link
-            href="/admin/boxtal/test"
-            className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 bg-violet-500/10 rounded-lg flex items-center justify-center group-hover:bg-violet-500/20 transition-colors">
-                <Package className="w-8 h-8 text-violet-500" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold mb-1">Test Boxtal</h2>
-                <p className="text-sm text-gray-400">Tester la configuration Boxtal API v1</p>
-              </div>
-            </div>
-            <p className="text-gray-300">
-              Testez votre configuration Boxtal, vérifiez l'authentification et la création d'expéditions.
-            </p>
-          </Link>
-
-          <Link
-            href="/admin/debug-auth"
-            className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 bg-rose-500/10 rounded-lg flex items-center justify-center group-hover:bg-rose-500/20 transition-colors">
-                <AlertCircle className="w-8 h-8 text-rose-500" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold mb-1">Diagnostic Connexion</h2>
-                <p className="text-sm text-gray-400">Diagnostiquer les problèmes de connexion</p>
-              </div>
-            </div>
-            <p className="text-gray-300">
-              Vérifiez l'état de l'authentification, la configuration Supabase et le localStorage.
-            </p>
-          </Link>
         </div>
       </div>
     </div>

@@ -120,4 +120,3 @@ export async function savePopupRecord(category: string, record: Record<string, s
     throw new Error(`Échec de la sauvegarde du record ${category}`)
   }
 }
-

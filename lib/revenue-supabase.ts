@@ -12,7 +12,6 @@ export interface Order {
   shipping_tracking_number?: string
   shipping_label_url?: string
   shipping_cost?: number
-  boxtal_created?: boolean
   items?: OrderItem[] // Les items sont maintenant stockés directement dans orders
 }
 
@@ -202,6 +201,38 @@ export async function updateOrderStatus(orderId: string, status: Order['status']
       localStorage.setItem('orders', JSON.stringify(orders))
     }
   }
+}
+
+/**
+ * Met à jour le numéro de suivi d'une commande
+ */
+export async function updateOrderTrackingNumber(orderId: string, trackingNumber: string): Promise<{ success: boolean; error?: string }> {
+  if (isSupabaseConfigured()) {
+    const supabase = getSupabaseClient()
+    if (supabase) {
+      const { error } = await supabase
+        .from('orders')
+        .update({ shipping_tracking_number: trackingNumber.trim() || null })
+        .eq('id', orderId)
+      
+      if (error) {
+        console.error('Erreur lors de la mise à jour du numéro de suivi:', error)
+        return { success: false, error: error.message }
+      }
+      return { success: true }
+    }
+  } else {
+    if (typeof window === 'undefined') return { success: false, error: 'Non disponible côté serveur' }
+    const orders = JSON.parse(localStorage.getItem('orders') || '[]')
+    const orderIndex = orders.findIndex((o: Order) => o.id === orderId)
+    if (orderIndex !== -1) {
+      orders[orderIndex].shipping_tracking_number = trackingNumber.trim() || undefined
+      localStorage.setItem('orders', JSON.stringify(orders))
+      return { success: true }
+    }
+    return { success: false, error: 'Commande non trouvée' }
+  }
+  return { success: false, error: 'Supabase non configuré' }
 }
 
 /**
@@ -479,8 +510,7 @@ export async function getAllOrders(): Promise<(Order & { items: OrderItem[]; use
           shipping_tracking_number: order.shipping_tracking_number,
           shipping_label_url: order.shipping_label_url,
           shipping_cost: order.shipping_cost ? parseFloat(order.shipping_cost.toString()) : undefined,
-          boxtal_created: order.boxtal_created || false,
-          boxtal_order_id: order.boxtal_order_id
+          shipping_address: order.shipping_address || undefined
         }
       })
     )

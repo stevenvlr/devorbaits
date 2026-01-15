@@ -21,13 +21,14 @@ import {
 } from '@/lib/appointments-manager'
 import { submitMoneticoPayment, generateOrderReference } from '@/lib/monetico'
 import { createOrder, updateOrderStatus } from '@/lib/revenue-supabase'
-import { createBoxtalShipmentAuto, getBoxtalShippingCost, type PickupPoint } from '@/lib/boxtal-simple'
-import PickupPointSelector from '@/components/PickupPointSelector'
-import { calculateFinalShippingPrice } from '@/lib/shipping-prices'
+import { getActiveShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
 import PayPalButton from '@/components/PayPalButton'
+import { calculateCartWeight } from '@/lib/product-weights'
+import type { ChronopostRelaisPoint } from '@/components/ChronopostRelaisWidget'
+import BoxtalRelayMap, { type BoxtalParcelPoint } from '@/components/BoxtalRelayMap'
 
-type RetraitMode = 'livraison' | 'point-relais' | 'amicale-blanc' | 'wavignies-rdv'
+type RetraitMode = 'livraison' | 'amicale-blanc' | 'wavignies-rdv' | 'chronopost-relais'
 type PaymentMethod = 'card' | 'paypal' 
 
 export default function CheckoutPage() {
@@ -54,10 +55,11 @@ export default function CheckoutPage() {
   const [promoValidation, setPromoValidation] = useState<PromoCodeValidation | null>(null)
   const [promoError, setPromoError] = useState<string | null>(null)
   const [shippingCost, setShippingCost] = useState<number>(0)
-  const [selectedPickupPoint, setSelectedPickupPoint] = useState<PickupPoint | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('paypal')
   const [orderReference, setOrderReference] = useState<string>('')
   const [cgvAccepted, setCgvAccepted] = useState(false)
+  const [chronopostRelaisPoint, setChronopostRelaisPoint] = useState<ChronopostRelaisPoint | null>(null)
+  const [boxtalParcelPoint, setBoxtalParcelPoint] = useState<BoxtalParcelPoint | null>(null)
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -105,28 +107,21 @@ export default function CheckoutPage() {
     }
   }, [retraitMode, rdvDate])
 
-  // Calculer le prix d'expédition Boxtal quand l'adresse est complète
+  // Calculer le prix d'expédition basé sur les tarifs configurés
   useEffect(() => {
     const calculateShippingCost = async () => {
-      if (retraitMode === 'livraison' && 
+      if ((retraitMode === 'livraison' || retraitMode === 'chronopost-relais') && 
           livraisonAddress.adresse && 
           livraisonAddress.codePostal && 
           livraisonAddress.ville) {
         
-        // Calculer le poids total (plus réaliste selon la quantité)
-        // Poids moyen par article : 0.4kg
-        const totalWeight = Math.max(
-          cartItems.reduce((sum, item) => {
-            const weightPerItem = 0.4 // Poids moyen en kg par article
-            return sum + (item.quantite * weightPerItem)
-          }, 0),
-          0.5 // Minimum 0.5kg
-        )
+        // Calculer le poids total basé sur les vrais poids des produits
+        const totalWeight = calculateCartWeight(cartItems)
         
         // Log pour debug
         console.log('🛒 Calcul expédition - Articles:', cartItems.length, 
           'Quantité totale:', cartItems.reduce((sum, item) => sum + item.quantite, 0),
-          'Poids total:', totalWeight.toFixed(2), 'kg')
+          'Poids total RÉEL:', totalWeight.toFixed(2), 'kg')
 
         // Calculer la valeur totale
         const totalValue = cartItems.reduce(
@@ -135,33 +130,54 @@ export default function CheckoutPage() {
         )
 
         try {
-          const result = await getBoxtalShippingCost(
-            {
-              street: livraisonAddress.adresse,
-              city: livraisonAddress.ville,
-              postalCode: livraisonAddress.codePostal,
-              country: 'FR'
-            },
-            totalWeight,
-            totalValue
-          )
-
-          if (result.success) {
-            // Appliquer les tarifs personnalisés si configurés
-            const finalPrice = await calculateFinalShippingPrice(
-              result.cost,
-              totalWeight,
-              totalValue
-            )
-            setShippingCost(finalPrice)
+          // Déterminer le type d'envoi selon le mode de retrait
+          const shippingType = retraitMode === 'livraison' ? 'home' : 'relay'
+          
+          // Récupérer le tarif actif selon le type d'envoi
+          const shippingPrice = await getActiveShippingPrice(shippingType)
+          
+          if (shippingPrice) {
+            // Calculer le prix selon le type de tarif
+            let basePrice = 0
+            
+            if (shippingPrice.type === 'fixed' && shippingPrice.fixed_price) {
+              basePrice = shippingPrice.fixed_price
+            } else if (shippingPrice.type === 'weight_ranges' && shippingPrice.weight_ranges) {
+              // Trouver la tranche de poids correspondante
+              for (const range of shippingPrice.weight_ranges) {
+                if (totalWeight >= range.min && (range.max === null || totalWeight <= range.max)) {
+                  basePrice = range.price
+                  break
+                }
+              }
+              // Si aucune tranche ne correspond, utiliser un prix par défaut
+              if (basePrice === 0) {
+                basePrice = 10 // Prix par défaut si aucune tranche ne correspond
+              }
+            } else {
+              // Pour les autres types, utiliser un prix par défaut
+              basePrice = 10
+            }
+            
+            // Vérifier la livraison gratuite
+            if (shippingPrice.free_shipping_threshold && totalValue >= shippingPrice.free_shipping_threshold) {
+              setShippingCost(0)
+              return
+            }
+            
+            // Appliquer le prix calculé
+            setShippingCost(basePrice)
+            console.log('✅ Prix d\'expédition calculé:', basePrice, '€ (poids:', totalWeight.toFixed(2), 'kg)')
           } else {
-            console.warn('Erreur estimation Boxtal:', result.error)
-            // Garder le prix par défaut en cas d'erreur
-            setShippingCost(5.99)
+            // Pas de tarif configuré, utiliser un prix par défaut simple
+            const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+            setShippingCost(defaultPrice)
+            console.log('⚠️ Aucun tarif configuré, utilisation prix par défaut:', defaultPrice, '€')
           }
         } catch (error) {
-          console.error('Erreur lors du calcul du prix d\'expédition:', error)
-          setShippingCost(5.99) // Prix par défaut en cas d'erreur
+          console.error('❌ Erreur lors du calcul du prix d\'expédition:', error)
+          // En cas d'erreur, utiliser un prix par défaut
+          setShippingCost(10)
         }
       } else {
         // Réinitialiser le prix si l'adresse n'est pas complète ou si ce n'est pas une livraison
@@ -278,9 +294,11 @@ export default function CheckoutPage() {
     ? Math.max(0, total - promoValidation.discount)
     : total
 
-  // Calculer le prix d'expédition (gratuit pour retrait, prix réel Boxtal pour livraison)
-  const calculatedShippingCost = retraitMode === 'livraison' 
-    ? (shippingCost > 0 ? shippingCost : 0) // Prix réel de Boxtal (0 si pas encore calculé)
+    // Calculer le prix d'expédition (gratuit pour retrait, prix configuré pour livraison)
+  // shippingCost = -1 signifie erreur d'estimation
+  const shippingError = (retraitMode === 'livraison' || retraitMode === 'chronopost-relais') && shippingCost === -1
+  const calculatedShippingCost = (retraitMode === 'livraison' || retraitMode === 'chronopost-relais')
+    ? (shippingCost > 0 ? shippingCost : 0) // Prix configuré (0 si pas encore calculé ou erreur)
     : 0 // Gratuit pour retrait
 
   // Total final avec expédition
@@ -294,10 +312,36 @@ export default function CheckoutPage() {
     }
     
     if (retraitMode === 'livraison') {
+      // Bloquer si le prix n'est pas encore calculé (> 0 requis)
+      if (shippingCost <= 0) {
+        return false
+      }
       return livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville
     }
-    if (retraitMode === 'point-relais') {
-      return selectedPickupPoint !== null
+    if (retraitMode === 'chronopost-relais') {
+      // Mode test : permettre le paiement même sans point relais sélectionné
+      // (pour tester pendant que l'API Boxtal n'est pas encore configurée)
+      const MODE_TEST = true // Mettre à false quand l'API est configurée
+      
+      if (MODE_TEST) {
+        // En mode test, on accepte même sans point relais sélectionné
+        // Vérifier juste le code postal pour le calcul du prix
+        if (!livraisonAddress.codePostal || livraisonAddress.codePostal.length < 5) {
+          return false
+        }
+        return true
+      }
+      
+      // Mode production : vérifier qu'un point relais est sélectionné
+      // Accepter soit chronopostRelaisPoint (ancien système) soit boxtalParcelPoint (nouveau système)
+      if (!chronopostRelaisPoint && !boxtalParcelPoint) {
+        return false
+      }
+      if (!livraisonAddress.codePostal || livraisonAddress.codePostal.length < 5) {
+        return false
+      }
+      // Le prix d'expédition peut être 0 (gratuit) ou > 0
+      return true
     }
     if (retraitMode === 'wavignies-rdv') {
       return rdvDate && rdvTimeSlot && isAvailableDay(rdvDate)
@@ -315,10 +359,6 @@ export default function CheckoutPage() {
       return
     }
 
-    if (retraitMode === 'point-relais' && !selectedPickupPoint) {
-      alert('Veuillez sélectionner un point relais')
-      return
-    }
 
     if (retraitMode === 'wavignies-rdv') {
       if (!rdvDate || !rdvTimeSlot) {
@@ -384,7 +424,7 @@ export default function CheckoutPage() {
       rdvDate: retraitMode === 'wavignies-rdv' ? rdvDate : undefined,
       rdvTimeSlot: retraitMode === 'wavignies-rdv' ? rdvTimeSlot : undefined,
       livraisonAddress: retraitMode === 'livraison' ? livraisonAddress : undefined,
-      pickupPoint: retraitMode === 'point-relais' ? selectedPickupPoint : undefined,
+      chronopostRelaisPoint: retraitMode === 'chronopost-relais' ? chronopostRelaisPoint : undefined,
       promoCode: promoValidation && promoValidation.valid ? promoCode : undefined,
       discount: promoValidation && promoValidation.valid ? promoValidation.discount : undefined,
     }
@@ -402,7 +442,7 @@ export default function CheckoutPage() {
       rdvDate: retraitMode === 'wavignies-rdv' ? rdvDate : null,
       rdvTimeSlot: retraitMode === 'wavignies-rdv' ? rdvTimeSlot : null,
       livraisonAddress: retraitMode === 'livraison' ? livraisonAddress : null,
-      pickupPoint: retraitMode === 'point-relais' ? selectedPickupPoint : null,
+      chronopostRelaisPoint: retraitMode === 'chronopost-relais' ? chronopostRelaisPoint : null,
       createdAt: new Date().toISOString(),
     }
     localStorage.setItem(`pending-order-${orderReference}`, JSON.stringify(pendingOrder))
@@ -435,15 +475,13 @@ export default function CheckoutPage() {
           calculatedShippingCost
         )
 
-        // Mettre à jour le statut à 'completed'
-        if (order.id) {
-          await updateOrderStatus(order.id, 'completed')
-        }
+        // La commande est créée avec le statut 'pending' (en attente) par défaut
+        // Le statut sera changé manuellement depuis l'admin
 
-        // Si c'est une livraison ou un point relais, créer l'expédition Boxtal
-        if ((retraitMode === 'livraison' || retraitMode === 'point-relais') && order.id) {
-          // Sauvegarder l'adresse de livraison dans le profil utilisateur (si livraison à domicile)
-          if (retraitMode === 'livraison' && user?.id && livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville) {
+        // Sauvegarder l'adresse de livraison dans la commande et le profil utilisateur
+        if (retraitMode === 'livraison' && order.id) {
+          // Sauvegarder l'adresse dans le profil utilisateur
+          if (user?.id && livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville) {
             try {
               await updateUserProfile(user.id, {
                 adresse: livraisonAddress.adresse,
@@ -456,24 +494,147 @@ export default function CheckoutPage() {
               console.warn('⚠️ Erreur lors de la sauvegarde de l\'adresse:', profileError)
             }
           }
-
-          // Créer automatiquement l'expédition Boxtal
+          
+          // Sauvegarder l'adresse dans la commande
           try {
-            console.log('📦 Création de l\'expédition Boxtal pour la commande:', order.id)
-            const pickupPointCode = retraitMode === 'point-relais' && selectedPickupPoint ? selectedPickupPoint.code : undefined
-            const boxtalResult = await createBoxtalShipmentAuto(order.id, pickupPointCode)
-            if (boxtalResult.success) {
-              console.log('✅ Expédition Boxtal créée avec succès:', boxtalResult)
-              console.log('📋 Numéro de suivi:', boxtalResult.trackingNumber)
-              console.log('🏷️ URL étiquette:', boxtalResult.labelUrl)
-            } else {
-              console.error('❌ Erreur création expédition Boxtal:', boxtalResult.message)
-              // Afficher l'erreur à l'utilisateur
-              alert(`⚠️ Commande créée mais erreur lors de la création de l'expédition Boxtal:\n${boxtalResult.message}\n\nVous pouvez créer l'expédition manuellement depuis l'interface admin.`)
+            const { getSupabaseClient } = await import('@/lib/supabase')
+            const supabase = getSupabaseClient()
+            if (supabase) {
+              await supabase
+                .from('orders')
+                .update({
+                  shipping_address: {
+                    adresse: livraisonAddress.adresse,
+                    codePostal: livraisonAddress.codePostal,
+                    ville: livraisonAddress.ville,
+                    telephone: livraisonAddress.telephone
+                  }
+                })
+                .eq('id', order.id)
+              console.log('✅ Adresse de livraison sauvegardée dans la commande')
             }
-          } catch (boxtalError: any) {
-            console.error('❌ Erreur lors de la création de l\'expédition Boxtal:', boxtalError)
-            alert(`⚠️ Commande créée mais erreur lors de la création de l'expédition Boxtal:\n${boxtalError?.message || 'Erreur inconnue'}\n\nVous pouvez créer l'expédition manuellement depuis l'interface admin.`)
+          } catch (addressError) {
+            console.warn('⚠️ Erreur lors de la sauvegarde de l\'adresse dans la commande:', addressError)
+          }
+        }
+
+        // Sauvegarder le point relais dans la commande (Chronopost ou Boxtal)
+        if (retraitMode === 'chronopost-relais' && order.id) {
+          try {
+            const { getSupabaseClient } = await import('@/lib/supabase')
+            const supabase = getSupabaseClient()
+            if (supabase) {
+              // Priorité à boxtalParcelPoint (nouveau système), sinon chronopostRelaisPoint (ancien système)
+              if (boxtalParcelPoint) {
+                // Utiliser UNIQUEMENT les données du point relais, pas celles de la recherche
+                const pointAddress = boxtalParcelPoint.address || {} as any
+                const rawData = (boxtalParcelPoint as any).rawData || boxtalParcelPoint
+                
+                // Extraire le code postal et la ville depuis TOUTES les sources possibles
+                // 1. Depuis pointAddress
+                // 2. Depuis rawData.address
+                // 3. Directement depuis rawData
+                const postalCode = 
+                  pointAddress.postalCode || 
+                  pointAddress.postal_code || 
+                  pointAddress.zipCode || 
+                  pointAddress.zip || 
+                  pointAddress.postcode ||
+                  rawData.address?.postalCode ||
+                  rawData.address?.postal_code ||
+                  rawData.address?.zipCode ||
+                  rawData.address?.zip ||
+                  rawData.postalCode ||
+                  rawData.postal_code ||
+                  rawData.zipCode ||
+                  rawData.zip ||
+                  rawData.codePostal ||
+                  ''
+                
+                const city = 
+                  pointAddress.city || 
+                  pointAddress.ville || 
+                  pointAddress.locality ||
+                  pointAddress.town ||
+                  pointAddress.commune ||
+                  rawData.address?.city ||
+                  rawData.address?.ville ||
+                  rawData.address?.locality ||
+                  rawData.address?.town ||
+                  rawData.city ||
+                  rawData.ville ||
+                  rawData.locality ||
+                  rawData.town ||
+                  ''
+                
+                const street = 
+                  pointAddress.street || 
+                  pointAddress.address || 
+                  pointAddress.line1 || 
+                  pointAddress.adresse ||
+                  pointAddress.streetAddress ||
+                  rawData.address?.street ||
+                  rawData.address?.address ||
+                  rawData.address?.line1 ||
+                  rawData.street ||
+                  rawData.address ||
+                  ''
+                
+                // Construire l'adresse complète
+                const fullAddress = [street, postalCode, city].filter(Boolean).join(', ')
+                
+                await supabase
+                  .from('orders')
+                  .update({
+                    shipping_address: {
+                      type: 'boxtal-relais',
+                      identifiant: boxtalParcelPoint.code || '',
+                      nom: boxtalParcelPoint.name || '',
+                      // Adresse complète formatée
+                      adresseComplete: fullAddress,
+                      // Utiliser UNIQUEMENT l'adresse du point relais (détaillée)
+                      adresse: street,
+                      codePostal: postalCode,
+                      ville: city,
+                      pays: pointAddress.country || pointAddress.countryCode || 'FR',
+                      coordonnees: boxtalParcelPoint.coordinates || {},
+                      network: boxtalParcelPoint.network || '',
+                      // Code postal utilisé par le client pour la recherche
+                      codePostalRecherche: livraisonAddress.codePostal || '',
+                      villeRecherche: livraisonAddress.ville || '',
+                      // Sauvegarder toutes les données du point relais (objet complet)
+                      pointRelais: boxtalParcelPoint
+                    }
+                  })
+                  .eq('id', order.id)
+                console.log('✅ Point relais Boxtal sauvegardé dans la commande:', {
+                  code: boxtalParcelPoint.code,
+                  name: boxtalParcelPoint.name,
+                  address: boxtalParcelPoint.address,
+                  extracted: { postalCode, city, street },
+                  fullAddress: fullAddress
+                })
+              } else if (chronopostRelaisPoint) {
+                await supabase
+                  .from('orders')
+                  .update({
+                    shipping_address: {
+                      type: 'chronopost-relais',
+                      identifiant: chronopostRelaisPoint.identifiant,
+                      nom: chronopostRelaisPoint.nom,
+                      adresse: chronopostRelaisPoint.adresse,
+                      codePostal: chronopostRelaisPoint.codePostal,
+                      ville: chronopostRelaisPoint.ville,
+                      horaires: chronopostRelaisPoint.horaires,
+                      coordonnees: chronopostRelaisPoint.coordonnees
+                    }
+                  })
+                  .eq('id', order.id)
+                console.log('✅ Point relais Chronopost sauvegardé dans la commande')
+              }
+            }
+          } catch (relaisError) {
+            console.warn('⚠️ Erreur lors de la sauvegarde du point relais:', relaisError)
           }
         }
 
@@ -609,29 +770,26 @@ export default function CheckoutPage() {
                   </div>
                 </label>
 
-                {/* Option Point relais */}
+                {/* Option Chronopost Relais */}
                 <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
                   style={{
-                    borderColor: retraitMode === 'point-relais' ? '#EAB308' : '#374151',
-                    backgroundColor: retraitMode === 'point-relais' ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
+                    borderColor: retraitMode === 'chronopost-relais' ? '#EAB308' : '#374151',
+                    backgroundColor: retraitMode === 'chronopost-relais' ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
                   }}>
                   <input
                     type="radio"
                     name="retrait-mode"
-                    value="point-relais"
-                    checked={retraitMode === 'point-relais'}
-                    onChange={(e) => {
-                      setRetraitMode(e.target.value as RetraitMode)
-                      setSelectedPickupPoint(null) // Réinitialiser la sélection
-                    }}
+                    value="chronopost-relais"
+                    checked={retraitMode === 'chronopost-relais'}
+                    onChange={(e) => setRetraitMode(e.target.value as RetraitMode)}
                     className="mt-1"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <MapPin className="w-5 h-5 text-yellow-500" />
-                      <span className="font-semibold text-lg">Point relais</span>
+                      <span className="font-semibold text-lg">Chronopost Relais</span>
                     </div>
-                    <p className="text-sm text-gray-400">Retrait dans un point relais près de chez vous</p>
+                    <p className="text-sm text-gray-400">Retrait dans un point relais Chronopost près de chez vous</p>
                   </div>
                 </label>
 
@@ -684,27 +842,6 @@ export default function CheckoutPage() {
                 </label>
               </div>
 
-              {/* Sélecteur de points relais */}
-              {retraitMode === 'point-relais' && (
-                <div className="mt-6 bg-noir-900/50 border border-noir-700 rounded-xl p-6">
-                  <h3 className="text-xl font-bold mb-4">Choisir un point relais</h3>
-                  <PickupPointSelector
-                    postalCode={livraisonAddress.codePostal || user?.codePostal || ''}
-                    city={livraisonAddress.ville || user?.ville}
-                    country="FR"
-                    onSelect={(point) => setSelectedPickupPoint(point)}
-                    selectedPoint={selectedPickupPoint}
-                  />
-                  {!selectedPickupPoint && (
-                    <div className="mt-4 bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-3">
-                      <p className="text-yellow-400 text-sm flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" />
-                        Veuillez sélectionner un point relais pour continuer
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
@@ -781,9 +918,11 @@ export default function CheckoutPage() {
                   </span>
                   <span className="text-white">
                     {retraitMode === 'livraison' ? (
-                      calculatedShippingCost > 0 
-                        ? `${calculatedShippingCost.toFixed(2)} €`
-                        : <span className="text-gray-500 text-xs">Calcul en cours...</span>
+                      calculatedShippingCost > 0 ? (
+                        `${calculatedShippingCost.toFixed(2)} €`
+                      ) : (
+                        <span className="text-gray-500 text-xs">Calcul en cours...</span>
+                      )
                     ) : (
                       'Gratuit'
                     )}
@@ -794,6 +933,36 @@ export default function CheckoutPage() {
                   <span className="text-yellow-500 font-bold">{finalTotal.toFixed(2)} €</span>
                 </div>
               </div>
+
+              {/* Point relais Boxtal sélectionné */}
+              {retraitMode === 'chronopost-relais' && boxtalParcelPoint && (
+                <div className="space-y-3 border-t border-noir-700 pt-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-yellow-500" />
+                    Point relais sélectionné
+                  </h3>
+                  <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4">
+                    <p className="text-sm text-yellow-300 font-semibold mb-2">
+                      {boxtalParcelPoint.name}
+                    </p>
+                    {boxtalParcelPoint.address?.street && (
+                      <p className="text-xs text-gray-300">
+                        {boxtalParcelPoint.address.street}
+                      </p>
+                    )}
+                    {(boxtalParcelPoint.address?.postalCode || boxtalParcelPoint.address?.city) && (
+                      <p className="text-xs text-gray-300">
+                        {boxtalParcelPoint.address?.postalCode} {boxtalParcelPoint.address?.city}
+                      </p>
+                    )}
+                    {boxtalParcelPoint.code && (
+                      <p className="text-xs text-gray-400 mt-2">
+                        Code: {boxtalParcelPoint.code}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Séparation des produits disponibles à l'amicale */}
               {produitsDisponiblesAmicale.length > 0 && retraitMode === 'livraison' && (
@@ -883,6 +1052,45 @@ export default function CheckoutPage() {
                   </div>
                 </div>
               )}
+
+              {/* Sélection point relais Boxtal */}
+              <div 
+                className="space-y-4 border-t border-noir-700 pt-4"
+                style={{ 
+                  display: retraitMode === 'chronopost-relais' ? 'block' : 'none',
+                  position: 'relative',
+                  zIndex: retraitMode === 'chronopost-relais' ? 1 : -1, // Mettre en arrière-plan quand masqué
+                  isolation: 'isolate', // Créer un nouveau contexte d'empilement pour isoler la carte
+                  pointerEvents: retraitMode === 'chronopost-relais' ? 'auto' : 'none', // Désactiver les interactions quand masqué
+                  visibility: retraitMode === 'chronopost-relais' ? 'visible' : 'hidden' // Masquer complètement
+                }}
+              >
+                <h3 className="font-semibold flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-yellow-500" />
+                  Point relais Boxtal
+                </h3>
+                
+                <div 
+                  style={{ 
+                    position: 'relative', 
+                    zIndex: 1, 
+                    isolation: 'isolate',
+                    contain: 'layout style paint',
+                    maxHeight: '450px',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <BoxtalRelayMap
+                    active={retraitMode === 'chronopost-relais'}
+                    onSelect={(parcelPoint) => {
+                      setBoxtalParcelPoint(parcelPoint)
+                      console.log('Point relais Boxtal sélectionné:', parcelPoint)
+                    }}
+                    initialCity={livraisonAddress.ville}
+                    initialPostalCode={livraisonAddress.codePostal}
+                  />
+                </div>
+              </div>
 
               {/* RDV Wavignies */}
               {retraitMode === 'wavignies-rdv' && (
@@ -1196,7 +1404,15 @@ export default function CheckoutPage() {
               </div>
 
               {/* Bouton de paiement */}
-              <div className="mt-6">
+              <div 
+                className="mt-6" 
+                style={{ 
+                  position: 'relative', 
+                  zIndex: 10000,
+                  isolation: 'isolate',
+                  pointerEvents: 'auto'
+                }}
+              >
                 {paymentMethod === 'paypal' ? (
                   <div className={!isFormValid() ? 'opacity-50 pointer-events-none' : ''}>
                     <PayPalButton
@@ -1241,18 +1457,158 @@ export default function CheckoutPage() {
                             // La commande reste en "pending" (en attente) par défaut
                             // Le statut sera changé manuellement depuis l'admin
                             
-                            // Boxtal désactivé temporairement
-                            // TODO: Réactiver quand Boxtal sera configuré
-                            /*
-                            if (retraitMode === 'livraison' || retraitMode === 'point-relais') {
+                            // Sauvegarder l'adresse de livraison dans la commande
+                            if (retraitMode === 'livraison' && order.id) {
                               try {
-                                const pickupPointCode = retraitMode === 'point-relais' && selectedPickupPoint ? selectedPickupPoint.code : undefined
-                                await createBoxtalShipmentAuto(order.id, pickupPointCode)
-                              } catch (boxtalError) {
-                                console.error('Erreur Boxtal:', boxtalError)
+                                const { getSupabaseClient } = await import('@/lib/supabase')
+                                const supabase = getSupabaseClient()
+                                if (supabase && livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville) {
+                                  await supabase
+                                    .from('orders')
+                                    .update({
+                                      shipping_address: {
+                                        adresse: livraisonAddress.adresse,
+                                        codePostal: livraisonAddress.codePostal,
+                                        ville: livraisonAddress.ville,
+                                        telephone: livraisonAddress.telephone
+                                      }
+                                    })
+                                    .eq('id', order.id)
+                                  console.log('✅ Adresse de livraison sauvegardée dans la commande')
+                                }
+                              } catch (addressError) {
+                                console.warn('⚠️ Erreur lors de la sauvegarde de l\'adresse:', addressError)
                               }
                             }
-                            */
+
+                            // Sauvegarder le point relais dans la commande (Chronopost ou Boxtal)
+                            if (retraitMode === 'chronopost-relais' && order.id) {
+                              try {
+                                const { getSupabaseClient } = await import('@/lib/supabase')
+                                const supabase = getSupabaseClient()
+                                if (supabase) {
+                                  // Priorité à boxtalParcelPoint (nouveau système), sinon chronopostRelaisPoint (ancien système)
+                                  if (boxtalParcelPoint) {
+                                    // Utiliser UNIQUEMENT les données du point relais, pas celles de la recherche
+                                    const pointAddress = boxtalParcelPoint.address || {} as any
+                                    const rawData = (boxtalParcelPoint as any).rawData || boxtalParcelPoint
+                                    
+                                    // Extraire le code postal et la ville depuis TOUTES les sources possibles
+                                    const postalCode = 
+                                      pointAddress.postalCode || 
+                                      pointAddress.postal_code || 
+                                      pointAddress.zipCode || 
+                                      pointAddress.zip || 
+                                      pointAddress.postcode ||
+                                      rawData.address?.postalCode ||
+                                      rawData.address?.postal_code ||
+                                      rawData.address?.zipCode ||
+                                      rawData.address?.zip ||
+                                      rawData.postalCode ||
+                                      rawData.postal_code ||
+                                      rawData.zipCode ||
+                                      rawData.zip ||
+                                      rawData.codePostal ||
+                                      ''
+                                    
+                                    const city = 
+                                      pointAddress.city || 
+                                      pointAddress.ville || 
+                                      pointAddress.locality ||
+                                      pointAddress.town ||
+                                      pointAddress.commune ||
+                                      rawData.address?.city ||
+                                      rawData.address?.ville ||
+                                      rawData.address?.locality ||
+                                      rawData.address?.town ||
+                                      rawData.city ||
+                                      rawData.ville ||
+                                      rawData.locality ||
+                                      rawData.town ||
+                                      ''
+                                    
+                                    const street = 
+                                      pointAddress.street || 
+                                      pointAddress.address || 
+                                      pointAddress.line1 || 
+                                      pointAddress.adresse ||
+                                      pointAddress.streetAddress ||
+                                      rawData.address?.street ||
+                                      rawData.address?.address ||
+                                      rawData.address?.line1 ||
+                                      rawData.street ||
+                                      rawData.address ||
+                                      ''
+                                    
+                                    // Construire l'adresse complète
+                                    const fullAddress = [street, postalCode, city].filter(Boolean).join(', ')
+                                    
+                                    await supabase
+                                      .from('orders')
+                                      .update({
+                                        shipping_address: {
+                                          type: 'boxtal-relais',
+                                          identifiant: boxtalParcelPoint.code || '',
+                                          nom: boxtalParcelPoint.name || '',
+                                          // Adresse complète formatée
+                                          adresseComplete: fullAddress,
+                                          // Utiliser UNIQUEMENT l'adresse du point relais (détaillée)
+                                          adresse: street,
+                                          codePostal: postalCode,
+                                          ville: city,
+                                          pays: pointAddress.country || pointAddress.countryCode || 'FR',
+                                          coordonnees: boxtalParcelPoint.coordinates || {},
+                                          network: boxtalParcelPoint.network || '',
+                                          // Code postal utilisé par le client pour la recherche
+                                          codePostalRecherche: livraisonAddress.codePostal || '',
+                                          villeRecherche: livraisonAddress.ville || '',
+                                          // Sauvegarder toutes les données du point relais (objet complet)
+                                          pointRelais: boxtalParcelPoint
+                                        }
+                                      })
+                                      .eq('id', order.id)
+                                    console.log('✅ Point relais Boxtal sauvegardé dans la commande (PayPal):', {
+                                      code: boxtalParcelPoint.code,
+                                      name: boxtalParcelPoint.name,
+                                      address: boxtalParcelPoint.address,
+                                      rawData: (boxtalParcelPoint as any).rawData,
+                                      extracted: { postalCode, city, street },
+                                      fullAddress: fullAddress,
+                                      willSave: {
+                                        codePostal: postalCode,
+                                        ville: city,
+                                        adresse: street
+                                      }
+                                    })
+                                    
+                                    // Vérifier que les données sont bien présentes
+                                    if (!postalCode && !city) {
+                                      console.warn('⚠️ ATTENTION: Code postal et ville non trouvés dans les données du point relais!')
+                                      console.warn('Données complètes:', JSON.stringify(boxtalParcelPoint, null, 2))
+                                    }
+                                  } else if (chronopostRelaisPoint) {
+                                    await supabase
+                                      .from('orders')
+                                      .update({
+                                        shipping_address: {
+                                          type: 'chronopost-relais',
+                                          identifiant: chronopostRelaisPoint.identifiant,
+                                          nom: chronopostRelaisPoint.nom,
+                                          adresse: chronopostRelaisPoint.adresse,
+                                          codePostal: chronopostRelaisPoint.codePostal,
+                                          ville: chronopostRelaisPoint.ville,
+                                          horaires: chronopostRelaisPoint.horaires,
+                                          coordonnees: chronopostRelaisPoint.coordonnees
+                                        }
+                                      })
+                                      .eq('id', order.id)
+                                    console.log('✅ Point relais Chronopost sauvegardé dans la commande')
+                                  }
+                                }
+                              } catch (relaisError) {
+                                console.warn('⚠️ Erreur lors de la sauvegarde du point relais:', relaisError)
+                              }
+                            }
                           }
 
                           clearCart()
@@ -1280,6 +1636,11 @@ export default function CheckoutPage() {
                   <button
                     onClick={handleSubmit}
                     disabled={!isFormValid()}
+                    style={{ 
+                      position: 'relative', 
+                      zIndex: 10000,
+                      pointerEvents: 'auto'
+                    }}
                     className={`w-full font-bold py-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg ${
                       isFormValid()
                         ? 'bg-yellow-500 text-noir-950 hover:bg-yellow-400 cursor-pointer'

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { 
   Plus, 
   Edit, 
@@ -12,10 +13,7 @@ import {
   ImageIcon,
   Upload,
   XCircle,
-  Download,
   AlertTriangle,
-  CheckCircle2,
-  Database
 } from 'lucide-react'
 import { 
   Product, 
@@ -25,15 +23,11 @@ import {
   updateProduct,
   deleteProduct,
   onProductsUpdate,
-  getProductImages,
-  loadProductsSync,
-  getAllProductsSync
+  getProductImages
 } from '@/lib/products-manager'
-import { migrateProductsToSupabase } from '@/lib/products-supabase'
 import { 
   loadStock, 
   updateStock, 
-  getAvailableStock,
   getAvailableStockSync,
   onStockUpdate,
 } from '@/lib/stock-manager'
@@ -43,10 +37,8 @@ import {
   TAILLES_EQUILIBRES 
 } from '@/lib/constants'
 import { loadGammes, addGamme, onGammesUpdate } from '@/lib/gammes-manager'
-import { optimizeImage } from '@/lib/image-optimizer'
 import { uploadProductImage } from '@/lib/storage-supabase'
 import { getUnseenAlerts, markAlertAsSeen, getAlertId, type StockAlert } from '@/lib/stock-notifications'
-import { importDefaultProducts, importAmicaleBlancProducts, addDescriptionsToExistingProducts } from '@/lib/import-default-products'
 import ProductDetailModal from '@/components/ProductDetailModal'
 
 const CATEGORIES = [
@@ -101,68 +93,15 @@ export default function ProductsAdminPage() {
     variants: []
   })
 
-  // Ajouter automatiquement des descriptions aux produits qui n'en ont pas (une seule fois)
-  useEffect(() => {
-    const checkDescriptions = async () => {
-      const hasCheckedDescriptions = localStorage.getItem('descriptions-checked')
-      if (!hasCheckedDescriptions) {
-        const products = await loadProducts()
-        const productsWithoutDescription = products.filter(p => !p.description || p.description.trim() === '')
-        if (productsWithoutDescription.length > 0) {
-          // Ajouter des descriptions automatiquement
-          const result = await addDescriptionsToExistingProducts()
-          if (result.updated > 0) {
-            console.log(`${result.updated} produits mis à  jour avec des descriptions`)
-            // Recharger les produits
-            const updatedProducts = await loadProducts()
-            setProducts(updatedProducts)
-          }
-        }
-        localStorage.setItem('descriptions-checked', 'true')
-      }
-    }
-    checkDescriptions()
-  }, [])
-
   // Charger les produits, stocks, gammes et alertes
   useEffect(() => {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:128',message:'ProductsAdminPage useEffect',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    }
-    // #endregion
     const loadData = async () => {
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:130',message:'loadData entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-      }
-      // #endregion
       try {
-        // #region agent log
-        if (typeof window !== 'undefined') {
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:133',message:'calling loadProducts',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-        }
-        // #endregion
         const allProducts = await loadProducts()
-        // #region agent log
-        if (typeof window !== 'undefined') {
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:136',message:'loadProducts result',data:{productsCount:allProducts.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-        }
-        // #endregion
         setProducts(allProducts)
         
         // Charger le stock depuis Supabase (location 'general' par défaut)
-        // #region agent log
-        if (typeof window !== 'undefined') {
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:140',message:'calling loadStock',data:{location:'general'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-        }
-        // #endregion
         const allStock = await loadStock('general')
-        // #region agent log
-        if (typeof window !== 'undefined') {
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:143',message:'loadStock result',data:{stockItemsCount:Object.keys(allStock).length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-        }
-        // #endregion
         const stockMap: Record<string, number> = {}
         const variantStockMap: Record<string, number> = {}
         
@@ -181,12 +120,7 @@ export default function ProductsAdminPage() {
         const alerts = await getUnseenAlerts()
         setStockAlerts(alerts)
       } catch (error: any) {
-        // #region agent log
-        if (typeof window !== 'undefined') {
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:160',message:'loadData error',data:{errorMessage:error?.message,errorStack:error?.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-        }
-        // #endregion
-        console.error('Erreur lors du chargement des donnÃ©es:', error)
+        console.error('Erreur lors du chargement des données:', error)
       }
     }
 
@@ -206,12 +140,12 @@ export default function ProductsAdminPage() {
     }
   }, [])
 
-  // GÃ©rer l'upload de plusieurs images (max 3, optimisÃ©es automatiquement)
+  // Gérer l'upload de plusieurs images (max 3, optimisées automatiquement)
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
 
-    // Limiter Ã  3 images max
+    // Limiter à 3 images max
     const currentCount = formData.images.length
     const remainingSlots = 3 - currentCount
     if (remainingSlots <= 0) {
@@ -223,7 +157,7 @@ export default function ProductsAdminPage() {
     setIsUploadingImages(true)
 
     try {
-      // Si on est en mode Ã©dition, utiliser l'ID du produit, sinon gÃ©nÃ©rer un ID temporaire
+      // Si on est en mode édition, utiliser l'ID du produit, sinon générer un ID temporaire
       const productId = editingProduct?.id || `temp-${Date.now()}`
       
       const uploadedImages = await Promise.all(
@@ -232,7 +166,7 @@ export default function ProductsAdminPage() {
             alert(`L'image ${file.name} est trop grande (max 5MB)`)
             throw new Error('File too large')
           }
-          // Upload vers Supabase Storage si configurÃ©, sinon base64
+          // Upload vers Supabase Storage si configuré, sinon base64
           const imageIndex = formData.images.length + index
           return await uploadProductImage(productId, file, imageIndex)
         })
@@ -258,7 +192,7 @@ export default function ProductsAdminPage() {
     })
   }
 
-  // RÃ©organiser les images (dÃ©placer vers le haut)
+  // Réorganiser les images (déplacer vers le haut)
   const moveImageUp = (index: number) => {
     if (index === 0) return
     const newImages = [...formData.images]
@@ -266,7 +200,7 @@ export default function ProductsAdminPage() {
     setFormData({ ...formData, images: newImages })
   }
 
-  // RÃ©organiser les images (dÃ©placer vers le bas)
+  // Réorganiser les images (déplacer vers le bas)
   const moveImageDown = (index: number) => {
     if (index === formData.images.length - 1) return
     const newImages = [...formData.images]
@@ -274,7 +208,7 @@ export default function ProductsAdminPage() {
     setFormData({ ...formData, images: newImages })
   }
 
-  // RÃ©initialiser le formulaire
+  // Réinitialiser le formulaire
   const resetForm = () => {
     setFormData({
       name: '',
@@ -329,14 +263,14 @@ export default function ProductsAdminPage() {
       variants: [...formData.variants, newVariant]
     })
     
-    // Si on est en mode Ã©dition (produit existant), crÃ©er immédiatement le stock pour cette variante
+    // Si on est en mode édition (produit existant), créer immédiatement le stock pour cette variante
     if (editingProduct) {
       try {
-        console.log(`ðŸ’¾ CrÃ©ation immÃ©diate du stock pour la nouvelle variante "${newVariant.label || newVariant.id}" du produit "${editingProduct.name}"`)
+        console.log(`Création immédiate du stock pour la nouvelle variante "${newVariant.label || newVariant.id}" du produit "${editingProduct.name}"`)
         await updateStock(editingProduct.id, 0, newVariant.id, 'general')
         console.log(`✅ Stock créé immédiatement pour la variante "${newVariant.label || newVariant.id}"`)
         
-        // Mettre Ã  jour l'affichage du stock
+        // Mettre à jour l'affichage du stock
         const allStock = await loadStock('general')
         const stockMap: Record<string, number> = {}
         const variantStockMap: Record<string, number> = {}
@@ -352,7 +286,7 @@ export default function ProductsAdminPage() {
         setStocks(stockMap)
         setVariantStocks(variantStockMap)
       } catch (error) {
-        console.error(`âŒ Erreur lors de la crÃ©ation immÃ©diate du stock pour la variante:`, error)
+        console.error(`Erreur lors de la création immédiate du stock pour la variante:`, error)
       }
     }
   }
@@ -371,7 +305,7 @@ export default function ProductsAdminPage() {
     }
   }
 
-  // Mettre Ã  jour une variante
+  // Mettre à jour une variante
   const updateVariant = (variantId: string, updates: Partial<ProductVariant>) => {
     setFormData({
       ...formData,
@@ -381,7 +315,7 @@ export default function ProductsAdminPage() {
     })
   }
 
-  // GÃ©nÃ©rer automatiquement les variantes selon le type de produit
+  // Générer automatiquement les variantes selon le type de produit
   const generateVariants = () => {
     const category = formData.category.toLowerCase()
     const newVariants: ProductVariant[] = []
@@ -418,20 +352,20 @@ export default function ProductsAdminPage() {
         ...formData,
         variants: newVariants
       })
-      alert(`${newVariants.length} variante(s) gÃ©nÃ©rÃ©e(s) automatiquement !`)
+      alert(`${newVariants.length} variante(s) générée(s) automatiquement !`)
     }
   }
 
   // Sauvegarder le produit
   const handleSave = async () => {
     if (!formData.name || !formData.category) {
-      alert('Veuillez remplir au moins le nom et la catÃ©gorie')
+      alert('Veuillez remplir au moins le nom et la catégorie')
       return
     }
 
     const hasVariants = formData.variants && formData.variants.length > 0
     if (hasVariants && formData.variants.length === 0) {
-      alert('Veuillez ajouter au moins une variante ou dÃ©sactiver les variantes')
+      alert('Veuillez ajouter au moins une variante ou désactiver les variantes')
       return
     }
 
@@ -457,22 +391,22 @@ export default function ProductsAdminPage() {
       
       if (editingProduct) {
         await updateProduct(editingProduct.id, productData)
-        // Récupérer le produit mis à  jour
+        // Récupérer le produit mis à jour
         const allProducts = await loadProducts()
         savedProduct = allProducts.find(p => p.id === editingProduct.id)!
         
-        // Pour un produit existant, vÃ©rifier toutes les variantes et crÃ©er le stock pour celles qui n'existent pas
-        // Utiliser formData.variants directement pour Ãªtre sÃ»r d'avoir les bonnes variantes
+        // Pour un produit existant, vérifier toutes les variantes et créer le stock pour celles qui n'existent pas
+        // Utiliser formData.variants directement pour être sûr d'avoir les bonnes variantes
         if (savedProduct) {
-          console.log(`ðŸ” Vérification du stock pour le produit "${savedProduct.name}" (ID: ${savedProduct.id})`)
-          console.log(`ðŸ“¦ hasVariants: ${hasVariants}, formData.variants:`, formData.variants)
+          console.log(`Vérification du stock pour le produit "${savedProduct.name}" (ID: ${savedProduct.id})`)
+          console.log(`hasVariants: ${hasVariants}, formData.variants:`, formData.variants)
           
           const allStock = await loadStock('general')
-          console.log(`ðŸ“Š Stock actuel chargÃ©: ${Object.keys(allStock).length} entrÃ©es`)
+          console.log(`Stock actuel chargé: ${Object.keys(allStock).length} entrées`)
           
           if (hasVariants && formData.variants && formData.variants.length > 0) {
-            console.log(`ðŸ” Vérification du stock pour ${formData.variants.length} variante(s) du produit "${savedProduct.name}"`)
-            console.log('ðŸ“‹ Variantes Ã  vÃ©rifier:', formData.variants.map(v => ({ id: v.id, label: v.label })))
+            console.log(`Vérification du stock pour ${formData.variants.length} variante(s) du produit "${savedProduct.name}"`)
+            console.log('Variantes à vérifier:', formData.variants.map(v => ({ id: v.id, label: v.label })))
             
             let createdCount = 0
             let existingCount = 0
@@ -480,83 +414,83 @@ export default function ProductsAdminPage() {
             
             for (const variant of formData.variants) {
               const stockKey = `${savedProduct.id}-${variant.id}`
-              console.log(`ðŸ”Ž Vérification de la variante "${variant.label}" (ID: ${variant.id}), stockKey: ${stockKey}`)
+              console.log(`Vérification de la variante "${variant.label}" (ID: ${variant.id}), stockKey: ${stockKey}`)
               
-              // VÃ©rifier si l'entrÃ©e de stock existe déjà 
+              // Vérifier si l'entrée de stock existe déjà
               if (!allStock[stockKey]) {
-                // CrÃ©er une nouvelle entrÃ©e de stock avec stock Ã  0 par défaut
+                // Créer une nouvelle entrée de stock avec stock à 0 par défaut
                 try {
-                  console.log(`ðŸ’¾ CrÃ©ation du stock pour la variante "${variant.label}"...`)
+                  console.log(`Création du stock pour la variante "${variant.label}"...`)
                   await updateStock(savedProduct.id, 0, variant.id, 'general')
                   createdCount++
-                  console.log(`✅ EntrÃ©e de stock créée pour la variante "${variant.label}" (ID: ${variant.id}) du produit "${savedProduct.name}"`)
+                  console.log(`✅ Entrée de stock créée pour la variante "${variant.label}" (ID: ${variant.id}) du produit "${savedProduct.name}"`)
                 } catch (error) {
                   errorCount++
-                  console.error(`âŒ Erreur lors de la crÃ©ation du stock pour la variante "${variant.label}":`, error)
+                  console.error(`Erreur lors de la création du stock pour la variante "${variant.label}":`, error)
                 }
               } else {
                 existingCount++
-                console.log(`ℹ️ Stock déjà  existant pour la variante "${variant.label}" (ID: ${variant.id}): ${allStock[stockKey].stock}`)
+                console.log(`Stock déjà existant pour la variante "${variant.label}" (ID: ${variant.id}): ${allStock[stockKey].stock}`)
               }
             }
             
-            console.log(`ðŸ“Š Résumé: ${createdCount} créé(s), ${existingCount} existant(s), ${errorCount} erreur(s)`)
+            console.log(`Résumé: ${createdCount} créé(s), ${existingCount} existant(s), ${errorCount} erreur(s)`)
           } else if (!hasVariants) {
-            // Si le produit n'a pas de variantes, crÃ©er une entrÃ©e de stock pour le produit lui-même
+            // Si le produit n'a pas de variantes, créer une entrée de stock pour le produit lui-même
             const stockKey = savedProduct.id
-            console.log(`ðŸ”Ž Vérification du stock pour le produit sans variantes, stockKey: ${stockKey}`)
+            console.log(`Vérification du stock pour le produit sans variantes, stockKey: ${stockKey}`)
             
             if (!allStock[stockKey]) {
               try {
-                console.log(`ðŸ’¾ CrÃ©ation du stock pour le produit sans variantes...`)
+                console.log(`Création du stock pour le produit sans variantes...`)
                 await updateStock(savedProduct.id, 0, undefined, 'general')
-                console.log(`✅ EntrÃ©e de stock créée pour le produit "${savedProduct.name}" (sans variantes)`)
+                console.log(`✅ Entrée de stock créée pour le produit "${savedProduct.name}" (sans variantes)`)
               } catch (error) {
-                console.error(`âŒ Erreur lors de la crÃ©ation du stock pour le produit "${savedProduct.name}":`, error)
+                console.error(`Erreur lors de la création du stock pour le produit "${savedProduct.name}":`, error)
               }
             } else {
-              console.log(`ℹ️ Stock déjà  existant pour le produit "${savedProduct.name}": ${allStock[stockKey].stock}`)
+              console.log(`Stock déjà existant pour le produit "${savedProduct.name}": ${allStock[stockKey].stock}`)
             }
           } else {
-            console.warn(`⚠️ Produit "${savedProduct.name}" a hasVariants=${hasVariants} mais formData.variants est vide ou undefined`)
+            console.warn(`Produit "${savedProduct.name}" a hasVariants=${hasVariants} mais formData.variants est vide ou undefined`)
           }
         }
         
-        alert('Produit mis à  jour avec succès !')
+        alert('Produit mis à jour avec succès !')
       } else {
         const newProduct = await addProduct(productData)
         savedProduct = newProduct
         
-        // CrÃ©er automatiquement des entrÃ©es de stock pour toutes les variantes du nouveau produit
+        // Créer automatiquement des entrées de stock pour toutes les variantes du nouveau produit
         if (savedProduct && hasVariants && formData.variants && formData.variants.length > 0) {
           for (const variant of formData.variants) {
-            // CrÃ©er une nouvelle entrÃ©e de stock avec stock Ã  0 par défaut
+            // Créer une nouvelle entrée de stock avec stock à 0 par défaut
             await updateStock(savedProduct.id, 0, variant.id, 'general')
-            console.log(`✅ EntrÃ©e de stock créée pour la variante "${variant.label}" du produit "${savedProduct.name}"`)
+            console.log(`✅ Entrée de stock créée pour la variante "${variant.label}" du produit "${savedProduct.name}"`)
           }
         } else if (savedProduct && !hasVariants) {
-          // Si le produit n'a pas de variantes, crÃ©er une entrÃ©e de stock pour le produit lui-même
+          // Si le produit n'a pas de variantes, créer une entrée de stock pour le produit lui-même
           const allStock = await loadStock('general')
           const stockKey = savedProduct.id
           if (!allStock[stockKey]) {
             await updateStock(savedProduct.id, 0, undefined, 'general')
-            console.log(`✅ EntrÃ©e de stock créée pour le produit "${savedProduct.name}"`)
+            console.log(`✅ Entrée de stock créée pour le produit "${savedProduct.name}"`)
           }
         }
         
-        alert('Produit ajoutÃ© avec succès !')
+        alert('Produit ajouté avec succès !')
       }
 
       // Recharger les produits
       const allProducts = await loadProducts()
       setProducts(allProducts)
       
-      // Recharger le stock pour mettre Ã  jour l'affichage
-      // Attendre un peu pour s'assurer que Supabase a bien enregistrÃ© les changements
+      // Recharger le stock pour mettre à jour l'affichage
+      // Attendre un peu pour s'assurer que Supabase a bien enregistré les changements
       await new Promise(resolve => setTimeout(resolve, 500))
       
       const updatedStock = await loadStock('general')
-      console.log('ðŸ“¦ Stock rechargÃ© aprÃ¨s sauvegarde:', Object.keys(updatedStock).length, 'entrÃ©es')
+      console.log('Stock rechargé après sauvegarde:', Object.keys(updatedStock).length, 'entrées')
       
       const stockMap: Record<string, number> = {}
       const variantStockMap: Record<string, number> = {}
@@ -569,7 +503,7 @@ export default function ProductsAdminPage() {
         }
       })
       
-      console.log('ðŸ“Š Stock mappÃ©:', {
+      console.log('Stock mappé:', {
         produits: Object.keys(stockMap).length,
         variantes: Object.keys(variantStockMap).length
       })
@@ -580,15 +514,15 @@ export default function ProductsAdminPage() {
       resetForm()
     } catch (error: any) {
       console.error('Erreur lors de la sauvegarde:', error)
-      alert(`Erreur lors de la sauvegarde : ${error.message || 'Erreur inconnue'}\n\nVÃ©rifiez la console (F12) pour plus de dÃ©tails.`)
+      alert(`Erreur lors de la sauvegarde : ${error.message || 'Erreur inconnue'}\n\nVérifiez la console (F12) pour plus de détails.`)
     }
   }
 
   // Supprimer un produit
   const handleDelete = async (id: string) => {
-    if (confirm('ÃŠtes-vous sÃ»r de vouloir supprimer ce produit ?')) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce produit ?')) {
       await deleteProduct(id)
-      alert('Produit supprimÃ© avec succès !')
+      alert('Produit supprimé avec succès !')
       // Recharger les produits
       const allProducts = await loadProducts()
       setProducts(allProducts)
@@ -597,39 +531,21 @@ export default function ProductsAdminPage() {
 
   // Ajouter une nouvelle gamme
   const handleAddGamme = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:375',message:'handleAddGamme called',data:{newGammeInput,trimmed:newGammeInput?.trim()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     if (!newGammeInput.trim()) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:377',message:'newGammeInput is empty',data:{newGammeInput},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       alert('Veuillez entrer un nom de gamme d\'appât')
       return
     }
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:381',message:'calling addGamme',data:{input:newGammeInput.trim()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     const result = await addGamme(newGammeInput.trim())
     if (result.success) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:385',message:'addGamme success - reloading gammes',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       // Recharger la liste des gammes
       loadGammes().then(reloadedGammes => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:388',message:'gammes reloaded',data:{count:reloadedGammes.length,gammes:reloadedGammes},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
         setGammes(reloadedGammes)
       }).catch(console.error)
       setFormData({ ...formData, gamme: newGammeInput.trim() })
       setNewGammeInput('')
       alert(result.message)
     } else {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:393',message:'addGamme failed',data:{message:result.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       alert(result.message)
     }
   }
@@ -644,137 +560,7 @@ export default function ProductsAdminPage() {
     loadAlerts()
   }
 
-  // Importer les produits par défaut
-  const handleImportDefaultProducts = async () => {
-    if (!confirm('Voulez-vous importer tous les produits par défaut (huiles, farines, bird food, robin red) ?\n\nLes produits déjà existants seront ignorés.')) {
-      return
-    }
-
-    const result = await importDefaultProducts()
-    
-    if (result.success > 0 || result.skipped > 0) {
-      let message = `Import terminé !\n`
-      if (result.success > 0) {
-        message += `✅ ${result.success} produit(s) importé(s)\n`
-      }
-      if (result.skipped > 0) {
-        message += `â­ï¸ ${result.skipped} produit(s) déjà  existant(s) ignoré(s)\n`
-      }
-      if (result.errors.length > 0) {
-        message += `\nâŒ ${result.errors.length} erreur(s):\n${result.errors.join('\n')}`
-      }
-      alert(message)
-      
-      // Recharger les produits
-      const allProducts = await loadProducts()
-      setProducts(allProducts)
-    } else {
-      alert('Aucun produit importé. Tous les produits existent déjà  ou une erreur est survenue.')
-    }
-  }
-
-  // Importer tous les produits de l'amicale des pêcheurs au blanc
-  const handleImportAmicaleBlancProducts = async () => {
-    if (!confirm('Voulez-vous importer TOUS les produits de l\'amicale des pêcheurs au blanc ?\n\nCela inclut :\n- Bouillettes (par gamme d\'appât avec toutes les variantes)\n- Équilibrées (par gamme d\'appât avec toutes les variantes)\n- Pop-up Duo, Bar à Pop-up, Flash boost, Spray plus, Boosters, Stick mix\n\nLes produits déjà existants seront ignorés.')) {
-      return
-    }
-
-    const result = await importAmicaleBlancProducts()
-    
-    if (result.success > 0 || result.skipped > 0) {
-      let message = `Import terminé !\n`
-      if (result.success > 0) {
-        message += `✅ ${result.success} produit(s) importé(s)\n`
-      }
-      if (result.skipped > 0) {
-        message += `â­ï¸ ${result.skipped} produit(s) déjà  existant(s) ignoré(s)\n`
-      }
-      if (result.errors.length > 0) {
-        message += `\nâŒ ${result.errors.length} erreur(s):\n${result.errors.slice(0, 5).join('\n')}${result.errors.length > 5 ? `\n... et ${result.errors.length - 5} autres` : ''}`
-      }
-      alert(message)
-      
-      // Recharger les produits
-      const allProducts = await loadProducts()
-      setProducts(allProducts)
-    } else {
-      alert('Aucun produit importé. Tous les produits existent déjà  ou une erreur est survenue.')
-    }
-  }
-
-  // Importer TOUS les produits (par défaut + amicale)
-  const handleImportAllProducts = async () => {
-    if (!confirm('Voulez-vous importer TOUS les produits disponibles ?\n\nCela inclut :\n- Produits par défaut (huiles, farines, bird food, robin red)\n- Tous les produits de l\'amicale (bouillettes, équilibrées, pop-ups, etc.)\n\nLes produits déjà  existants seront ignorés.')) {
-      return
-    }
-
-    const resultDefault: { success: number; skipped: number; errors: string[] } = await importDefaultProducts()
-    const resultAmicale: { success: number; skipped: number; errors: string[] } = await importAmicaleBlancProducts()
-    
-    const totalSuccess = resultDefault.success + resultAmicale.success
-    const totalSkipped = resultDefault.skipped + resultAmicale.skipped
-    const totalErrors = [...resultDefault.errors, ...resultAmicale.errors]
-
-    let message = `Import terminé !\n\n`
-    if (totalSuccess > 0) {
-      message += `✅ ${totalSuccess} produit(s) importé(s)\n`
-    }
-    if (totalSkipped > 0) {
-      message += `â­ï¸ ${totalSkipped} produit(s) déjà  existant(s) ignoré(s)\n`
-    }
-    if (totalErrors.length > 0) {
-      message += `\nâŒ ${totalErrors.length} erreur(s):\n${totalErrors.slice(0, 5).join('\n')}${totalErrors.length > 5 ? '\n...' : ''}`
-    }
-    
-    alert(message)
-    
-    // Recharger les produits
-    const allProducts = await loadProducts()
-    setProducts(allProducts)
-  }
-
-  // Ajouter des descriptions aux produits existants
-  const handleAddDescriptions = async () => {
-    if (!confirm('Voulez-vous ajouter des descriptions Ã  tous les produits qui n\'en ont pas ?')) {
-      return
-    }
-
-    const result = await addDescriptionsToExistingProducts()
-    
-    if (result.updated > 0) {
-      alert(`✅ ${result.updated} produit(s) mis à  jour avec des descriptions${result.errors.length > 0 ? `\n\nâŒ ${result.errors.length} erreur(s):\n${result.errors.slice(0, 5).join('\n')}${result.errors.length > 5 ? `\n... et ${result.errors.length - 5} autres` : ''}` : ''}`)
-      
-      // Recharger les produits
-      const allProducts = await loadProducts()
-      setProducts(allProducts)
-    } else {
-      alert('Tous les produits ont déjà une description ou une erreur est survenue.')
-    }
-  }
-
-  // Migrer les produits vers Supabase
-  const handleMigrateToSupabase = async () => {
-    if (!confirm('Voulez-vous migrer tous les produits de localStorage vers Supabase ?\n\nCette opÃ©ration va sauvegarder tous vos produits dans la base de donnÃ©es Supabase.')) {
-      return
-    }
-
-    try {
-      const result = await migrateProductsToSupabase()
-      
-      if (result.success) {
-        alert(`✅ Migration réussie !\n\n${result.count} produit(s) migré(s) vers Supabase.`)
-        // Recharger les produits depuis Supabase
-        const allProducts = await loadProducts()
-        setProducts(allProducts)
-      } else {
-        alert(`âŒ Erreur lors de la migration :\n\n${result.error || 'Erreur inconnue'}`)
-      }
-    } catch (error: any) {
-      alert(`âŒ Erreur lors de la migration :\n\n${error.message || 'Erreur inconnue'}`)
-    }
-  }
-
-  // GÃ©rer le changement de stock
+  // Gérer le changement de stock
   const handleStockChange = async (productId: string, variantId: string | undefined, newStock: number) => {
     await updateStock(productId, newStock, variantId)
     if (variantId) {
@@ -783,8 +569,6 @@ export default function ProductsAdminPage() {
       setStocks(prev => ({ ...prev, [productId]: newStock }))
     }
   }
-
-
 
   // Filtrer les produits
   const filteredProducts = products.filter(product => {
@@ -801,41 +585,6 @@ export default function ProductsAdminPage() {
   return (
     <div className="min-h-screen bg-noir-950 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Alerte si aucun produit */}
-        {products.length === 0 && (
-          <div className="mb-8 bg-red-500/10 border border-red-500/50 rounded-xl p-6">
-            <div className="flex items-start gap-4">
-              <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0 mt-1" />
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-red-400 mb-2">Aucun produit trouvÃ© !</h3>
-                <p className="text-gray-300 mb-4">
-                  Il n'y a actuellement aucun produit dans le systÃ¨me. Vous devez importer les produits pour qu'ils apparaissent sur le site.
-                </p>
-                <div className="flex gap-3 flex-wrap">
-                  <button
-                    onClick={handleImportAllProducts}
-                    className="px-6 py-3 bg-yellow-500 text-noir-950 font-bold rounded-lg hover:bg-yellow-400 transition-colors text-lg"
-                  >
-                    ⚡ Importer TOUS les produits
-                  </button>
-                  <button
-                    onClick={handleImportAmicaleBlancProducts}
-                    className="px-4 py-2 bg-yellow-500/80 text-noir-950 font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
-                  >
-                    Importer produits Amicale
-                  </button>
-                  <button
-                    onClick={handleImportDefaultProducts}
-                    className="px-4 py-2 bg-noir-700 text-white font-semibold rounded-lg hover:bg-noir-600 transition-colors"
-                  >
-                    Importer produits par défaut
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Notifications de rupture de stock */}
         {stockAlerts.length > 0 && (
           <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-xl p-4">
@@ -895,46 +644,6 @@ export default function ProductsAdminPage() {
               <Plus className="w-4 h-4" />
               Ajouter un produit
             </button>
-            <button
-              onClick={handleImportAllProducts}
-              className="btn btn-warning btn-md"
-              title="Importer TOUS les produits (par défaut + amicale) en une seule fois"
-            >
-              <Database className="w-4 h-4" />
-              ⚡ Importer TOUS les produits
-            </button>
-            <button
-              onClick={handleImportDefaultProducts}
-              className="btn btn-secondary btn-md"
-              title="Importer tous les produits par défaut (huiles, farines, etc.)"
-            >
-              <Database className="w-4 h-4" />
-              Importer produits par défaut
-            </button>
-            <button
-              onClick={handleImportAmicaleBlancProducts}
-              className="btn btn-info btn-md"
-              title="Importer tous les produits de l'amicale (bouillettes, équilibrées, pop-ups, etc.) avec variantes regroupées"
-            >
-              <Database className="w-4 h-4" />
-              Importer tous les produits (Amicale)
-            </button>
-            <button
-              onClick={handleAddDescriptions}
-              className="btn btn-secondary btn-md"
-              title="Ajouter des descriptions automatiques aux produits qui n'en ont pas"
-            >
-              <Database className="w-4 h-4" />
-              Ajouter descriptions
-            </button>
-            <button
-              onClick={handleMigrateToSupabase}
-              className="btn btn-success btn-md"
-              title="Migrer tous les produits de localStorage vers Supabase"
-            >
-              <Database className="w-4 h-4" />
-              Migrer vers Supabase
-            </button>
           </div>
         </div>
 
@@ -992,7 +701,7 @@ export default function ProductsAdminPage() {
                 />
               </div>
 
-              {/* CatÃ©gorie */}
+              {/* Catégorie */}
               <div>
                 <label className="block text-sm font-medium mb-2">Catégorie *</label>
                 <select
@@ -1019,7 +728,7 @@ export default function ProductsAdminPage() {
                 />
               </div>
 
-              {/* Gamme - SÃ©lecteur dynamique */}
+              {/* Gamme - Sélecteur dynamique */}
               <div>
                 <label className="block text-sm font-medium mb-2">Gamme d'appât</label>
                 <div className="flex gap-2">
@@ -1028,7 +737,7 @@ export default function ProductsAdminPage() {
                     onChange={(e) => {
                       const selectedGamme = e.target.value
                       if (selectedGamme === '__new__') {
-                        // Ouvrir le champ pour crÃ©er une nouvelle gamme
+                        // Ouvrir le champ pour créer une nouvelle gamme
                         setNewGammeInput('')
                         setFormData({ ...formData, gamme: '__new__' })
                       } else {
@@ -1044,13 +753,7 @@ export default function ProductsAdminPage() {
                     <option value="__new__">+ Créer une nouvelle gamme d'appât</option>
                   </select>
                 </div>
-                {(() => {
-                  // #region agent log
-                  const shouldShow = formData.gamme === '__new__' || (newGammeInput && !gammes.includes(newGammeInput))
-                  fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:668',message:'checking button visibility',data:{formDataGamme:formData.gamme,newGammeInput,gammesCount:gammes.length,shouldShow},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                  // #endregion
-                  return shouldShow
-                })() ? (
+                {(formData.gamme === '__new__' || (newGammeInput && !gammes.includes(newGammeInput))) ? (
                   <div className="mt-2 flex gap-2">
                     <input
                       type="text"
@@ -1066,12 +769,7 @@ export default function ProductsAdminPage() {
                     />
                     <button
                       type="button"
-                      onClick={(e) => {
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/products/page.tsx:684',message:'button onClick triggered',data:{newGammeInput,formDataGamme:formData.gamme},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-                        // #endregion
-                        handleAddGamme()
-                      }}
+                      onClick={handleAddGamme}
                       className="px-4 py-2 bg-yellow-500 text-noir-950 font-bold rounded-lg hover:bg-yellow-400 transition-colors"
                     >
                       Ajouter
@@ -1148,11 +846,11 @@ export default function ProductsAdminPage() {
                     />
                   </label>
                   <p className="text-xs text-gray-400 mt-2">
-                    Format acceptÃ©: JPG, PNG, GIF (max 5MB par image, optimisÃ© automatiquement)
+                    Format accepté: JPG, PNG, GIF (max 5MB par image, optimisé automatiquement)
                   </p>
                 </div>
                 
-                {/* AperÃ§u des images */}
+                {/* Aperçu des images */}
                 {formData.images.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                     {formData.images.map((img, index) => (
@@ -1168,9 +866,9 @@ export default function ProductsAdminPage() {
                               type="button"
                               onClick={() => moveImageUp(index)}
                               className="p-1 bg-noir-800 rounded hover:bg-noir-700"
-                              title="DÃ©placer vers le haut"
+                              title="Déplacer vers le haut"
                             >
-                              â†‘
+                              ↑
                             </button>
                           )}
                           {index < formData.images.length - 1 && (
@@ -1178,9 +876,9 @@ export default function ProductsAdminPage() {
                               type="button"
                               onClick={() => moveImageDown(index)}
                               className="p-1 bg-noir-800 rounded hover:bg-noir-700"
-                              title="DÃ©placer vers le bas"
+                              title="Déplacer vers le bas"
                             >
-                              â†“
+                              ↓
                             </button>
                           )}
                           <button
@@ -1329,10 +1027,14 @@ export default function ProductsAdminPage() {
                   onClick={() => setSelectedProductForModal(product)}
                 >
                   {images.length > 0 ? (
-                    <img
+                    <Image
                       src={images[0]}
                       alt={product.name}
-                      className="w-full h-full object-cover hover:scale-105 transition-transform"
+                      fill
+                      sizes="(max-width: 1200px) 50vw, 33vw"
+                      className="object-cover hover:scale-105 transition-transform"
+                      loading="lazy"
+                      quality={85}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
@@ -1491,13 +1193,13 @@ export default function ProductsAdminPage() {
             <Package className="w-16 h-16 text-gray-500 mx-auto mb-4" />
             <p className="text-gray-400">
               {searchTerm || categoryFilter 
-                ? 'Aucun produit trouvÃ© avec ces critÃ¨res' 
+                ? 'Aucun produit trouvé avec ces critères' 
                 : 'Aucun produit pour le moment. Ajoutez-en un !'}
             </p>
           </div>
         )}
 
-        {/* Modal de dÃ©tails produit */}
+        {/* Modal de détails produit */}
         <ProductDetailModal
           isOpen={selectedProductForModal !== null}
           onClose={() => setSelectedProductForModal(null)}

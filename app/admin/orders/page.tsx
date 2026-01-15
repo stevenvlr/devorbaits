@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, CheckCircle, XCircle, Clock, Truck, Search, Filter, Download } from 'lucide-react'
-import { getAllOrders, updateOrderStatus, type Order, type OrderItem } from '@/lib/revenue-supabase'
+import { Package, CheckCircle, XCircle, Clock, Truck, Search, Filter, Download, Edit2, Save, X, MapPin } from 'lucide-react'
+import { getAllOrders, updateOrderStatus, updateOrderTrackingNumber, type Order, type OrderItem } from '@/lib/revenue-supabase'
 import { getProductById } from '@/lib/products-manager'
-import { createBoxtalShipmentAuto } from '@/lib/boxtal-simple'
 
 type OrderStatus = Order['status']
 
@@ -15,7 +14,39 @@ interface OrderWithDetails extends Order {
   shipping_tracking_number?: string
   shipping_label_url?: string
   shipping_cost?: number
-  boxtal_created?: boolean
+  shipping_address?: {
+    type?: 'chronopost-relais' | 'boxtal-relais' | 'livraison'
+    adresse?: string
+    codePostal?: string
+    ville?: string
+    telephone?: string
+    pays?: string
+    // Pour Chronopost Relais
+    identifiant?: string
+    nom?: string
+    horaires?: string
+    // Pour Boxtal Relais
+    network?: string
+    pointRelais?: {
+      code?: string
+      name?: string
+      address?: {
+        street?: string
+        postalCode?: string
+        city?: string
+        country?: string
+      }
+      coordinates?: {
+        latitude?: number
+        longitude?: number
+      }
+      network?: string
+    }
+    coordonnees?: {
+      latitude?: number
+      longitude?: number
+    }
+  }
 }
 
 const STATUS_OPTIONS: { value: OrderStatus; label: string; icon: any; color: string }[] = [
@@ -32,6 +63,9 @@ export default function OrdersAdminPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [editingTrackingNumber, setEditingTrackingNumber] = useState<string | null>(null)
+  const [trackingNumberValue, setTrackingNumberValue] = useState<string>('')
+  const [savingTracking, setSavingTracking] = useState<string | null>(null)
 
   const loadOrders = async () => {
     setLoading(true)
@@ -63,39 +97,8 @@ export default function OrdersAdminPage() {
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
     try {
       await updateOrderStatus(orderId, newStatus)
-      
-      // Si le statut passe à "shipped", créer automatiquement l'expédition Boxtal
-      if (newStatus === 'shipped') {
-        const order = orders.find(o => o.id === orderId)
-        if (order && !order.boxtal_created) {
-          setMessage({ type: 'success', text: 'Statut mis à jour. Création de l\'expédition Boxtal...' })
-          
-          // Attendre un peu pour que le statut soit bien sauvegardé
-          setTimeout(async () => {
-            const result = await createBoxtalShipmentAuto(orderId)
-            if (result.success) {
-              setMessage({ 
-                type: 'success', 
-                text: `✅ Expédition créée automatiquement !${result.trackingNumber ? ` Suivi: ${result.trackingNumber}` : ''}` 
-              })
-              await loadOrders()
-            } else {
-              setMessage({ 
-                type: 'error', 
-                text: `⚠️ Expédition non créée: ${result.message}. Vous pouvez réessayer en cliquant sur "Créer l'expédition".` 
-              })
-            }
-            setTimeout(() => setMessage(null), 8000)
-          }, 1000)
-        } else {
-          setMessage({ type: 'success', text: 'Statut de la commande mis à jour' })
-          setTimeout(() => setMessage(null), 3000)
-        }
-      } else {
-        setMessage({ type: 'success', text: 'Statut de la commande mis à jour' })
-        setTimeout(() => setMessage(null), 3000)
-      }
-      
+      setMessage({ type: 'success', text: 'Statut de la commande mis à jour' })
+      setTimeout(() => setMessage(null), 3000)
       await loadOrders()
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error)
@@ -104,28 +107,37 @@ export default function OrdersAdminPage() {
     }
   }
 
-  const handleCreateBoxtalShipment = async (order: OrderWithDetails) => {
-    if (order.boxtal_created && order.shipping_tracking_number) {
-      if (!confirm('Une expédition existe déjà. Voulez-vous en créer une nouvelle ?')) {
-        return
-      }
-    }
+  const handleEditTrackingNumber = (order: OrderWithDetails) => {
+    setEditingTrackingNumber(order.id)
+    setTrackingNumberValue(order.shipping_tracking_number || '')
+  }
 
-    setMessage({ type: 'success', text: 'Création de l\'expédition en cours...' })
-    
-    const result = await createBoxtalShipmentAuto(order.id)
-    
-    if (result.success) {
-      setMessage({ 
-        type: 'success', 
-        text: `✅ ${result.message}${result.trackingNumber ? ` - Suivi: ${result.trackingNumber}` : ''}` 
-      })
-      await loadOrders()
-    } else {
-      setMessage({ type: 'error', text: `❌ ${result.message}` })
+  const handleCancelEditTracking = () => {
+    setEditingTrackingNumber(null)
+    setTrackingNumberValue('')
+  }
+
+  const handleSaveTrackingNumber = async (orderId: string) => {
+    setSavingTracking(orderId)
+    try {
+      const result = await updateOrderTrackingNumber(orderId, trackingNumberValue)
+      if (result.success) {
+        setMessage({ type: 'success', text: 'Numéro de suivi mis à jour avec succès' })
+        setTimeout(() => setMessage(null), 3000)
+        setEditingTrackingNumber(null)
+        setTrackingNumberValue('')
+        await loadOrders()
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Erreur lors de la mise à jour du numéro de suivi' })
+        setTimeout(() => setMessage(null), 5000)
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de la mise à jour du numéro de suivi:', error)
+      setMessage({ type: 'error', text: error.message || 'Erreur lors de la mise à jour du numéro de suivi' })
+      setTimeout(() => setMessage(null), 5000)
+    } finally {
+      setSavingTracking(null)
     }
-    
-    setTimeout(() => setMessage(null), 8000)
   }
 
   const getStatusInfo = (status: OrderStatus) => {
@@ -495,55 +507,312 @@ export default function OrdersAdminPage() {
                     )}
                   </div>
 
-                  {/* Section Boxtal - Expédition */}
-                  {order.status === 'shipped' && (
+                  {/* Informations de livraison */}
+                  {order.shipping_address && (
                     <div className="border-t border-noir-700 pt-4 mt-4">
-                      {order.shipping_tracking_number ? (
-                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <CheckCircle className="w-5 h-5 text-green-500" />
-                            <p className="text-sm font-medium text-green-500">Expédition créée</p>
+                      {(order.shipping_address as any).type === 'chronopost-relais' ? (
+                        // Point relais Chronopost
+                        <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <MapPin className="w-5 h-5 text-purple-500" />
+                            <p className="text-sm font-medium text-purple-500">Point relais Chronopost</p>
                           </div>
-                          <div className="space-y-2 text-sm">
-                            <p className="text-gray-300">
-                              <span className="text-gray-400">Numéro de suivi :</span>{' '}
-                              <span className="font-mono text-yellow-500">{order.shipping_tracking_number}</span>
-                            </p>
-                            {order.shipping_cost && (
-                              <p className="text-gray-300">
-                                <span className="text-gray-400">Coût de livraison :</span>{' '}
-                                <span className="text-yellow-500">{order.shipping_cost.toFixed(2)}€</span>
+                          <div className="space-y-1 text-sm text-gray-300">
+                            {(order.shipping_address as any).nom && (
+                              <p className="font-semibold text-white">
+                                <span className="text-gray-400">Nom :</span> {(order.shipping_address as any).nom}
                               </p>
                             )}
-                            {order.shipping_label_url && (
-                              <a
-                                href={order.shipping_label_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-yellow-500 hover:text-yellow-400 transition-colors"
-                              >
-                                <Download className="w-4 h-4" />
-                                Télécharger l'étiquette
-                              </a>
+                            {(order.shipping_address as any).identifiant && (
+                              <p>
+                                <span className="text-gray-400">Code point relais :</span>{' '}
+                                <span className="font-mono text-yellow-400">{(order.shipping_address as any).identifiant}</span>
+                              </p>
+                            )}
+                            {order.shipping_address.adresse && (
+                              <p><span className="text-gray-400">Adresse :</span> {order.shipping_address.adresse}</p>
+                            )}
+                            {(order.shipping_address.codePostal || order.shipping_address.ville) && (
+                              <p>
+                                <span className="text-gray-400">Ville :</span>{' '}
+                                {order.shipping_address.codePostal} {order.shipping_address.ville}
+                              </p>
+                            )}
+                            {(order.shipping_address as any).horaires && (
+                              <p className="mt-2">
+                                <span className="text-gray-400">Horaires :</span>{' '}
+                                <span className="text-gray-300">{(order.shipping_address as any).horaires}</span>
+                              </p>
+                            )}
+                            {(order.shipping_address as any).coordonnees && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                Coordonnées : {((order.shipping_address as any).coordonnees.latitude || 0).toFixed(4)}, {((order.shipping_address as any).coordonnees.longitude || 0).toFixed(4)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (order.shipping_address as any).type === 'boxtal-relais' ? (
+                        // Point relais Boxtal
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <MapPin className="w-5 h-5 text-green-500" />
+                            <p className="text-sm font-medium text-green-500">Point relais Boxtal</p>
+                            {(order.shipping_address as any).network && (
+                              <span className="text-xs text-gray-400">({(order.shipping_address as any).network})</span>
+                            )}
+                          </div>
+                          <div className="space-y-2 text-sm text-gray-300">
+                            {(order.shipping_address as any).nom && (
+                              <p className="font-semibold text-white text-base">
+                                {(order.shipping_address as any).nom}
+                              </p>
+                            )}
+                            {(order.shipping_address as any).identifiant && (
+                              <p>
+                                <span className="text-gray-400">Code point relais :</span>{' '}
+                                <span className="font-mono text-yellow-400">{(order.shipping_address as any).identifiant}</span>
+                              </p>
+                            )}
+                            
+                            {/* Code postal utilisé pour la recherche */}
+                            {(order.shipping_address as any).codePostalRecherche && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                <span className="text-gray-400">Code postal de recherche :</span>{' '}
+                                <span className="text-yellow-400 font-medium">{(order.shipping_address as any).codePostalRecherche}</span>
+                                {(order.shipping_address as any).villeRecherche && (
+                                  <span className="text-gray-400"> ({((order.shipping_address as any).villeRecherche)})</span>
+                                )}
+                              </p>
+                            )}
+                            
+                            {/* Adresse complète du point relais */}
+                            <div className="mt-3 pt-3 border-t border-green-500/20">
+                              <p className="text-xs text-gray-400 mb-2 font-medium">ADRESSE DU POINT RELAIS :</p>
+                              <div className="space-y-1">
+                                {/* Extraire le code postal et la ville depuis TOUTES les sources possibles */}
+                                {(() => {
+                                  const pointRelais = (order.shipping_address as any).pointRelais
+                                  const rawData = pointRelais?.rawData || pointRelais
+                                  
+                                  // Chercher dans toutes les sources possibles
+                                  const postalCode = 
+                                    order.shipping_address.codePostal ||
+                                    pointRelais?.address?.postalCode ||
+                                    pointRelais?.address?.postal_code ||
+                                    pointRelais?.address?.zipCode ||
+                                    pointRelais?.address?.zip ||
+                                    pointRelais?.address?.postcode ||
+                                    rawData?.address?.postalCode ||
+                                    rawData?.address?.postal_code ||
+                                    rawData?.address?.zipCode ||
+                                    rawData?.address?.zip ||
+                                    rawData?.postalCode ||
+                                    rawData?.postal_code ||
+                                    rawData?.zipCode ||
+                                    rawData?.zip ||
+                                    rawData?.codePostal ||
+                                    ''
+                                  
+                                  const city = 
+                                    order.shipping_address.ville ||
+                                    pointRelais?.address?.city ||
+                                    pointRelais?.address?.ville ||
+                                    pointRelais?.address?.locality ||
+                                    pointRelais?.address?.town ||
+                                    pointRelais?.address?.commune ||
+                                    rawData?.address?.city ||
+                                    rawData?.address?.ville ||
+                                    rawData?.address?.locality ||
+                                    rawData?.address?.town ||
+                                    rawData?.city ||
+                                    rawData?.ville ||
+                                    rawData?.locality ||
+                                    rawData?.town ||
+                                    ''
+                                  
+                                  const street = 
+                                    order.shipping_address.adresse ||
+                                    pointRelais?.address?.street ||
+                                    pointRelais?.address?.address ||
+                                    pointRelais?.address?.line1 ||
+                                    pointRelais?.address?.adresse ||
+                                    pointRelais?.address?.streetAddress ||
+                                    rawData?.address?.street ||
+                                    rawData?.address?.address ||
+                                    rawData?.address?.line1 ||
+                                    rawData?.street ||
+                                    rawData?.address ||
+                                    ''
+                                  
+                                  return (
+                                    <>
+                                      {/* Rue/Adresse si disponible */}
+                                      {street && (
+                                        <p className="text-white">
+                                          {street}
+                                        </p>
+                                      )}
+                                      {/* Code postal et ville - TOUJOURS affichés si disponibles */}
+                                      {(postalCode || city) ? (
+                                        <p className="text-white font-medium text-base">
+                                          {postalCode} {city}
+                                        </p>
+                                      ) : (
+                                        <p className="text-yellow-400 text-xs italic">
+                                          Code postal et ville non disponibles
+                                        </p>
+                                      )}
+                                    </>
+                                  )
+                                })()}
+                              </div>
+                            </div>
+                            {(order.shipping_address as any).coordonnees && (
+                              <p className="text-xs text-gray-500 mt-2">
+                                Coordonnées : {((order.shipping_address as any).coordonnees.latitude || 0).toFixed(4)}, {((order.shipping_address as any).coordonnees.longitude || 0).toFixed(4)}
+                              </p>
+                            )}
+                            {/* Afficher les informations complètes du point relais si disponibles */}
+                            {(order.shipping_address as any).pointRelais && (
+                              <div className="mt-3 pt-3 border-t border-green-500/20">
+                                <p className="text-xs text-gray-400 mb-2">Informations complètes :</p>
+                                <div className="text-xs text-gray-500 space-y-1">
+                                  {(order.shipping_address as any).pointRelais.address?.street && (
+                                    <p>Rue : {(order.shipping_address as any).pointRelais.address.street}</p>
+                                  )}
+                                  {(order.shipping_address as any).pointRelais.address?.postalCode && (
+                                    <p>Code postal : {(order.shipping_address as any).pointRelais.address.postalCode}</p>
+                                  )}
+                                  {(order.shipping_address as any).pointRelais.address?.city && (
+                                    <p>Ville : {(order.shipping_address as any).pointRelais.address.city}</p>
+                                  )}
+                                  {(order.shipping_address as any).pointRelais.address?.country && (
+                                    <p>Pays : {(order.shipping_address as any).pointRelais.address.country}</p>
+                                  )}
+                                </div>
+                              </div>
                             )}
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-                          <p className="text-sm text-yellow-500 mb-3">
-                            L'expédition Boxtal n'a pas été créée automatiquement.
-                          </p>
-                          <button
-                            onClick={() => handleCreateBoxtalShipment(order)}
-                            className="w-full px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Truck className="w-4 h-4" />
-                            Créer l'expédition Boxtal
-                          </button>
+                        // Adresse de livraison classique
+                        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Truck className="w-5 h-5 text-blue-500" />
+                            <p className="text-sm font-medium text-blue-500">Adresse de livraison</p>
+                          </div>
+                          <div className="space-y-1 text-sm text-gray-300">
+                            {order.shipping_address.adresse && (
+                              <p><span className="text-gray-400">Adresse :</span> {order.shipping_address.adresse}</p>
+                            )}
+                            {(order.shipping_address.codePostal || order.shipping_address.ville) && (
+                              <p>
+                                <span className="text-gray-400">Ville :</span>{' '}
+                                {order.shipping_address.codePostal} {order.shipping_address.ville}
+                              </p>
+                            )}
+                            {order.shipping_address.telephone && (
+                              <p><span className="text-gray-400">Téléphone :</span> {order.shipping_address.telephone}</p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
                   )}
+                  
+                  {/* Informations d'expédition */}
+                  <div className="border-t border-noir-700 pt-4 mt-4">
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Truck className="w-5 h-5 text-green-500" />
+                          <p className="text-sm font-medium text-green-500">Expédition</p>
+                        </div>
+                        {!editingTrackingNumber && (
+                          <button
+                            onClick={() => handleEditTrackingNumber(order)}
+                            className="text-xs px-2 py-1 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors flex items-center gap-1"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            {order.shipping_tracking_number ? 'Modifier' : 'Ajouter'}
+                          </button>
+                        )}
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        {editingTrackingNumber === order.id ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={trackingNumberValue}
+                                onChange={(e) => setTrackingNumberValue(e.target.value)}
+                                placeholder="Numéro de suivi"
+                                className="flex-1 px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white text-sm focus:border-yellow-500 focus:outline-none font-mono"
+                                onKeyPress={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleSaveTrackingNumber(order.id)
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleSaveTrackingNumber(order.id)}
+                                disabled={savingTracking === order.id}
+                                className="px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                              >
+                                {savingTracking === order.id ? (
+                                  <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Sauvegarde...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="w-4 h-4" />
+                                    <span>Enregistrer</span>
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={handleCancelEditTracking}
+                                disabled={savingTracking === order.id}
+                                className="px-3 py-2 bg-noir-700 hover:bg-noir-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            {order.shipping_tracking_number ? (
+                              <p className="text-gray-300">
+                                <span className="text-gray-400">Numéro de suivi :</span>{' '}
+                                <span className="font-mono text-yellow-500">{order.shipping_tracking_number}</span>
+                              </p>
+                            ) : (
+                              <p className="text-gray-400 text-xs italic">Aucun numéro de suivi enregistré</p>
+                            )}
+                          </div>
+                        )}
+                        {order.shipping_cost && (
+                          <p className="text-gray-300">
+                            <span className="text-gray-400">Coût de livraison :</span>{' '}
+                            <span className="text-yellow-500">{order.shipping_cost.toFixed(2)}€</span>
+                          </p>
+                        )}
+                        {order.shipping_label_url && (
+                          <a
+                            href={order.shipping_label_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-yellow-500 hover:text-yellow-400 transition-colors"
+                          >
+                            <Download className="w-4 h-4" />
+                            Télécharger l'étiquette
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )
             })}

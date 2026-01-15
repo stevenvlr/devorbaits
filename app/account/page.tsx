@@ -563,14 +563,9 @@ export default function AccountPage() {
                           <span className="text-gray-400">Numéro de suivi :</span>{' '}
                           <span className="font-mono text-yellow-500">{(order as any).shipping_tracking_number}</span>
                         </p>
-                        <a
-                          href={`https://www.boxtal.com/tracking/${(order as any).shipping_tracking_number}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-yellow-500 hover:text-yellow-400 text-xs inline-flex items-center gap-1 transition-colors"
-                        >
-                          Suivre mon colis →
-                        </a>
+                        <p className="text-xs text-gray-400">
+                          Contactez-nous pour suivre votre colis
+                        </p>
                       </div>
                     )}
                   </div>

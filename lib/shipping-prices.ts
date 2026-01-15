@@ -4,7 +4,8 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 export interface ShippingPrice {
   id: string
   name: string
-  type: 'fixed' | 'margin_percent' | 'margin_fixed' | 'weight_ranges' | 'boxtal_only'
+  type: 'fixed' | 'margin_percent' | 'margin_fixed' | 'weight_ranges'
+  shipping_type?: 'home' | 'relay' // 'home' = livraison à domicile, 'relay' = point relais
   fixed_price?: number
   margin_percent?: number
   margin_fixed?: number
@@ -20,8 +21,9 @@ export interface ShippingPrice {
 
 /**
  * Récupère le tarif d'expédition actif
+ * @param shippingType - Type d'envoi: 'home' pour livraison à domicile, 'relay' pour point relais
  */
-export async function getActiveShippingPrice(): Promise<ShippingPrice | null> {
+export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'home'): Promise<ShippingPrice | null> {
   if (!isSupabaseConfigured()) {
     return null
   }
@@ -34,11 +36,27 @@ export async function getActiveShippingPrice(): Promise<ShippingPrice | null> {
       .from('shipping_prices')
       .select('*')
       .eq('active', true)
+      .eq('shipping_type', shippingType)
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
 
     if (error || !data) {
+      // Si aucun tarif spécifique n'est trouvé, essayer de récupérer un tarif sans type (rétrocompatibilité)
+      if (shippingType === 'home') {
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('shipping_prices')
+          .select('*')
+          .eq('active', true)
+          .is('shipping_type', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
+        
+        if (!fallbackError && fallbackData) {
+          return fallbackData
+        }
+      }
       return null
     }
 
@@ -51,17 +69,22 @@ export async function getActiveShippingPrice(): Promise<ShippingPrice | null> {
 
 /**
  * Calcule le prix d'expédition final en appliquant les tarifs personnalisés
+ * @param basePrice - Prix de base
+ * @param weight - Poids du colis
+ * @param orderValue - Valeur de la commande
+ * @param shippingType - Type d'envoi: 'home' pour livraison à domicile, 'relay' pour point relais
  */
 export async function calculateFinalShippingPrice(
-  boxtalPrice: number,
+  basePrice: number,
   weight: number,
-  orderValue: number = 0
+  orderValue: number = 0,
+  shippingType: 'home' | 'relay' = 'home'
 ): Promise<number> {
-  const shippingPrice = await getActiveShippingPrice()
+  const shippingPrice = await getActiveShippingPrice(shippingType)
 
   if (!shippingPrice) {
-    // Pas de tarif personnalisé, utiliser le prix Boxtal
-    return boxtalPrice
+    // Pas de tarif personnalisé, utiliser le prix de base
+    return basePrice
   }
 
   // Vérifier la livraison gratuite
@@ -71,36 +94,33 @@ export async function calculateFinalShippingPrice(
 
   // Vérifier le prix minimum de commande
   if (shippingPrice.min_order_value && orderValue < shippingPrice.min_order_value) {
-    return boxtalPrice // Utiliser le prix Boxtal si le minimum n'est pas atteint
+    return basePrice // Utiliser le prix de base si le minimum n'est pas atteint
   }
 
   // Vérifier les limites de poids
   if (shippingPrice.min_weight && weight < shippingPrice.min_weight) {
-    return boxtalPrice
+    return basePrice
   }
   if (shippingPrice.max_weight && weight > shippingPrice.max_weight) {
-    return boxtalPrice
+    return basePrice
   }
 
   // Appliquer le tarif selon le type
   switch (shippingPrice.type) {
-    case 'boxtal_only':
-      return boxtalPrice
-
     case 'fixed':
-      return shippingPrice.fixed_price || boxtalPrice
+      return shippingPrice.fixed_price || basePrice
 
     case 'margin_percent':
       if (shippingPrice.margin_percent) {
-        return boxtalPrice * (1 + shippingPrice.margin_percent / 100)
+        return basePrice * (1 + shippingPrice.margin_percent / 100)
       }
-      return boxtalPrice
+      return basePrice
 
     case 'margin_fixed':
       if (shippingPrice.margin_fixed) {
-        return boxtalPrice + shippingPrice.margin_fixed
+        return basePrice + shippingPrice.margin_fixed
       }
-      return boxtalPrice
+      return basePrice
 
     case 'weight_ranges':
       if (shippingPrice.weight_ranges && Array.isArray(shippingPrice.weight_ranges)) {
@@ -111,11 +131,11 @@ export async function calculateFinalShippingPrice(
           }
         }
       }
-      // Si aucune tranche ne correspond, utiliser le prix Boxtal
-      return boxtalPrice
+      // Si aucune tranche ne correspond, utiliser le prix de base
+      return basePrice
 
     default:
-      return boxtalPrice
+      return basePrice
   }
 }
 
@@ -168,6 +188,7 @@ export async function saveShippingPrice(price: Partial<ShippingPrice>): Promise<
     }
 
     // Ajouter les champs optionnels seulement s'ils sont définis
+    if (price.shipping_type !== undefined) cleanPrice.shipping_type = price.shipping_type
     if (price.fixed_price !== undefined) cleanPrice.fixed_price = price.fixed_price
     if (price.margin_percent !== undefined) cleanPrice.margin_percent = price.margin_percent
     if (price.margin_fixed !== undefined) cleanPrice.margin_fixed = price.margin_fixed

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import Image from 'next/image'
 import { ShoppingCart, Package } from 'lucide-react'
 import { Product, ProductVariant, getProductImages } from '@/lib/products-manager'
 import { loadFlashBoostImage, loadSprayPlusImage } from '@/lib/flash-spray-variables-manager'
@@ -131,10 +132,14 @@ export default function ProductCard({
           }}
         >
           {productImages.length > 0 ? (
-            <img
+            <Image
               src={productImages[0]}
               alt={product.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              className="object-cover transition-transform duration-300 group-hover:scale-110"
+              loading="lazy"
+              quality={85}
             />
           ) : (
             <Package className="w-16 h-16 transition-colors duration-300 text-gray-500 group-hover:text-yellow-500" />

@@ -29,10 +29,14 @@ export default function Home() {
         {/* Image en arrière-plan */}
         <div className="absolute inset-0 z-0">
           {heroImage ? (
-            <img
+            <Image
               src={heroImage}
               alt="Photo d'accueil"
-              className="w-full h-full object-cover opacity-80"
+              fill
+              sizes="100vw"
+              className="object-cover opacity-80"
+              priority
+              quality={85}
             />
           ) : (
             <Image
@@ -41,6 +45,7 @@ export default function Home() {
               fill
               className="object-cover opacity-80"
               priority
+              quality={85}
             />
           )}
         </div>

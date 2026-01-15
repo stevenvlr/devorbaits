@@ -108,7 +108,8 @@ export default function ShippingPricesAdminPage() {
   const handleNew = () => {
     setEditingPrice({
       name: '',
-      type: 'boxtal_only',
+      type: 'fixed',
+      shipping_type: 'home',
       active: true,
       free_shipping_threshold: 100
     })
@@ -214,17 +215,33 @@ export default function ShippingPricesAdminPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Type d'envoi <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={editingPrice.shipping_type || 'home'}
+                  onChange={(e) => setEditingPrice({ ...editingPrice, shipping_type: e.target.value as 'home' | 'relay' })}
+                  className="w-full px-4 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                >
+                  <option value="home">Livraison à domicile</option>
+                  <option value="relay">Point relais</option>
+                </select>
+                <p className="mt-1 text-sm text-gray-400">
+                  Choisissez si ce tarif s'applique aux livraisons à domicile ou aux points relais
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Type de tarif <span className="text-red-400">*</span>
                 </label>
                 <select
-                  value={editingPrice.type || 'boxtal_only'}
+                  value={editingPrice.type || 'fixed'}
                   onChange={(e) => setEditingPrice({ ...editingPrice, type: e.target.value as any })}
                   className="w-full px-4 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
                 >
-                  <option value="boxtal_only">Utiliser uniquement Boxtal (pas de modification)</option>
                   <option value="fixed">Prix fixe</option>
-                  <option value="margin_percent">Marge en pourcentage sur Boxtal</option>
-                  <option value="margin_fixed">Marge fixe en euros sur Boxtal</option>
+                  <option value="margin_percent">Marge en pourcentage</option>
+                  <option value="margin_fixed">Marge fixe en euros</option>
                   <option value="weight_ranges">Tarifs par tranches de poids</option>
                 </select>
               </div>
@@ -259,7 +276,7 @@ export default function ShippingPricesAdminPage() {
                     placeholder="10.00"
                   />
                   <p className="mt-1 text-sm text-gray-400">
-                    Ex: 10% = prix Boxtal × 1.10
+                    Ex: 10% = prix de base × 1.10
                   </p>
                 </div>
               )}
@@ -278,7 +295,7 @@ export default function ShippingPricesAdminPage() {
                     placeholder="2.50"
                   />
                   <p className="mt-1 text-sm text-gray-400">
-                    Ex: 2.50€ = prix Boxtal + 2.50€
+                    Ex: 2.50€ = prix de base + 2.50€
                   </p>
                 </div>
               )}
@@ -410,63 +427,125 @@ export default function ShippingPricesAdminPage() {
           </div>
         )}
 
-        <div className="space-y-4">
-          {prices.map((price) => (
-            <div
-              key={price.id}
-              className={`bg-noir-800/50 border rounded-xl p-6 ${
-                price.active ? 'border-noir-700' : 'border-noir-800 opacity-60'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    <Package className="w-5 h-5 text-yellow-500" />
-                    {price.name}
-                    {price.active && (
-                      <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">
-                        Actif
-                      </span>
-                    )}
-                  </h3>
-                  <p className="text-gray-400 text-sm mt-1">
-                    Type: {price.type === 'boxtal_only' && 'Boxtal uniquement'}
-                    {price.type === 'fixed' && `Prix fixe: ${price.fixed_price}€`}
-                    {price.type === 'margin_percent' && `Marge: +${price.margin_percent}%`}
-                    {price.type === 'margin_fixed' && `Marge: +${price.margin_fixed}€`}
-                    {price.type === 'weight_ranges' && `${price.weight_ranges?.length || 0} tranche(s) de poids`}
+        {/* Séparer les tarifs par type d'envoi */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-white mb-4">Livraison à domicile</h2>
+          <div className="space-y-4">
+            {prices.filter(p => p.shipping_type === 'home' || !p.shipping_type).map((price) => (
+              <div
+                key={price.id}
+                className={`bg-noir-800/50 border rounded-xl p-6 ${
+                  price.active ? 'border-noir-700' : 'border-noir-800 opacity-60'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Package className="w-5 h-5 text-yellow-500" />
+                      {price.name}
+                      {price.active && (
+                        <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">
+                          Actif
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-gray-400 text-sm mt-1">
+                      {price.type === 'fixed' && `Prix fixe: ${price.fixed_price}€`}
+                      {price.type === 'margin_percent' && `Marge: +${price.margin_percent}%`}
+                      {price.type === 'margin_fixed' && `Marge: +${price.margin_fixed}€`}
+                      {price.type === 'weight_ranges' && `${price.weight_ranges?.length || 0} tranche(s) de poids`}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(price)}
+                      className="px-3 py-2 bg-noir-700 text-gray-300 rounded-lg hover:bg-noir-600"
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      onClick={() => handleDelete(price.id)}
+                      className="p-2 text-red-400 hover:text-red-300"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {price.free_shipping_threshold && (
+                  <p className="text-sm text-gray-400">
+                    🎁 Livraison gratuite à partir de {price.free_shipping_threshold}€
                   </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(price)}
-                    className="px-3 py-2 bg-noir-700 text-gray-300 rounded-lg hover:bg-noir-600"
-                  >
-                    Modifier
-                  </button>
-                  <button
-                    onClick={() => handleDelete(price.id)}
-                    className="p-2 text-red-400 hover:text-red-300"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </div>
+                )}
               </div>
-
-              {price.free_shipping_threshold && (
-                <p className="text-sm text-gray-400">
-                  🎁 Livraison gratuite à partir de {price.free_shipping_threshold}€
-                </p>
-              )}
-            </div>
-          ))}
-
-          {prices.length === 0 && (
-            <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 text-center">
-              <p className="text-gray-400">Aucun tarif configuré. Créez-en un pour commencer.</p>
-            </div>
-          )}
+            ))}
+            {prices.filter(p => p.shipping_type === 'home' || !p.shipping_type).length === 0 && (
+              <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 text-center">
+                <p className="text-gray-400">Aucun tarif configuré pour la livraison à domicile.</p>
+              </div>
+            )}
+          </div>
         </div>
+
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-white mb-4">Point relais</h2>
+          <div className="space-y-4">
+            {prices.filter(p => p.shipping_type === 'relay').map((price) => (
+              <div
+                key={price.id}
+                className={`bg-noir-800/50 border rounded-xl p-6 ${
+                  price.active ? 'border-noir-700' : 'border-noir-800 opacity-60'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Package className="w-5 h-5 text-yellow-500" />
+                      {price.name}
+                      {price.active && (
+                        <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded">
+                          Actif
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-gray-400 text-sm mt-1">
+                      {price.type === 'fixed' && `Prix fixe: ${price.fixed_price}€`}
+                      {price.type === 'margin_percent' && `Marge: +${price.margin_percent}%`}
+                      {price.type === 'margin_fixed' && `Marge: +${price.margin_fixed}€`}
+                      {price.type === 'weight_ranges' && `${price.weight_ranges?.length || 0} tranche(s) de poids`}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(price)}
+                      className="px-3 py-2 bg-noir-700 text-gray-300 rounded-lg hover:bg-noir-600"
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      onClick={() => handleDelete(price.id)}
+                      className="p-2 text-red-400 hover:text-red-300"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {price.free_shipping_threshold && (
+                  <p className="text-sm text-gray-400">
+                    🎁 Livraison gratuite à partir de {price.free_shipping_threshold}€
+                  </p>
+                )}
+              </div>
+            ))}
+            {prices.filter(p => p.shipping_type === 'relay').length === 0 && (
+              <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 text-center">
+                <p className="text-gray-400">Aucun tarif configuré pour les points relais.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   )

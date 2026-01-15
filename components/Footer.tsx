@@ -6,7 +6,7 @@ export default function Footer() {
   return (
     <footer className="bg-noir-950 border-t border-noir-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid md:grid-cols-4 gap-8">
+        <div className="grid md:grid-cols-3 gap-8">
           {/* Brand */}
           <div className="col-span-1">
             <div className="flex items-center mb-4">
@@ -25,38 +25,6 @@ export default function Footer() {
               <Factory className="w-3 h-3 text-yellow-500" />
               <span className="text-xs font-medium text-yellow-500">FABRIQUÉ EN FRANCE</span>
             </div>
-          </div>
-
-          {/* Quick Links */}
-          <div>
-            <h3 className="font-bold mb-4">Catégories</h3>
-            <ul className="space-y-2 text-sm text-gray-400">
-              <li>
-                <Link href="/categories/bouillettes" className="hover:text-yellow-500 transition-colors">
-                  Gammes d'appât
-                </Link>
-              </li>
-              <li>
-                <Link href="/categories/popups" className="hover:text-yellow-500 transition-colors">
-                  Pop-up duo
-                </Link>
-              </li>
-              <li>
-                <Link href="/categories/equilibres" className="hover:text-yellow-500 transition-colors">
-                  Équilibrées
-                </Link>
-              </li>
-              <li>
-                <Link href="/categories/huiles" className="hover:text-yellow-500 transition-colors">
-                  Huiles
-                </Link>
-              </li>
-              <li>
-                <Link href="/categories/personnalisables" className="hover:text-yellow-500 transition-colors">
-                  Les Personnalisables
-                </Link>
-              </li>
-            </ul>
           </div>
 
           {/* Info */}

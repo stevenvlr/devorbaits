@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { Upload, X, ImageIcon, RotateCcw } from 'lucide-react'
 import { loadHomepageImage, saveHomepageImage, removeHomepageImage, onHomepageImageUpdate } from '@/lib/homepage-manager'
 import { uploadHomepageImage } from '@/lib/storage-supabase'
@@ -82,10 +83,13 @@ export default function HomepageAdminPage() {
           {currentImage ? (
             <div className="relative mb-6">
               <div className="relative w-full h-64 bg-noir-900 rounded-lg overflow-hidden border border-noir-700">
-                <img
+                <Image
                   src={currentImage}
                   alt="Photo d'accueil actuelle"
-                  className="w-full h-full object-cover"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 800px"
+                  className="object-cover"
+                  quality={85}
                 />
               </div>
               <p className="text-sm text-gray-400 mt-2">Photo personnalisée active</p>

@@ -1,0 +1,36 @@
+# Configuration Netlify pour Next.js
+# Ce fichier configure Netlify pour déployer correctement votre application Next.js
+
+[build]
+  # Commande de build
+  command = "npm run build"
+  
+  # Répertoire de publication
+  # Netlify détectera automatiquement .next avec le plugin Next.js
+  publish = ".next"
+
+# Plugin Next.js officiel de Netlify
+# Ce plugin gère automatiquement les routes API, les fonctions serverless, etc.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Headers de sécurité
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Headers pour les images optimisées Next.js
+[[headers]]
+  for = "/_next/image/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Headers pour les assets statiques
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

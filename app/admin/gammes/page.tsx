@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { Plus, Trash2, X, Factory, Tag, Upload, ImageIcon } from 'lucide-react'
 import { loadGammes, addGamme, removeGamme, onGammesUpdate, getGammeImage, setGammeImage, removeGammeImage, onGammesImagesUpdate } from '@/lib/gammes-manager'
 import { optimizeImage } from '@/lib/image-optimizer'
@@ -277,12 +278,15 @@ export default function GammesAdminPage() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3 flex-1">
                         {/* Aperçu de l'image ou icône par défaut */}
-                        <div className="w-16 h-16 bg-noir-800 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <div className="w-16 h-16 bg-noir-800 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 relative">
                           {gammeImage ? (
-                            <img
+                            <Image
                               src={gammeImage}
                               alt={gamme}
-                              className="w-full h-full object-cover"
+                              fill
+                              sizes="64px"
+                              className="object-cover"
+                              quality={75}
                             />
                           ) : (
                             <Tag className="w-8 h-8 text-yellow-500" />

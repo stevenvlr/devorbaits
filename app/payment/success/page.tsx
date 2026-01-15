@@ -161,7 +161,7 @@ function PaymentSuccessContent() {
             }))
             
             // Créer la commande dans Supabase ou localStorage
-            await createOrder(
+            const order = await createOrder(
               user?.id,
               returnData.reference,
               total,
@@ -170,17 +170,32 @@ function PaymentSuccessContent() {
               typeof pendingOrder?.shippingCost === 'number' ? pendingOrder.shippingCost : undefined
             )
             
-            // Mettre à jour le statut à 'completed'
-            // Note: On devra récupérer l'ID de la commande créée
-            // Pour l'instant, on marque simplement comme complétée dans localStorage
-            if (typeof window !== 'undefined') {
-              const orders = JSON.parse(localStorage.getItem('orders') || '[]')
-              const orderIndex = orders.findIndex((o: any) => o.reference === returnData.reference)
-              if (orderIndex !== -1) {
-                orders[orderIndex].status = 'completed'
-                localStorage.setItem('orders', JSON.stringify(orders))
+            // Sauvegarder l'adresse de livraison si disponible
+            if (order.id && pendingOrder.livraisonAddress && pendingOrder.retraitMode === 'livraison') {
+              try {
+                const { getSupabaseClient } = await import('@/lib/supabase')
+                const supabase = getSupabaseClient()
+                if (supabase && pendingOrder.livraisonAddress.adresse && pendingOrder.livraisonAddress.codePostal && pendingOrder.livraisonAddress.ville) {
+                  await supabase
+                    .from('orders')
+                    .update({
+                      shipping_address: {
+                        adresse: pendingOrder.livraisonAddress.adresse,
+                        codePostal: pendingOrder.livraisonAddress.codePostal,
+                        ville: pendingOrder.livraisonAddress.ville,
+                        telephone: pendingOrder.livraisonAddress.telephone
+                      }
+                    })
+                    .eq('id', order.id)
+                  console.log('✅ Adresse de livraison sauvegardée dans la commande')
+                }
+              } catch (addressError) {
+                console.warn('⚠️ Erreur lors de la sauvegarde de l\'adresse dans la commande:', addressError)
               }
             }
+            
+            // La commande est créée avec le statut 'pending' (en attente) par défaut
+            // Le statut sera changé manuellement depuis l'admin
             
             // Charger les produits pour obtenir les noms
             const allProducts = await loadProducts()

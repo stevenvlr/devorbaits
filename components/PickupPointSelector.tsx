@@ -2,7 +2,24 @@
 
 import { useState, useEffect } from 'react'
 import { MapPin, Search, Loader2, AlertCircle, CheckCircle2, Navigation } from 'lucide-react'
-import type { PickupPoint } from '@/lib/boxtal-simple'
+// Type temporaire pour PickupPoint (Boxtal supprimé)
+interface PickupPoint {
+  code: string
+  name: string
+  address: {
+    street: string
+    city: string
+    postalCode: string
+    country: string
+  }
+  coordinates?: {
+    latitude: number
+    longitude: number
+  }
+  distance?: number
+  openingHours?: string
+  network?: string
+}
 
 interface PickupPointSelectorProps {
   postalCode: string
@@ -48,23 +65,9 @@ export default function PickupPointSelector({
         params.append('city', city)
       }
 
-      const response = await fetch(`/api/boxtal/pickup-points?${params.toString()}`)
-      const data = await response.json()
-
-      if (data.success) {
-        setPoints(data.points || [])
-        if (data.points && data.points.length === 0) {
-          setError('Aucun point relais trouvé dans cette zone. Essayez d\'augmenter le rayon de recherche.')
-        }
-      } else {
-        let errorMsg = data.error || 'Erreur lors de la recherche de points relais'
-        // Si c'est une erreur 404, donner plus de détails
-        if (errorMsg.includes('404') || errorMsg.includes('endpoint')) {
-          errorMsg = 'L\'API de recherche de points relais n\'est pas disponible. Cette fonctionnalité nécessite peut-être une configuration supplémentaire dans votre compte Boxtal ou l\'endpoint API a changé.'
-        }
-        setError(errorMsg)
-        setPoints([])
-      }
+      // API Boxtal supprimée - fonctionnalité désactivée
+      setError('La recherche de points relais n\'est plus disponible. Les expéditions sont gérées manuellement.')
+      setPoints([])
     } catch (err: any) {
       console.error('Erreur recherche points relais:', err)
       setError('Erreur lors de la recherche. Vérifiez votre connexion internet.')
