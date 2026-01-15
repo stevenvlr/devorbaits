@@ -12,6 +12,8 @@ function LoginForm() {
     fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/account/login/page.tsx:9',message:'LoginForm rendered',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
   }
   // #endregion
+  
+  // TOUS LES HOOKS DOIVENT ÊTRE APPELÉS AVANT TOUT RETURN CONDITIONNEL
   const router = useRouter()
   const searchParams = useSearchParams()
   const { login, isAuthenticated, user } = useAuth()
@@ -20,11 +22,20 @@ function LoginForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
-  const redirect = searchParams.get('redirect') || '/account'
+  // Obtenir le redirect après le montage pour éviter les problèmes avec useSearchParams
+  const redirect = mounted ? (searchParams.get('redirect') || '/account') : '/account'
+
+  // Marquer le composant comme monté
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Vérifier l'authentification une seule fois au chargement
   useEffect(() => {
+    if (!mounted) return
+    
     // Attendre un délai pour laisser le temps à Supabase de charger
     const checkAuth = setTimeout(() => {
       setIsCheckingAuth(false)
@@ -36,9 +47,9 @@ function LoginForm() {
     }, 2000) // Délai plus long pour laisser Supabase se charger complètement
     
     return () => clearTimeout(checkAuth)
-  }, [isAuthenticated, user, router]) // Inclure les dépendances mais avec le délai
+  }, [mounted, isAuthenticated, user, router]) // Inclure mounted dans les dépendances
 
-  // Ne rien afficher pendant la vérification initiale
+  // Ne rien afficher pendant la vérification initiale (APRÈS tous les hooks)
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-noir-950 flex items-center justify-center">
