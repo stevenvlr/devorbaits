@@ -36,8 +36,9 @@ export async function GET(request: Request) {
         
         // Essayer d'extraire les données JSON depuis le HTML (si Chronopost les inclut)
         // Chercher des scripts JSON ou des données structurées
-        const jsonMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({.+?});/s) || 
-                         html.match(/var\s+relayPoints\s*=\s*(\[.+?\]);/s) ||
+        // Utilisation de [\s\S] au lieu de . avec flag s pour compatibilité ES5
+        const jsonMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]+?});/) || 
+                         html.match(/var\s+relayPoints\s*=\s*(\[[\s\S]+?\]);/) ||
                          html.match(/data-relay-points=["']([^"']+)["']/)
         
         if (jsonMatch) {
