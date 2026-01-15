@@ -5,5 +5,9 @@ name = "devorbaits"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 
+# Répertoire de sortie du build Next.js
+# Next.js génère les fichiers dans .next/static et .next/server
+pages_build_output_dir = ".next"
+
 # Note: Pour Next.js standard, vous n'avez généralement pas besoin de bindings supplémentaires
 # Les routes API fonctionneront automatiquement avec cette configuration
