@@ -39,6 +39,7 @@ export default function Header() {
               height={160}
               className="h-32 w-auto group-hover:scale-105 transition-transform"
               priority
+              unoptimized={true}
             />
           </Link>
 

@@ -10,6 +10,7 @@ const nextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920], // Tailles pour mobile/desktop
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384], // Tailles pour icônes
     minimumCacheTTL: 60, // Cache de 60 secondes minimum
+    // Configuration pour les images locales et distantes
     remotePatterns: [
       {
         protocol: 'https',
@@ -22,6 +23,10 @@ const nextConfig = {
         pathname: '/storage/v1/object/public/**',
       },
     ],
+    // Permettre les images locales du dossier public
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   trailingSlash: true,
 }
