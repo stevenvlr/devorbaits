@@ -1,13 +1,29 @@
 # Configuration Cloudflare Pages pour Next.js
-# Ce fichier configure Cloudflare Pages pour déployer correctement votre application Next.js
+# Variables d'environnement non sensibles (Plain text)
 
 name = "devorbaits"
 compatibility_date = "2025-01-15"
 compatibility_flags = ["nodejs_compat"]
 
 # Répertoire de sortie du build Next.js avec @cloudflare/next-on-pages
-# @cloudflare/next-on-pages génère les fichiers dans .vercel/output/static
 pages_build_output_dir = ".vercel/output/static"
 
-# Note: Pour Next.js standard, vous n'avez généralement pas besoin de bindings supplémentaires
-# Les routes API fonctionneront automatiquement avec cette configuration
+# Variables d'environnement Plain text (non sensibles)
+# Les variables sensibles (PAYPAL_SECRET, MONETICO_CLE_SECRETE) sont dans Cloudflare Dashboard
+[vars]
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL = "https://nbnvcsuzhuwhvvbgxbhe.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ibnZjc3V6aHV3aHZ2Ymd4YmhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNTMwNDAsImV4cCI6MjA4MTYyOTA0MH0.nCIIPvZbDtOaJSZ5rr4Fsu8ZwTjXHnIyw4qtuLGnpx8"
+
+# PayPal
+NEXT_PUBLIC_PAYPAL_CLIENT_ID = "AVhuxTCciFLSxPYJE2a9B"
+NEXT_PUBLIC_PAYPAL_BASE_URL = "https://api-m.paypal.com"
+NEXT_PUBLIC_SITE_URL = "https://6b67fd8b.devorbaits.pages.dev"
+
+# Monetico
+NEXT_PUBLIC_MONETICO_TPE = "0917217"
+NEXT_PUBLIC_MONETICO_KEY = "266032402DDAA6220573A5C5A523C114016926P6"
+NEXT_PUBLIC_MONETICO_SOCIETE = ""  # Optionnel - laissez vide si vous ne le trouvez pas
+NEXT_PUBLIC_MONETICO_URL = "https://paiement.monetico.fr/paiement.cgi"
+NEXT_PUBLIC_MONETICO_URL_RETOUR = "https://6b67fd8b.devorbaits.pages.dev/payment/success"
+NEXT_PUBLIC_MONETICO_URL_RETOUR_ERR = "https://6b67fd8b.devorbaits.pages.dev/payment/error"
