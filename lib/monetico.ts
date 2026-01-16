@@ -85,14 +85,24 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
   const { params, url } = prepareMoneticoPayment(orderData)
   
   try {
-    // Log pour débogage
-    console.log('Monetico - Préparation paiement:', {
+    // Log pour débogage - Afficher TOUS les paramètres Monetico
+    console.log('Monetico - Préparation paiement (TOUS les paramètres):', {
       TPE: params.TPE,
+      date: params.date,
       montant: params.montant,
       reference: params.reference,
-      date: params.date,
+      texte_libre: params.texte_libre || '(vide)',
       version: params.version,
+      lgue: params.lgue,
+      societe: params.societe || '(vide)',
+      mail: params.mail,
+      url_retour: params.url_retour,
+      url_retour_ok: params.url_retour_ok,
+      url_retour_err: params.url_retour_err,
+      url_paiement: url,
     })
+    
+    console.log('Monetico - Appel API signature...')
 
     // Générer la signature côté serveur pour la sécurité
     const response = await fetch('/api/monetico/signature', {
@@ -109,11 +119,19 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
       throw new Error(errorData.error || 'Erreur lors de la génération de la signature')
     }
 
-    const { MAC } = await response.json()
+    const data = await response.json()
+    console.log('Monetico - Réponse API signature:', {
+      hasMAC: !!data.MAC,
+      macLength: data.MAC?.length,
+      macPreview: data.MAC ? data.MAC.substring(0, 20) + '...' : 'aucun',
+    })
+    
+    const { MAC } = data
     if (!MAC) {
       throw new Error('Signature MAC non reçue')
     }
     params.MAC = MAC
+    console.log('Monetico - MAC ajouté aux paramètres')
   } catch (error: any) {
     console.error('Erreur génération signature:', error)
     
@@ -132,22 +150,33 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
   }
   
   // Créer un formulaire dynamique
+  console.log('Monetico - Création du formulaire...')
   const form = document.createElement('form')
   form.method = 'POST'
   form.action = url
   form.style.display = 'none'
   
   // Ajouter tous les paramètres comme champs cachés
+  const formFields: string[] = []
   Object.entries(params).forEach(([key, value]) => {
     const input = document.createElement('input')
     input.type = 'hidden'
     input.name = key
     input.value = value
     form.appendChild(input)
+    formFields.push(`${key}=${value.substring(0, 50)}${value.length > 50 ? '...' : ''}`)
+  })
+  
+  console.log('Monetico - Formulaire créé avec les champs:', {
+    action: url,
+    method: 'POST',
+    fieldsCount: formFields.length,
+    fields: formFields,
   })
   
   // Ajouter le formulaire au DOM et le soumettre
   document.body.appendChild(form)
+  console.log('Monetico - Soumission du formulaire vers Monetico...')
   form.submit()
 }
 
@@ -174,5 +203,61 @@ export function generateOrderReference(): string {
   const timestamp = Date.now()
   const random = Math.random().toString(36).slice(2, 9).toUpperCase()
   return `CMD-${timestamp}-${random}`
+}
+
+/**
+ * Fonction client pour démarrer un paiement Monetico
+ * Appelle l'API /api/monetico et soumet automatiquement le formulaire
+ */
+export async function startMoneticoPayment(data: {
+  montant: string // Format: "19.99EUR"
+  mail: string
+  texteLibre?: string
+}) {
+  try {
+    console.log('Monetico - Démarrage paiement avec:', data)
+
+    // Appeler l'API pour générer les champs et le MAC
+    const response = await fetch('/api/monetico', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }))
+      console.error('Monetico - Erreur API:', errorData)
+      throw new Error(errorData.error || 'Erreur lors de la génération du paiement')
+    }
+
+    const { action, fields } = await response.json()
+
+    // Log des champs envoyés pour debug
+    console.log('Monetico - FIELDS envoyés Monetico:', fields)
+
+    // Créer le formulaire
+    const form = document.createElement('form')
+    form.method = 'POST'
+    form.action = action
+    form.style.display = 'none'
+
+    // Ajouter tous les champs comme inputs cachés
+    Object.entries(fields).forEach(([key, value]) => {
+      const input = document.createElement('input')
+      input.type = 'hidden'
+      input.name = key
+      input.value = String(value)
+      form.appendChild(input)
+    })
+
+    // Ajouter le formulaire au DOM et le soumettre
+    document.body.appendChild(form)
+    form.submit()
+  } catch (error: any) {
+    console.error('Monetico - Erreur:', error)
+    alert(`Erreur lors du paiement Monetico: ${error.message}`)
+  }
 }
 
