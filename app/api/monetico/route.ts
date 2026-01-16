@@ -4,13 +4,14 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'edge'
 
 interface MoneticoRequest {
-  montant: string // Format: "19.99EUR"
+  montant: string // Format: "20.99EUR"
   mail: string
   texteLibre?: string
 }
 
 /**
- * Génère une référence alphanumérique (A-Z0-9) de max 12 caractères
+ * Génère une référence alphanumérique (A-Z0-9) de exactement 12 caractères
+ * STRICTEMENT sans tirets, underscores ou autres caractères spéciaux
  */
 function generateReference(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -60,14 +61,14 @@ async function calculateMAC(
   // Calculer la signature
   const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
 
-  // Convertir en hexadécimal majuscules
+  // Convertir en hexadécimal majuscules (40 caractères)
   const hashArray = Array.from(new Uint8Array(signature))
   return hashArray.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('')
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Lire les variables d'environnement
+    // Lire les variables d'environnement côté serveur (Edge runtime)
     const TPE = process.env.MONETICO_TPE || process.env.NEXT_PUBLIC_MONETICO_TPE
     const SOCIETE = process.env.MONETICO_SOCIETE || process.env.NEXT_PUBLIC_MONETICO_SOCIETE || ''
     const CLE_HMAC = process.env.MONETICO_CLE_HMAC || process.env.MONETICO_CLE_SECRETE
@@ -75,22 +76,36 @@ export async function POST(request: NextRequest) {
 
     // Vérifier les variables obligatoires
     if (!TPE) {
+      console.error('MONETICO_TPE non configuré')
       return NextResponse.json(
-        { error: 'MONETICO_TPE non configuré' },
+        { error: 'MONETICO_TPE non configuré. Configurez MONETICO_TPE dans Cloudflare Dashboard (Settings → Environment Variables)' },
         { status: 500 }
       )
     }
 
     if (!CLE_HMAC) {
+      console.error('MONETICO_CLE_HMAC non configuré')
       return NextResponse.json(
-        { error: 'MONETICO_CLE_HMAC non configuré' },
+        { error: 'MONETICO_CLE_HMAC non configuré. Configurez MONETICO_CLE_HMAC dans Cloudflare Dashboard (Settings → Environment Variables → Secrets)' },
         { status: 500 }
       )
     }
 
     if (!ACTION_URL) {
+      console.error('MONETICO_ACTION_URL non configuré')
       return NextResponse.json(
-        { error: 'MONETICO_ACTION_URL non configuré' },
+        { error: 'MONETICO_ACTION_URL non configuré. Configurez MONETICO_ACTION_URL dans Cloudflare Dashboard (Settings → Environment Variables)' },
+        { status: 500 }
+      )
+    }
+
+    // VÉRIFICATION CRITIQUE : societe ne doit PAS être vide
+    if (!SOCIETE || SOCIETE.trim() === '') {
+      console.error('MONETICO_SOCIETE est vide ou non configuré')
+      return NextResponse.json(
+        { 
+          error: 'MONETICO_SOCIETE est vide. Configurez MONETICO_SOCIETE dans Cloudflare Dashboard (Settings → Environment Variables) pour Preview et Production. La valeur ne peut pas être vide pour Monetico.' 
+        },
         { status: 500 }
       )
     }
@@ -106,34 +121,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Générer la date et la référence
+    // Générer la date et la référence (12 chars, alphanumérique uniquement)
     const date = formatDate()
     const reference = generateReference()
 
-    // Construire la chaîne à signer selon l'ordre exact Monetico
+    // Construire la chaîne à signer selon l'ordre EXACT Monetico
     // Format: <TPE>*<date>*<montant>*<reference>*<texte-libre>*<version>*<lgue>*<societe>*<mail>*
     const version = '3.0'
     const lgue = 'FR'
     const texteLibreClean = texteLibre || ''
     
-    // Construire la chaîne exacte selon les spécifications Monetico
-    // Chaque champ est séparé par un astérisque, y compris le dernier
+    // Construire la chaîne MAC exacte selon les spécifications Monetico
+    // IMPORTANT : Utiliser "texte-libre" (avec tiret) dans la chaîne MAC
     const macString = [
       TPE,
       date,
       montant,
       reference,
-      texteLibreClean,
+      texteLibreClean, // texte-libre dans la chaîne MAC
       version,
       lgue,
-      SOCIETE || '', // Societe peut être vide mais doit être présent
+      SOCIETE, // societe ne peut plus être vide (vérifié plus haut)
       mail,
     ].join('*') + '*' // Astérisque final après mail
 
     // Calculer le MAC
     const MAC = await calculateMAC(CLE_HMAC, macString)
 
+    // Vérifier que le MAC fait bien 40 caractères
+    if (MAC.length !== 40) {
+      console.error(`MAC invalide: longueur ${MAC.length} au lieu de 40`)
+      return NextResponse.json(
+        { error: 'Erreur lors du calcul du MAC' },
+        { status: 500 }
+      )
+    }
+
     // Construire les champs du formulaire
+    // IMPORTANT : Utiliser "texte-libre" (avec tiret) comme nom de champ
     const fields: Record<string, string> = {
       TPE,
       societe: SOCIETE,
@@ -141,19 +166,23 @@ export async function POST(request: NextRequest) {
       date,
       montant,
       reference,
-      'texte-libre': texteLibreClean,
+      'texte-libre': texteLibreClean, // Nom du champ avec tiret, pas underscore
       lgue,
       mail,
       MAC,
     }
 
-    // Log pour debug (à retirer en production)
-    console.log('Monetico - MAC calculé:', {
-      macString,
-      macLength: MAC.length,
-      macPreview: MAC.substring(0, 20) + '...',
+    // Logs de debug
+    console.log('Monetico - Paiement généré:', {
       reference,
       referenceLength: reference.length,
+      referenceValid: /^[A-Z0-9]{12}$/.test(reference),
+      societe: SOCIETE,
+      societeLength: SOCIETE.length,
+      texteLibre: texteLibreClean,
+      macLength: MAC.length,
+      macPreview: MAC.substring(0, 20) + '...',
+      macString: macString.substring(0, 100) + '...',
     })
 
     return NextResponse.json({

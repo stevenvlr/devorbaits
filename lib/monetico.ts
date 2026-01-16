@@ -210,7 +210,7 @@ export function generateOrderReference(): string {
  * Appelle l'API /api/monetico et soumet automatiquement le formulaire
  */
 export async function startMoneticoPayment(data: {
-  montant: string // Format: "19.99EUR"
+  montant: string // Format: "20.99EUR"
   mail: string
   texteLibre?: string
 }) {
@@ -229,13 +229,54 @@ export async function startMoneticoPayment(data: {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }))
       console.error('Monetico - Erreur API:', errorData)
-      throw new Error(errorData.error || 'Erreur lors de la génération du paiement')
+      
+      // Afficher une erreur claire si societe est vide
+      if (errorData.error && errorData.error.includes('MONETICO_SOCIETE')) {
+        alert(`❌ Erreur de configuration Monetico:\n\n${errorData.error}\n\nVeuillez configurer MONETICO_SOCIETE dans Cloudflare Dashboard (Settings → Environment Variables) pour Preview et Production.`)
+      } else {
+        alert(`Erreur lors du paiement Monetico: ${errorData.error || 'Erreur inconnue'}`)
+      }
+      return
     }
 
     const { action, fields } = await response.json()
 
+    // Vérifications de sécurité avant d'envoyer
+    if (!fields.MAC || fields.MAC.length !== 40) {
+      console.error('Monetico - MAC invalide:', fields.MAC)
+      alert('Erreur: MAC invalide. Le paiement ne peut pas être effectué.')
+      return
+    }
+
+    if (!fields.reference || fields.reference.length > 12 || !/^[A-Z0-9]+$/.test(fields.reference)) {
+      console.error('Monetico - Référence invalide:', fields.reference)
+      alert('Erreur: Référence invalide. Le paiement ne peut pas être effectué.')
+      return
+    }
+
+    if (!fields.societe || fields.societe.trim() === '') {
+      console.error('Monetico - societe est vide')
+      alert('Erreur: societe est vide. Le paiement ne peut pas être effectué.')
+      return
+    }
+
     // Log des champs envoyés pour debug
-    console.log('Monetico - FIELDS envoyés Monetico:', fields)
+    console.log('Monetico - FIELDS envoyés Monetico:', {
+      action,
+      TPE: fields.TPE,
+      societe: fields.societe,
+      version: fields.version,
+      date: fields.date,
+      montant: fields.montant,
+      reference: fields.reference,
+      'texte-libre': fields['texte-libre'],
+      lgue: fields.lgue,
+      mail: fields.mail,
+      MAC: fields.MAC.substring(0, 20) + '...',
+      MACLength: fields.MAC.length,
+      referenceLength: fields.reference.length,
+      referenceValid: /^[A-Z0-9]{12}$/.test(fields.reference),
+    })
 
     // Créer le formulaire
     const form = document.createElement('form')
@@ -244,16 +285,18 @@ export async function startMoneticoPayment(data: {
     form.style.display = 'none'
 
     // Ajouter tous les champs comme inputs cachés
+    // IMPORTANT : Utiliser le nom exact du champ (texte-libre avec tiret)
     Object.entries(fields).forEach(([key, value]) => {
       const input = document.createElement('input')
       input.type = 'hidden'
-      input.name = key
+      input.name = key // Le nom exact (texte-libre, pas texte_libre)
       input.value = String(value)
       form.appendChild(input)
     })
 
     // Ajouter le formulaire au DOM et le soumettre
     document.body.appendChild(form)
+    console.log('Monetico - Soumission du formulaire vers:', action)
     form.submit()
   } catch (error: any) {
     console.error('Monetico - Erreur:', error)

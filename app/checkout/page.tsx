@@ -1536,22 +1536,21 @@ export default function CheckoutPage() {
                   </div>
                 ) : (
                   <>
-                    {/* Bouton de test Monetico - À retirer en production */}
-                    {process.env.NODE_ENV === 'development' && (
-                      <button
-                        onClick={() => {
-                          startMoneticoPayment({
-                            montant: '19.99EUR',
-                            mail: user?.email || 'client@test.fr',
-                            texteLibre: 'CMDTEST'
-                          })
-                        }}
-                        className="w-full font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-base mb-2 bg-blue-500 text-white hover:bg-blue-400"
-                      >
-                        <CreditCard className="w-4 h-4" />
-                        Payer en test (Monetico)
-                      </button>
-                    )}
+                    {/* Bouton de test Monetico TEST */}
+                    <button
+                      onClick={() => {
+                        const finalTotal = (total + shippingCost - (promoValidation?.discount || 0)).toFixed(2)
+                        startMoneticoPayment({
+                          montant: `${finalTotal}EUR`,
+                          mail: user?.email || 'client@test.fr',
+                          texteLibre: `CMD-${orderReference || 'TEST'}`
+                        })
+                      }}
+                      className="w-full font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-base mb-2 bg-blue-500 text-white hover:bg-blue-400"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Payer (TEST Monetico)
+                    </button>
                     <button
                       onClick={handleSubmit}
                       disabled={!isFormValid()}
