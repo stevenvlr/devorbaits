@@ -46,12 +46,17 @@ export function prepareMoneticoPayment(orderData: MoneticoOrderData) {
   const montant = `${orderData.montant.toFixed(2)}EUR`
   
   // Préparer le texte libre avec les infos de commande
-  const texteLibre = JSON.stringify({
-    retraitMode: orderData.retraitMode,
-    rdvDate: orderData.rdvDate,
-    rdvTimeSlot: orderData.rdvTimeSlot,
-    livraisonAddress: orderData.livraisonAddress,
-  })
+  // Important : Le texte libre ne doit pas contenir de caractères spéciaux qui pourraient casser le format
+  const texteLibreData: any = {}
+  if (orderData.retraitMode) texteLibreData.retraitMode = orderData.retraitMode
+  if (orderData.rdvDate) texteLibreData.rdvDate = orderData.rdvDate
+  if (orderData.rdvTimeSlot) texteLibreData.rdvTimeSlot = orderData.rdvTimeSlot
+  if (orderData.livraisonAddress) texteLibreData.livraisonAddress = orderData.livraisonAddress
+  
+  // Convertir en JSON et nettoyer (pas d'espaces, format compact)
+  const texteLibre = Object.keys(texteLibreData).length > 0 
+    ? JSON.stringify(texteLibreData).replace(/\s+/g, '')
+    : ''
   
   // Construire les paramètres dans l'ordre requis par Monetico
   const params: Record<string, string> = {
@@ -80,6 +85,15 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
   const { params, url } = prepareMoneticoPayment(orderData)
   
   try {
+    // Log pour débogage
+    console.log('Monetico - Préparation paiement:', {
+      TPE: params.TPE,
+      montant: params.montant,
+      reference: params.reference,
+      date: params.date,
+      version: params.version,
+    })
+
     // Générer la signature côté serveur pour la sécurité
     const response = await fetch('/api/monetico/signature', {
       method: 'POST',

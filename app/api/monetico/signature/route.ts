@@ -47,6 +47,10 @@ export async function POST(request: NextRequest) {
     // Ajouter un * à la fin selon la documentation Monetico
     const toSign = toSignParts.join('*') + '*'
 
+    // Log pour débogage (à retirer en production)
+    console.log('Monetico - Chaîne à signer:', toSign)
+    console.log('Monetico - Paramètres reçus:', JSON.stringify(params, null, 2))
+
     // Générer le MAC avec HMAC-SHA1 (format Monetico)
     // Utilisation de l'API Web Crypto pour Edge Runtime
     const encoder = new TextEncoder()
@@ -70,6 +74,9 @@ export async function POST(request: NextRequest) {
       .map(b => b.toString(16).padStart(2, '0'))
       .join('')
       .toUpperCase()
+
+    // Log pour débogage (à retirer en production)
+    console.log('Monetico - MAC généré:', mac.substring(0, 20) + '...')
 
     return NextResponse.json({ MAC: mac })
   } catch (error) {
