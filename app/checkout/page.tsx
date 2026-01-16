@@ -1059,15 +1059,15 @@ export default function CheckoutPage() {
                 style={{ 
                   display: retraitMode === 'chronopost-relais' ? 'block' : 'none',
                   position: 'relative',
-                  zIndex: retraitMode === 'chronopost-relais' ? 1 : -1, // Mettre en arrière-plan quand masqué
-                  isolation: 'isolate', // Créer un nouveau contexte d'empilement pour isoler la carte
-                  pointerEvents: retraitMode === 'chronopost-relais' ? 'auto' : 'none', // Désactiver les interactions quand masqué
-                  visibility: retraitMode === 'chronopost-relais' ? 'visible' : 'hidden' // Masquer complètement
+                  zIndex: retraitMode === 'chronopost-relais' ? 1 : -1,
+                  isolation: 'isolate',
+                  pointerEvents: retraitMode === 'chronopost-relais' ? 'auto' : 'none',
+                  visibility: retraitMode === 'chronopost-relais' ? 'visible' : 'hidden'
                 }}
               >
                 <h3 className="font-semibold flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-yellow-500" />
-                  Point relais Boxtal
+                  Point relais Chronopost
                 </h3>
                 
                 <div 

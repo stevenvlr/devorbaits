@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Script from 'next/script'
 import { getBoxtalToken } from '@/src/lib/getBoxtalToken'
+import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase'
 
-// ⚠️ À REMPLACER par l'URL exacte du script Boxtal
-const BOXTAL_MAP_SCRIPT_SRC = process.env.NEXT_PUBLIC_BOXTAL_MAP_SCRIPT_SRC || 'A_REMPLACER'
+// URL par défaut (fallback si non trouvée dans Supabase)
+const DEFAULT_BOXTAL_MAP_SCRIPT_SRC = process.env.NEXT_PUBLIC_BOXTAL_MAP_SCRIPT_SRC || 'https://unpkg.com/@boxtal/parcel-point-map@0.0.7/dist/index.umd.js'
 
 export interface BoxtalParcelPoint {
   code: string
@@ -59,6 +60,7 @@ export default function BoxtalRelayMap({
   const prevActiveRef = useRef(active) // Pour détecter quand active passe de true à false
 
   // États
+  const [scriptSrc, setScriptSrc] = useState<string>(DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
   const [scriptLoaded, setScriptLoaded] = useState(false)
   const [scriptError, setScriptError] = useState<string | null>(null)
   const [mapReady, setMapReady] = useState(false)
@@ -70,17 +72,50 @@ export default function BoxtalRelayMap({
   const [searching, setSearching] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
 
-  // Vérifier que l'URL du script est configurée
+  // Récupérer l'URL du script depuis Supabase (table boxtal_config)
   useEffect(() => {
-    if (BOXTAL_MAP_SCRIPT_SRC === 'A_REMPLACER') {
-      setScriptError('URL du script Boxtal manquante')
-      console.error("❌ BOXTAL_MAP_SCRIPT_SRC n'est pas configuré")
+    const fetchScriptUrl = async () => {
+      if (!isSupabaseConfigured()) {
+        console.warn('⚠️ Supabase non configuré, utilisation de l\'URL par défaut')
+        return
+      }
+
+      const supabase = getSupabaseClient()
+      if (!supabase) return
+
+      try {
+        // Récupérer la configuration Boxtal depuis Supabase
+        const { data, error } = await supabase
+          .from('boxtal_config')
+          .select('map_script_url, script_url')
+          .limit(1)
+          .single()
+
+        if (error) {
+          console.warn('⚠️ Erreur récupération config Boxtal depuis Supabase:', error.message)
+          console.log('📝 Utilisation de l\'URL par défaut:', DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
+          return
+        }
+
+        // Utiliser map_script_url ou script_url si disponible
+        const urlFromSupabase = data?.map_script_url || data?.script_url
+        if (urlFromSupabase) {
+          console.log('✅ URL script Boxtal récupérée depuis Supabase:', urlFromSupabase)
+          setScriptSrc(urlFromSupabase)
+        } else {
+          console.log('📝 Aucune URL trouvée dans boxtal_config, utilisation de l\'URL par défaut')
+        }
+      } catch (error) {
+        console.warn('⚠️ Erreur lors de la récupération de l\'URL du script:', error)
+      }
     }
+
+    fetchScriptUrl()
   }, [])
 
   // Récupérer le token Boxtal (une seule fois)
   useEffect(() => {
-    if (BOXTAL_MAP_SCRIPT_SRC === 'A_REMPLACER' || token !== null) {
+    if (!scriptSrc || scriptSrc === 'A_REMPLACER' || token !== null) {
       return
     }
 
@@ -129,7 +164,7 @@ export default function BoxtalRelayMap({
     }
 
     // Vérifier les prérequis
-    if (!scriptLoaded || !token || !hostRef.current || BOXTAL_MAP_SCRIPT_SRC === 'A_REMPLACER') {
+    if (!scriptLoaded || !token || !hostRef.current || !scriptSrc || scriptSrc === 'A_REMPLACER') {
       console.log('⏳ Prérequis non remplis:', { scriptLoaded, token: !!token, hostRef: !!hostRef.current })
       return
     }
@@ -462,12 +497,12 @@ export default function BoxtalRelayMap({
   }
 
   // Afficher l'erreur si l'URL du script n'est pas configurée
-  if (BOXTAL_MAP_SCRIPT_SRC === 'A_REMPLACER') {
+  if (!scriptSrc || scriptSrc === 'A_REMPLACER') {
     return (
       <div className="p-4 bg-red-50 border border-red-200 rounded-md">
         <p className="text-red-700 font-medium">URL du script Boxtal manquante</p>
         <p className="text-sm text-red-600 mt-1">
-          Veuillez configurer NEXT_PUBLIC_BOXTAL_MAP_SCRIPT_SRC dans votre fichier .env.local
+          Veuillez configurer l'URL du script Boxtal dans Supabase (table boxtal_config, colonne map_script_url ou script_url)
         </p>
       </div>
     )
@@ -478,7 +513,7 @@ export default function BoxtalRelayMap({
       {/* Script Boxtal - chargé UNE SEULE FOIS avec id fixe + flag window */}
       <Script
         id="boxtal-parcelpoint-script"
-        src={BOXTAL_MAP_SCRIPT_SRC}
+        src={scriptSrc}
         strategy="afterInteractive"
         onLoad={() => {
           // Vérifier le flag global pour éviter les rechargements lors de rerenders
