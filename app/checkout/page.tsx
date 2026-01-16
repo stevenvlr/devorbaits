@@ -469,7 +469,7 @@ export default function CheckoutPage() {
 
         // Créer la commande directement (avec le total incluant l'expédition)
         const order = await createOrder(
-          user.id,
+          user?.id || '',
           orderReference,
           finalTotal,
           orderItems,
