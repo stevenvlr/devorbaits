@@ -468,6 +468,7 @@ export default function CheckoutPage() {
         }))
 
         // Créer la commande directement (avec le total incluant l'expédition)
+        const commentValue = orderComment.trim() || undefined
         const order = await createOrder(
           user?.id || '',
           orderReference,
@@ -475,7 +476,7 @@ export default function CheckoutPage() {
           orderItems,
           'test', // Mode test
           calculatedShippingCost,
-          orderComment.trim() || undefined
+          commentValue
         )
 
         // La commande est créée avec le statut 'pending' (en attente) par défaut
@@ -1427,6 +1428,7 @@ export default function CheckoutPage() {
                           }))
 
                           const currentRef = orderReference || generateOrderReference()
+                          const commentValue = orderComment.trim() || undefined
                           
                           const order = await createOrder(
                             user?.id || '',
@@ -1435,7 +1437,7 @@ export default function CheckoutPage() {
                             orderItems,
                             'paypal',
                             calculatedShippingCost,
-                            orderComment.trim() || undefined
+                            commentValue
                           )
 
                           if (order.id) {
