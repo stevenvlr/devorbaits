@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
   try {
     // Lire les variables d'environnement côté serveur (Edge runtime)
     const TPE = process.env.MONETICO_TPE || process.env.NEXT_PUBLIC_MONETICO_TPE
+    // Lire MONETICO_SOCIETE depuis process.env (priorité) ou fallback
     const SOCIETE = process.env.MONETICO_SOCIETE || process.env.NEXT_PUBLIC_MONETICO_SOCIETE || ''
     const CLE_HMAC = process.env.MONETICO_CLE_HMAC || process.env.MONETICO_CLE_SECRETE
     const ACTION_URL = process.env.MONETICO_ACTION_URL || process.env.NEXT_PUBLIC_MONETICO_URL
