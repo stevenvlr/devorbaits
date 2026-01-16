@@ -254,7 +254,7 @@ export default function ChronopostRelaisWidget({
       {/* Scripts nécessaires */}
       <Script
         src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"
-        strategy="lazyOnload"
+        strategy="afterInteractive"
         onLoad={() => {
           setJqueryLoaded(true)
         }}
@@ -264,12 +264,12 @@ export default function ChronopostRelaisWidget({
       
       <Script
         src="https://api.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.js"
-        strategy="lazyOnload"
+        strategy="afterInteractive"
       />
 
       <Script
         src="https://ws.colissimo.fr/widget-colissimo/js/jquery.plugin.colissimo.min.js"
-        strategy="lazyOnload"
+        strategy="afterInteractive"
         onLoad={() => {
           setScriptLoaded(true)
         }}

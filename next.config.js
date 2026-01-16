@@ -26,7 +26,7 @@ const nextConfig = {
     // Permettre les images locales du dossier public
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
-    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    // ✅ CSP retirée : elle bloquait les scripts externes nécessaires au widget Chronopost
   },
   trailingSlash: true,
 }
