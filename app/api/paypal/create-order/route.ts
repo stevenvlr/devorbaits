@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
     // API Orders v2
     const ordersUrl = `${baseUrl}/v2/checkout/orders`
 
-    // Créer les credentials pour l'authentification Basic
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
+    // Créer les credentials pour l'authentification Basic (compatible Edge Runtime)
+    const credentials = btoa(`${clientId}:${clientSecret}`)
 
     const tokenResponse = await fetch(accessTokenUrl, {
       method: 'POST',

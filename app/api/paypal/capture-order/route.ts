@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
     // API Orders v2
     const captureUrl = `${baseUrl}/v2/checkout/orders/${orderId}/capture`
 
-    // Obtenir un token d'accès
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
+    // Obtenir un token d'accès (compatible Edge Runtime)
+    const credentials = btoa(`${clientId}:${clientSecret}`)
 
     const tokenResponse = await fetch(accessTokenUrl, {
       method: 'POST',
