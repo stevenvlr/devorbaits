@@ -61,6 +61,7 @@ export default function BoxtalRelayMap({
 
   // États
   const [scriptSrc, setScriptSrc] = useState<string>(DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
+  const [scriptUrlReady, setScriptUrlReady] = useState(false)
   const [scriptLoaded, setScriptLoaded] = useState(false)
   const [scriptError, setScriptError] = useState<string | null>(null)
   const [mapReady, setMapReady] = useState(false)
@@ -77,36 +78,43 @@ export default function BoxtalRelayMap({
     const fetchScriptUrl = async () => {
       if (!isSupabaseConfigured()) {
         console.warn('⚠️ Supabase non configuré, utilisation de l\'URL par défaut')
+        setScriptUrlReady(true)
         return
       }
 
       const supabase = getSupabaseClient()
-      if (!supabase) return
+      if (!supabase) {
+        setScriptUrlReady(true)
+        return
+      }
 
       try {
         // Récupérer la configuration Boxtal depuis Supabase
         const { data, error } = await supabase
           .from('boxtal_config')
-          .select('map_script_url, script_url')
+          .select('map_script_url')
           .limit(1)
           .single()
 
         if (error) {
           console.warn('⚠️ Erreur récupération config Boxtal depuis Supabase:', error.message)
           console.log('📝 Utilisation de l\'URL par défaut:', DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
+          setScriptUrlReady(true)
           return
         }
 
-        // Utiliser map_script_url ou script_url si disponible
-        const urlFromSupabase = data?.map_script_url || data?.script_url
+        // Utiliser map_script_url si disponible
+        const urlFromSupabase = data?.map_script_url
         if (urlFromSupabase) {
           console.log('✅ URL script Boxtal récupérée depuis Supabase:', urlFromSupabase)
           setScriptSrc(urlFromSupabase)
         } else {
           console.log('📝 Aucune URL trouvée dans boxtal_config, utilisation de l\'URL par défaut')
         }
+        setScriptUrlReady(true)
       } catch (error) {
         console.warn('⚠️ Erreur lors de la récupération de l\'URL du script:', error)
+        setScriptUrlReady(true)
       }
     }
 
@@ -496,6 +504,18 @@ export default function BoxtalRelayMap({
     run()
   }
 
+  // Attendre que l'URL du script soit récupérée depuis Supabase
+  if (!scriptUrlReady) {
+    return (
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+        <p className="text-blue-700 font-medium">Chargement de la configuration...</p>
+        <p className="text-sm text-blue-600 mt-1">
+          Récupération de l'URL du script Boxtal depuis Supabase
+        </p>
+      </div>
+    )
+  }
+
   // Afficher l'erreur si l'URL du script n'est pas configurée
   if (!scriptSrc || scriptSrc === 'A_REMPLACER') {
     return (
@@ -513,6 +533,7 @@ export default function BoxtalRelayMap({
       {/* Script Boxtal - chargé UNE SEULE FOIS avec id fixe + flag window */}
       <Script
         id="boxtal-parcelpoint-script"
+        key={scriptSrc}
         src={scriptSrc}
         strategy="afterInteractive"
         onLoad={() => {
@@ -523,12 +544,24 @@ export default function BoxtalRelayMap({
             return
           }
           window.__boxtalScriptLoaded = true
-          console.log('✅ Script Boxtal chargé')
+          console.log('✅ Script Boxtal chargé depuis:', scriptSrc)
+          
+          // Vérifier que l'objet global est disponible
+          setTimeout(() => {
+            console.log('🔍 Vérification window.BoxtalParcelPointMap:', window.BoxtalParcelPointMap)
+            if (!window.BoxtalParcelPointMap || !window.BoxtalParcelPointMap.BoxtalParcelPointMap) {
+              console.warn('⚠️ window.BoxtalParcelPointMap non disponible après chargement')
+              setScriptError('Le script Boxtal est chargé mais l\'API n\'est pas disponible. Vérifiez l\'URL du script.')
+            } else {
+              console.log('✅ window.BoxtalParcelPointMap disponible')
+            }
+          }, 500)
+          
           setScriptLoaded(true)
         }}
         onError={(e) => {
-          console.error("❌ Erreur chargement script Boxtal:", e)
-          setScriptError('Impossible de charger le script Boxtal')
+          console.error("❌ Erreur chargement script Boxtal depuis:", scriptSrc, e)
+          setScriptError(`Impossible de charger le script Boxtal depuis ${scriptSrc}. Vérifiez l'URL dans Supabase.`)
         }}
       />
 
