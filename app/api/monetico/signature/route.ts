@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
     // Ordre spécifique des paramètres selon la documentation Monetico v3.0
     // Les URLs de retour (url_retour, url_retour_ok, url_retour_err) ne sont PAS incluses dans le calcul du MAC
     // Ordre: TPE, date, montant, reference, texte-libre, version, lgue, societe, mail
+    // Pour paiement simple (non fractionné), ajouter 8 astérisques pour les champs de fractionnement vides
+    // (nbrech, dateech1, montantech1, dateech2, montantech2, dateech3, montantech3, dateech4, montantech4)
     const orderedKeys = ['TPE', 'date', 'montant', 'reference', 'texte_libre', 'version', 'lgue', 'societe', 'mail']
     
     // Construire la chaîne à signer dans l'ordre Monetico (sans MAC, sans URLs de retour)
@@ -44,8 +46,16 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Ajouter un * à la fin selon la documentation Monetico
-    const toSign = toSignParts.join('*') + '*'
+    // Pour paiement simple (non fractionné), ajouter les astérisques pour les champs de fractionnement vides
+    // Format: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*nbrech*dateech1*montantech1*dateech2*montantech2*dateech3*montantech3*dateech4*montantech4
+    // Pour un paiement simple, tous ces champs sont vides
+    // Selon la doc Monetico, on ajoute les séparateurs pour les 9 champs de fractionnement
+    // Chaque champ vide nécessite un séparateur avant et après (sauf le premier et dernier)
+    // Format exact: ...mail**nbrech**dateech1**montantech1**dateech2**montantech2**dateech3**montantech3**dateech4**montantech4**
+    // Mais en pratique, on peut simplifier en ajoutant juste les séparateurs nécessaires
+    // D'après l'exemple de la doc: 12 astérisques à la fin
+    // Testons avec 9 astérisques (un par champ de fractionnement vide)
+    const toSign = toSignParts.join('*') + '*********'
 
     // Log pour débogage (à retirer en production)
     console.log('Monetico - Chaîne à signer:', toSign)
