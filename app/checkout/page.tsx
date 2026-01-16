@@ -469,15 +469,25 @@ export default function CheckoutPage() {
 
         // Créer la commande directement (avec le total incluant l'expédition)
         const commentValue = orderComment.trim() || undefined
-        const order = await createOrder(
-          user?.id || '',
-          orderReference,
-          finalTotal,
-          orderItems,
-          'test', // Mode test
-          calculatedShippingCost,
-          commentValue
-        )
+        // Appel conditionnel pour éviter les problèmes de typage TypeScript
+        const order = commentValue 
+          ? await createOrder(
+              user?.id || '',
+              orderReference,
+              finalTotal,
+              orderItems,
+              'test',
+              calculatedShippingCost,
+              commentValue
+            )
+          : await createOrder(
+              user?.id || '',
+              orderReference,
+              finalTotal,
+              orderItems,
+              'test',
+              calculatedShippingCost
+            )
 
         // La commande est créée avec le statut 'pending' (en attente) par défaut
         // Le statut sera changé manuellement depuis l'admin
@@ -1430,15 +1440,25 @@ export default function CheckoutPage() {
                           const currentRef = orderReference || generateOrderReference()
                           const commentValue = orderComment.trim() || undefined
                           
-                          const order = await createOrder(
-                            user?.id || '',
-                            currentRef,
-                            finalTotal,
-                            orderItems,
-                            'paypal',
-                            calculatedShippingCost,
-                            commentValue
-                          )
+                          // Appel conditionnel pour éviter les problèmes de typage TypeScript
+                          const order = commentValue
+                            ? await createOrder(
+                                user?.id || '',
+                                currentRef,
+                                finalTotal,
+                                orderItems,
+                                'paypal',
+                                calculatedShippingCost,
+                                commentValue
+                              )
+                            : await createOrder(
+                                user?.id || '',
+                                currentRef,
+                                finalTotal,
+                                orderItems,
+                                'paypal',
+                                calculatedShippingCost
+                              )
 
                           if (order.id) {
                             // La commande reste en "pending" (en attente) par défaut

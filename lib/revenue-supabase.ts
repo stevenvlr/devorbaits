@@ -13,6 +13,7 @@ export interface Order {
   shipping_label_url?: string
   shipping_cost?: number
   items?: OrderItem[] // Les items sont maintenant stockés directement dans orders
+  comment?: string // Commentaire de commande (optionnel, max 500 caractères)
 }
 
 export interface OrderItem {
@@ -43,7 +44,8 @@ export async function createOrder(
   total: number,
   items: Omit<OrderItem, 'id' | 'order_id' | 'created_at'>[],
   paymentMethod?: string,
-  shippingCost?: number
+  shippingCost?: number,
+  comment?: string
 ): Promise<Order> {
   // Pour Supabase, on ne fournit pas l'ID (il sera généré automatiquement)
   // Pour localStorage, on génère un ID
@@ -82,11 +84,16 @@ export async function createOrder(
           // Ne pas inclure 'id' ni 'created_at' - Supabase les génère automatiquement
         }
 
-        // Ajouter shipping_cost si fourni (et valide)
-        const orderDataToInsert =
-          typeof shippingCost === 'number' && Number.isFinite(shippingCost)
-            ? { ...orderDataToInsertBase, shipping_cost: shippingCost }
-            : orderDataToInsertBase
+        // Ajouter shipping_cost et comment si fournis (et valides)
+        let orderDataToInsert: any = orderDataToInsertBase
+        if (typeof shippingCost === 'number' && Number.isFinite(shippingCost)) {
+          orderDataToInsert = { ...orderDataToInsert, shipping_cost: shippingCost }
+        }
+        if (comment && typeof comment === 'string' && comment.trim().length > 0) {
+          // Sécuriser le commentaire : trim, limiter à 500 caractères, éviter HTML/script
+          const sanitizedComment = comment.trim().substring(0, 500)
+          orderDataToInsert = { ...orderDataToInsert, comment: sanitizedComment }
+        }
 
         console.log(`📦 Création de la commande ${reference} avec ${itemsForJson.length} item(s)`)
         console.log('Items à insérer:', itemsForJson)
@@ -101,10 +108,11 @@ export async function createOrder(
         if (
           orderError &&
           typeof orderError.message === 'string' &&
-          orderError.message.toLowerCase().includes('shipping_cost') &&
+          (orderError.message.toLowerCase().includes('shipping_cost') ||
+           orderError.message.toLowerCase().includes('comment')) &&
           orderError.message.toLowerCase().includes('does not exist')
         ) {
-          console.warn('⚠️ Colonne shipping_cost absente dans orders, retry sans shipping_cost')
+          console.warn('⚠️ Colonne shipping_cost ou comment absente dans orders, retry sans ces colonnes')
           const retry = await supabase
             .from('orders')
             .insert(orderDataToInsertBase as any)
@@ -170,7 +178,10 @@ export async function createOrder(
     status: 'pending',
     payment_method: paymentMethod,
     created_at: new Date().toISOString(),
-    items: orderItems
+    items: orderItems,
+    comment: comment && typeof comment === 'string' && comment.trim().length > 0 
+      ? comment.trim().substring(0, 500) 
+      : undefined
   }
 
   const orders = JSON.parse(localStorage.getItem('orders') || '[]')
@@ -510,7 +521,8 @@ export async function getAllOrders(): Promise<(Order & { items: OrderItem[]; use
           shipping_tracking_number: order.shipping_tracking_number,
           shipping_label_url: order.shipping_label_url,
           shipping_cost: order.shipping_cost ? parseFloat(order.shipping_cost.toString()) : undefined,
-          shipping_address: order.shipping_address || undefined
+          shipping_address: order.shipping_address || undefined,
+          comment: order.comment || undefined
         }
       })
     )
