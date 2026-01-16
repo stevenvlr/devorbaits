@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
+
+export const runtime = 'edge'
+
+// Fonction pour convertir en base64 (compatible Edge Runtime)
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  // btoa est disponible dans Edge Runtime (Cloudflare Workers)
+  return btoa(binary)
+}
 
 // Cette route génère la signature Monetico de manière sécurisée côté serveur
 export async function POST(request: NextRequest) {
@@ -37,10 +49,25 @@ export async function POST(request: NextRequest) {
     const toSign = sortedParams
 
     // Générer le MAC avec HMAC-SHA1 (format Monetico)
-    const mac = crypto
-      .createHmac('sha1', cleSecrete)
-      .update(toSign, 'utf8')
-      .digest('base64')
+    // Utilisation de l'API Web Crypto pour Edge Runtime
+    const encoder = new TextEncoder()
+    const keyData = encoder.encode(cleSecrete)
+    const messageData = encoder.encode(toSign)
+    
+    // Import de la clé pour HMAC
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-1' },
+      false,
+      ['sign']
+    )
+    
+    // Signer le message
+    const signature = await crypto.subtle.sign('HMAC', key, messageData)
+    
+    // Convertir en base64
+    const mac = arrayBufferToBase64(signature)
 
     return NextResponse.json({ MAC: mac })
   } catch (error) {

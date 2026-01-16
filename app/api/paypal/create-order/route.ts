@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const runtime = 'edge'
+
 // Cette route crée une commande PayPal côté serveur
 export async function POST(request: NextRequest) {
   try {

@@ -246,6 +246,35 @@ Puis redéployez le site.
 
 ## 🐛 Résolution des problèmes courants
 
+### Problème : Erreur d'authentification GitHub ("No server is currently available")
+
+Si vous voyez une erreur HTML de GitHub lors de la connexion, voici comment résoudre :
+
+**Solutions immédiates :**
+1. **Attendez 5-10 minutes** et réessayez (problème temporaire de GitHub)
+2. **Vérifiez le statut de GitHub** : [https://www.githubstatus.com](https://www.githubstatus.com)
+3. **Rafraîchissez la page** Netlify (F5 ou Ctrl+R)
+4. **Fermez et rouvrez votre navigateur**
+
+**Solutions avancées :**
+1. **Videz le cache du navigateur** :
+   - Chrome/Edge : Ctrl+Shift+Suppr → Cochez "Cookies" → Effacer
+   - Firefox : Ctrl+Shift+Suppr → Cochez "Cookies" → Effacer
+2. **Utilisez un autre navigateur** (ou mode navigation privée)
+3. **Désactivez temporairement les extensions** (adblockers, VPN)
+4. **Essayez depuis un autre réseau** (téléphone en partage de connexion)
+
+**Si le problème persiste :**
+1. Allez sur [https://github.com/settings/applications](https://github.com/settings/applications)
+2. Vérifiez si Netlify apparaît dans "Authorized OAuth Apps"
+3. Si oui, cliquez sur "Revoke" puis réessayez la connexion
+4. Si non, le problème vient de la connexion initiale
+
+**Alternative : Connexion manuelle**
+Si rien ne fonctionne, vous pouvez déployer manuellement :
+1. Dans Netlify, choisissez "Deploy manually" au lieu de "Deploy with GitHub"
+2. Vous devrez uploader votre code à chaque fois (moins pratique)
+
 ### Problème : Le build échoue
 
 **Solutions :**

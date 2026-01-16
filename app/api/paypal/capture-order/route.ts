@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const runtime = 'edge'
+
 // Cette route capture un paiement PayPal après approbation
 export async function POST(request: NextRequest) {
   try {

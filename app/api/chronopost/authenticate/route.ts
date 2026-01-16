@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const runtime = 'edge'
+
 /**
  * Route API pour obtenir un token d'authentification Colissimo
  * Note: Cette route fait un appel à l'API Colissimo pour obtenir un token

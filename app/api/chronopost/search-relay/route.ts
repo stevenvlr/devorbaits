@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const runtime = 'edge'
+
 /**
  * Route API pour rechercher des points relais Chronopost
  * Utilise le site web Chronopost pour récupérer les points relais
