@@ -25,13 +25,18 @@ export interface ShippingPrice {
  */
 export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'home'): Promise<ShippingPrice | null> {
   if (!isSupabaseConfigured()) {
+    console.warn('⚠️ Supabase non configuré')
     return null
   }
 
   const supabase = getSupabaseClient()
-  if (!supabase) return null
+  if (!supabase) {
+    console.warn('⚠️ Client Supabase non disponible')
+    return null
+  }
 
   try {
+    // D'abord, essayer de récupérer un tarif avec le type spécifique
     const { data, error } = await supabase
       .from('shipping_prices')
       .select('*')
@@ -39,11 +44,13 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
       .eq('shipping_type', shippingType)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
 
-    if (error || !data) {
+    if (error) {
+      console.error('❌ Erreur lors de la récupération du tarif:', error)
+      
       // Si aucun tarif spécifique n'est trouvé, essayer de récupérer un tarif sans type (rétrocompatibilité)
       if (shippingType === 'home') {
+        console.log('🔄 Tentative de récupération d\'un tarif sans type (rétrocompatibilité)')
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('shipping_prices')
           .select('*')
@@ -51,18 +58,51 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
           .is('shipping_type', null)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single()
         
-        if (!fallbackError && fallbackData) {
-          return fallbackData
+        if (fallbackError) {
+          console.error('❌ Erreur lors de la récupération du tarif fallback:', fallbackError)
+          return null
+        }
+        
+        if (fallbackData && fallbackData.length > 0) {
+          console.log('✅ Tarif fallback trouvé:', fallbackData[0])
+          return fallbackData[0]
         }
       }
       return null
     }
 
-    return data
+    if (data && data.length > 0) {
+      console.log(`✅ Tarif ${shippingType} trouvé:`, data[0])
+      return data[0]
+    }
+
+    // Si aucun tarif avec le type spécifique n'est trouvé, essayer le fallback pour 'home'
+    if (shippingType === 'home') {
+      console.log('🔄 Aucun tarif "home" trouvé, recherche d\'un tarif sans type')
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('shipping_prices')
+        .select('*')
+        .eq('active', true)
+        .is('shipping_type', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+      
+      if (fallbackError) {
+        console.error('❌ Erreur lors de la récupération du tarif fallback:', fallbackError)
+        return null
+      }
+      
+      if (fallbackData && fallbackData.length > 0) {
+        console.log('✅ Tarif fallback trouvé:', fallbackData[0])
+        return fallbackData[0]
+      }
+    }
+
+    console.warn(`⚠️ Aucun tarif actif trouvé pour le type "${shippingType}"`)
+    return null
   } catch (error) {
-    console.error('Erreur lors de la récupération du tarif:', error)
+    console.error('❌ Erreur lors de la récupération du tarif:', error)
     return null
   }
 }
@@ -185,10 +225,9 @@ export async function saveShippingPrice(price: Partial<ShippingPrice>): Promise<
       name: price.name,
       type: price.type,
       active: price.active !== undefined ? price.active : true,
+      // Toujours définir shipping_type avec une valeur par défaut si non spécifié
+      shipping_type: price.shipping_type || 'home'
     }
-
-    // Ajouter les champs optionnels seulement s'ils sont définis
-    if (price.shipping_type !== undefined) cleanPrice.shipping_type = price.shipping_type
     if (price.fixed_price !== undefined) cleanPrice.fixed_price = price.fixed_price
     if (price.margin_percent !== undefined) cleanPrice.margin_percent = price.margin_percent
     if (price.margin_fixed !== undefined) cleanPrice.margin_fixed = price.margin_fixed

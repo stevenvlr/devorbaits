@@ -60,6 +60,7 @@ export default function CheckoutPage() {
   const [cgvAccepted, setCgvAccepted] = useState(false)
   const [chronopostRelaisPoint, setChronopostRelaisPoint] = useState<ChronopostRelaisPoint | null>(null)
   const [boxtalParcelPoint, setBoxtalParcelPoint] = useState<BoxtalParcelPoint | null>(null)
+  const [orderComment, setOrderComment] = useState('')
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -427,6 +428,7 @@ export default function CheckoutPage() {
       chronopostRelaisPoint: retraitMode === 'chronopost-relais' ? chronopostRelaisPoint : undefined,
       promoCode: promoValidation && promoValidation.valid ? promoCode : undefined,
       discount: promoValidation && promoValidation.valid ? promoValidation.discount : undefined,
+      comment: orderComment.trim() || undefined,
     }
 
     // Sauvegarder temporairement la commande avant paiement
@@ -472,7 +474,8 @@ export default function CheckoutPage() {
           finalTotal,
           orderItems,
           'test', // Mode test
-          calculatedShippingCost
+          calculatedShippingCost,
+          orderComment.trim() || undefined
         )
 
         // La commande est créée avec le statut 'pending' (en attente) par défaut
@@ -874,14 +877,19 @@ export default function CheckoutPage() {
                 )}
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">
-                    {retraitMode === 'livraison' ? 'Expédition:' : 'Retrait:'}
+                    {retraitMode === 'livraison' || retraitMode === 'chronopost-relais' ? 'Expédition:' : 'Retrait:'}
                   </span>
                   <span className="text-white">
-                    {retraitMode === 'livraison' ? (
+                    {retraitMode === 'livraison' || retraitMode === 'chronopost-relais' ? (
                       calculatedShippingCost > 0 ? (
                         `${calculatedShippingCost.toFixed(2)} €`
+                      ) : livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville ? (
+                        <span className="text-yellow-400 text-xs flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          Calcul en cours...
+                        </span>
                       ) : (
-                        <span className="text-gray-500 text-xs">Calcul en cours...</span>
+                        <span className="text-gray-500 text-xs">Remplissez l'adresse</span>
                       )
                     ) : (
                       'Gratuit'
@@ -1258,6 +1266,30 @@ export default function CheckoutPage() {
                 </div>
               )}
 
+              {/* Commentaire de commande */}
+              <div className="space-y-3 border-t border-noir-700 pt-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Info className="w-5 h-5 text-yellow-500" />
+                  Commentaire (optionnel)
+                </h3>
+                <textarea
+                  value={orderComment}
+                  onChange={(e) => {
+                    const value = e.target.value.trimStart()
+                    if (value.length <= 500) {
+                      setOrderComment(value)
+                    }
+                  }}
+                  placeholder="Ajoutez un commentaire pour votre commande (max 500 caractères)"
+                  rows={4}
+                  maxLength={500}
+                  className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-white text-sm focus:border-yellow-500 focus:outline-none resize-none"
+                />
+                <p className="text-xs text-gray-500 text-right">
+                  {orderComment.length}/500 caractères
+                </p>
+              </div>
+
               {/* Acceptation des CGV */}
               <div className="space-y-3 border-t border-noir-700 pt-4">
                 <label className="flex items-start gap-3 cursor-pointer group">
@@ -1366,7 +1398,7 @@ export default function CheckoutPage() {
                 }}
               >
                 {paymentMethod === 'paypal' ? (
-                  <div className={!isFormValid() ? 'opacity-50 pointer-events-none' : ''}>
+                  <div>
                     <PayPalButton
                       amount={finalTotal}
                       reference={orderReference || generateOrderReference()}
@@ -1402,7 +1434,8 @@ export default function CheckoutPage() {
                             finalTotal,
                             orderItems,
                             'paypal',
-                            calculatedShippingCost
+                            calculatedShippingCost,
+                            orderComment.trim() || undefined
                           )
 
                           if (order.id) {
