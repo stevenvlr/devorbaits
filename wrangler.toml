@@ -24,10 +24,10 @@ NEXT_PUBLIC_SITE_URL = "https://6b67fd8b.devorbaits.pages.dev"
 NEXT_PUBLIC_MONETICO_TPE = "0917217"
 NEXT_PUBLIC_MONETICO_KEY = "266032402DDAA6220573A5C5A523C114016926P6"
 NEXT_PUBLIC_MONETICO_SOCIETE = ""  # Optionnel - laissez vide si vous ne le trouvez pas
-NEXT_PUBLIC_MONETICO_URL = "https://paiement.monetico.fr/paiement.cgi"
+# URL de test Monetico (pour production, utilisez: https://paiement.monetico.fr/paiement.cgi)
+NEXT_PUBLIC_MONETICO_URL = "https://p.monetico-services.com/test/paiement.cgi"
 NEXT_PUBLIC_MONETICO_URL_RETOUR = "https://6b67fd8b.devorbaits.pages.dev/payment/success"
 NEXT_PUBLIC_MONETICO_URL_RETOUR_ERR = "https://6b67fd8b.devorbaits.pages.dev/payment/error"
 
-# Boxtal (pour les points relais Chronopost)
-# Essai avec différentes URLs possibles - testez celle qui fonctionne
-NEXT_PUBLIC_BOXTAL_MAP_SCRIPT_SRC = "https://unpkg.com/@boxtal/parcel-point-map@0.0.7/dist/index.umd.js"
+# Boxtal : L'URL du script est récupérée depuis Supabase (table boxtal_config, colonne map_script_url)
+# Plus besoin de variable d'environnement ici
