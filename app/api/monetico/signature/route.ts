@@ -2,16 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'edge'
 
-// Fonction pour convertir en base64 (compatible Edge Runtime)
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  // btoa est disponible dans Edge Runtime (Cloudflare Workers)
-  return btoa(binary)
-}
+// Note: La fonction arrayBufferToBase64 n'est plus utilisée
+// Le MAC Monetico doit être en hexadécimal, pas en base64
 
 // Cette route génère la signature Monetico de manière sécurisée côté serveur
 export async function POST(request: NextRequest) {
@@ -38,15 +30,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Trier les paramètres par ordre alphabétique (sauf MAC)
-    const sortedParams = Object.keys(params)
-      .filter(key => key !== 'MAC') // Exclure MAC du calcul
-      .sort()
-      .map(key => `${key}=${params[key]}`)
-      .join('*')
-
-    // Préparer la chaîne à signer (sans la clé secrète)
-    const toSign = sortedParams
+    // Ordre spécifique des paramètres selon la documentation Monetico v3.0
+    // Les URLs de retour (url_retour, url_retour_ok, url_retour_err) ne sont PAS incluses dans le calcul du MAC
+    // Ordre: TPE, date, montant, reference, texte-libre, version, lgue, societe, mail
+    const orderedKeys = ['TPE', 'date', 'montant', 'reference', 'texte_libre', 'version', 'lgue', 'societe', 'mail']
+    
+    // Construire la chaîne à signer dans l'ordre Monetico (sans MAC, sans URLs de retour)
+    const toSignParts: string[] = []
+    for (const key of orderedKeys) {
+      if (params[key] !== undefined && params[key] !== null && key !== 'MAC') {
+        // Utiliser valeur vide si societe est vide (mais inclure quand même)
+        toSignParts.push(params[key] || '')
+      }
+    }
+    
+    // Ajouter un * à la fin selon la documentation Monetico
+    const toSign = toSignParts.join('*') + '*'
 
     // Générer le MAC avec HMAC-SHA1 (format Monetico)
     // Utilisation de l'API Web Crypto pour Edge Runtime
@@ -66,8 +65,11 @@ export async function POST(request: NextRequest) {
     // Signer le message
     const signature = await crypto.subtle.sign('HMAC', key, messageData)
     
-    // Convertir en base64
-    const mac = arrayBufferToBase64(signature)
+    // Convertir en hexadécimal (format Monetico, pas base64)
+    const mac = Array.from(new Uint8Array(signature))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
 
     return NextResponse.json({ MAC: mac })
   } catch (error) {

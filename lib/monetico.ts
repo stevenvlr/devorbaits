@@ -32,12 +32,15 @@ export interface MoneticoOrderData {
 
 // Préparer les données pour Monetico
 export function prepareMoneticoPayment(orderData: MoneticoOrderData) {
-  // Formater la date au format Monetico (YYYYMMDDHHmmss)
+  // Formater la date au format Monetico (JJ/MM/AAAA:HH:MM:SS)
   const now = new Date()
-  const date = now.toISOString()
-    .replace(/[-:]/g, '')
-    .replace(/\.\d{3}/, '')
-    .slice(0, 14)
+  const jour = String(now.getDate()).padStart(2, '0')
+  const mois = String(now.getMonth() + 1).padStart(2, '0')
+  const annee = now.getFullYear()
+  const heures = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  const secondes = String(now.getSeconds()).padStart(2, '0')
+  const date = `${jour}/${mois}/${annee}:${heures}:${minutes}:${secondes}`
   
   // Formater le montant (ex: 25.50EUR)
   const montant = `${orderData.montant.toFixed(2)}EUR`
@@ -50,17 +53,20 @@ export function prepareMoneticoPayment(orderData: MoneticoOrderData) {
     livraisonAddress: orderData.livraisonAddress,
   })
   
+  // Construire les paramètres dans l'ordre requis par Monetico
   const params: Record<string, string> = {
     TPE: MONETICO_CONFIG.TPE,
     date: date,
     montant: montant,
     reference: orderData.reference,
+    texte_libre: texteLibre.substring(0, 32000), // Limite Monetico
+    version: '3.0', // Version obligatoire
+    lgue: 'FR',
+    societe: MONETICO_CONFIG.SOCIETE || '', // Peut être vide mais doit être présent
+    mail: orderData.email,
     url_retour: MONETICO_CONFIG.URL_RETOUR,
     url_retour_ok: MONETICO_CONFIG.URL_RETOUR,
     url_retour_err: MONETICO_CONFIG.URL_RETOUR_ERR,
-    lgue: 'FR',
-    mail: orderData.email,
-    texte_libre: texteLibre.substring(0, 32000), // Limite Monetico
   }
   
   return {
