@@ -29,4 +29,5 @@ NEXT_PUBLIC_MONETICO_URL_RETOUR = "https://6b67fd8b.devorbaits.pages.dev/payment
 NEXT_PUBLIC_MONETICO_URL_RETOUR_ERR = "https://6b67fd8b.devorbaits.pages.dev/payment/error"
 
 # Boxtal (pour les points relais Chronopost)
-NEXT_PUBLIC_BOXTAL_MAP_SCRIPT_SRC = "https://cdn.jsdelivr.net/npm/@boxtal/parcel-point-map@0.0.7/dist/parcel-point-map.min.js"
+# Essai avec différentes URLs possibles - testez celle qui fonctionne
+NEXT_PUBLIC_BOXTAL_MAP_SCRIPT_SRC = "https://unpkg.com/@boxtal/parcel-point-map@0.0.7/dist/index.umd.js"
