@@ -3,22 +3,18 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 let supabaseClient: SupabaseClient | null = null
 
-function getPublicEnv(): Record<string, string | undefined> {
-  // Next.js remplace les variables NEXT_PUBLIC_* au build.
-  // Selon l'environnement (Cloudflare/Pages), `process` peut être absent : on garde un fallback sûr.
-  const env =
-    (typeof process !== 'undefined' ? process.env : undefined) ??
-    (typeof globalThis !== 'undefined' ? (globalThis as any).process?.env : undefined)
-
-  return (env || {}) as Record<string, string | undefined>
-}
+// IMPORTANT :
+// On référence DIRECTEMENT process.env.NEXT_PUBLIC_* pour que Next.js injecte les valeurs au build.
+// Si on passe par un objet (ex: const env = process.env), Next peut ne pas remplacer les valeurs,
+// et on obtient "Supabase non configuré" en production.
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 /**
  * Vérifie si Supabase est configuré (variables d'environnement présentes)
  */
 export function isSupabaseConfigured(): boolean {
-  const env = getPublicEnv()
-  return !!(env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  return !!(SUPABASE_URL && SUPABASE_ANON_KEY)
 }
 
 /**
@@ -32,11 +28,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 
   // Créer le client une seule fois (singleton)
   if (!supabaseClient) {
-    const env = getPublicEnv()
-    const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseAnonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+    supabaseClient = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!)
   }
 
   return supabaseClient

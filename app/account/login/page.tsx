@@ -7,12 +7,6 @@ import { ArrowLeft, LogIn, Mail, Lock } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 function LoginForm() {
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/account/login/page.tsx:9',message:'LoginForm rendered',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-  }
-  // #endregion
-  
   // TOUS LES HOOKS DOIVENT ÊTRE APPELÉS AVANT TOUT RETURN CONDITIONNEL
   const router = useRouter()
   const searchParams = useSearchParams()
