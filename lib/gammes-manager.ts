@@ -1,10 +1,16 @@
 // Système de gestion dynamique des gammes - Supabase uniquement
 
 import { 
-  loadGammesFromSupabase, 
+  loadGammesNamesFromSupabase, 
   addGammeToSupabase, 
-  deleteGammeFromSupabase 
+  deleteGammeFromSupabase,
+  toggleGammeHidden,
+  loadGammesFromSupabase,
+  type GammeData
 } from './gammes-supabase'
+
+// Exporter GammeData pour utilisation dans les composants
+export type { GammeData }
 import { isSupabaseConfigured } from './supabase'
 
 // Gammes par défaut (utilisées si Supabase n'est pas configuré)
@@ -17,6 +23,9 @@ const DEFAULT_GAMMES = [
   'Thon Curry'
 ]
 
+/**
+ * Charge les gammes visibles pour les clients (exclut les gammes masquées)
+ */
 export async function loadGammes(): Promise<string[]> {
   // Utiliser uniquement Supabase
   if (!isSupabaseConfigured()) {
@@ -25,15 +34,70 @@ export async function loadGammes(): Promise<string[]> {
   }
   
   try {
-    const gammes = await loadGammesFromSupabase()
+    // Charger uniquement les gammes visibles (includeHidden = false)
+    // Ne pas fusionner avec DEFAULT_GAMMES car Supabase est la source de vérité
+    // Si une gamme est masquée dans Supabase, elle ne doit pas apparaître même si elle est dans DEFAULT_GAMMES
+    const gammes = await loadGammesNamesFromSupabase(false)
     // S'assurer que gammes est un tableau
     const gammesArray = Array.isArray(gammes) ? gammes : []
-    // Fusionner avec les gammes par défaut pour éviter les pertes
-    const merged = Array.from(new Set([...DEFAULT_GAMMES, ...gammesArray]))
-    return merged.sort() // Trier pour un affichage cohérent
+    
+    // Si aucune gamme n'est trouvée dans Supabase, utiliser les gammes par défaut comme fallback
+    if (gammesArray.length === 0) {
+      console.warn('⚠️ Aucune gamme visible trouvée dans Supabase, utilisation des gammes par défaut')
+      return DEFAULT_GAMMES
+    }
+    
+    return gammesArray.sort() // Trier pour un affichage cohérent
   } catch (error) {
     console.error('Erreur lors du chargement des gammes:', error)
+    // En cas d'erreur, retourner les gammes par défaut comme fallback
     return DEFAULT_GAMMES
+  }
+}
+
+/**
+ * Charge toutes les gammes (y compris masquées) pour l'admin
+ */
+export async function loadGammesForAdmin(): Promise<GammeData[]> {
+  if (!isSupabaseConfigured()) {
+    console.warn('⚠️ Supabase non configuré, retour des gammes par défaut')
+    return DEFAULT_GAMMES.map(name => ({ name, hidden: false }))
+  }
+  
+  try {
+    // Charger toutes les gammes depuis Supabase (includeHidden = true)
+    const gammesFromSupabase = await loadGammesFromSupabase(true)
+    console.log('🔍 Gammes chargées depuis Supabase (admin):', gammesFromSupabase)
+    
+    // Créer un Map pour indexer les gammes de Supabase par nom
+    const supabaseGammesMap = new Map<string, GammeData>()
+    gammesFromSupabase.forEach(gamme => {
+      supabaseGammesMap.set(gamme.name, gamme)
+    })
+    
+    // Fusionner : les gammes de Supabase ont la priorité
+    // Si une gamme par défaut n'existe pas dans Supabase, on l'ajoute avec hidden: false
+    const allGammes: GammeData[] = []
+    
+    // D'abord, ajouter toutes les gammes de Supabase (elles ont la priorité)
+    gammesFromSupabase.forEach(gamme => {
+      allGammes.push(gamme)
+    })
+    
+    // Ensuite, ajouter les gammes par défaut qui n'existent pas dans Supabase
+    DEFAULT_GAMMES.forEach(name => {
+      if (!supabaseGammesMap.has(name)) {
+        allGammes.push({ name, hidden: false })
+      }
+    })
+    
+    const sorted = allGammes.sort((a, b) => a.name.localeCompare(b.name))
+    console.log('✅ Gammes finales pour admin:', sorted)
+    console.log('✅ Gammes masquées dans la liste finale:', sorted.filter(g => g.hidden))
+    return sorted
+  } catch (error) {
+    console.error('Erreur lors du chargement des gammes pour admin:', error)
+    return DEFAULT_GAMMES.map(name => ({ name, hidden: false }))
   }
 }
 
@@ -65,8 +129,8 @@ export async function addGamme(gamme: string): Promise<{ success: boolean; messa
   }
   
   try {
-    // Vérifier si la gamme existe déjà
-    const existingGammes = await loadGammes()
+    // Vérifier si la gamme existe déjà (vérifier toutes les gammes, y compris masquées)
+    const existingGammes = await loadGammesNamesFromSupabase(true)
     if (existingGammes.includes(trimmedGamme)) {
       return { success: false, message: 'Cette gamme existe déjà' }
     }
@@ -105,6 +169,30 @@ export async function removeGamme(gamme: string): Promise<boolean> {
     return success
   } catch (error) {
     console.error('Erreur lors de la suppression de la gamme:', error)
+    return false
+  }
+}
+
+/**
+ * Bascule le statut hidden d'une gamme
+ */
+export async function toggleGammeVisibility(gamme: string, hidden: boolean): Promise<boolean> {
+  if (!isSupabaseConfigured()) {
+    console.error('❌ Supabase non configuré. Impossible de modifier le statut de la gamme.')
+    return false
+  }
+  
+  try {
+    const success = await toggleGammeHidden(gamme, hidden)
+    if (success) {
+      // Émettre l'événement
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gammes-updated'))
+      }
+    }
+    return success
+  } catch (error) {
+    console.error('Erreur lors de la modification du statut de la gamme:', error)
     return false
   }
 }

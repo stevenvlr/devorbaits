@@ -4,6 +4,8 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 import { reserveStock as reserveStockAmicale, releaseStock as releaseStockAmicale } from '@/lib/amicale-blanc-stock'
 import { reserveStock, releaseStock, getAvailableStock } from '@/lib/stock-manager'
 import { getBouilletteId } from '@/lib/price-utils'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
+import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 
 export interface PromoCharacteristics {
   arome?: string
@@ -23,6 +25,9 @@ interface CartItem {
   type?: string
   quantite: number
   prix: number
+  prixOriginal?: number // Prix original avant promotion (pour recalculer si promotion activée après)
+  category?: string // Catégorie du produit (pour appliquer la promotion)
+  gamme?: string // Gamme du produit (pour appliquer la promotion)
   pointRetrait?: string
   productId?: string // ID du produit pour la gestion du stock
   variantId?: string // ID de la variante pour la gestion du stock
@@ -46,14 +51,8 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  // #region agent log
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CartContext.tsx:47',message:'CartProvider render',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    }
-  }, []);
-  // #endregion
   const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const { promotion } = useGlobalPromotion()
 
   // Fonction pour vérifier si un produit est éligible à la promotion 4+1
   const isEligibleForPromo = (produit: string): boolean => {
@@ -278,11 +277,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantite, 0)
   // Le total exclut les articles gratuits
+  // Recalculer le prix avec la promotion globale si elle est active
   const total = cartItems.reduce((sum, item) => {
     if (item.isGratuit) {
       return sum
     }
-    return sum + (item.prix * item.quantite)
+    
+    // Si on a une promotion active
+    let prixFinal = item.prix
+    if (promotion && promotion.active) {
+      // Si on a le prix original, l'utiliser (meilleur cas)
+      const prixBase = item.prixOriginal !== undefined ? item.prixOriginal : item.prix
+      
+      // Si la promotion s'applique à tout le site, l'appliquer même sans category/gamme
+      if (promotion.applyToAll) {
+        prixFinal = applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+      } else if (item.category || item.gamme) {
+        // Si on a category ou gamme, vérifier l'éligibilité
+        prixFinal = applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+      }
+      // Sinon, pas de promotion (pas de category/gamme et pas applyToAll)
+    }
+    
+    return sum + (prixFinal * item.quantite)
   }, 0)
 
   return (

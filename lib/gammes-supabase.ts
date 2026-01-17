@@ -1,10 +1,16 @@
 // Gestion des gammes dans Supabase
 import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 
+export interface GammeData {
+  name: string
+  hidden: boolean
+}
+
 /**
- * Charge toutes les gammes depuis Supabase
+ * Charge toutes les gammes depuis Supabase (avec statut hidden)
+ * @param includeHidden Si true, inclut aussi les gammes masquées (pour l'admin)
  */
-export async function loadGammesFromSupabase(): Promise<string[]> {
+export async function loadGammesFromSupabase(includeHidden: boolean = false): Promise<GammeData[]> {
   if (!isSupabaseConfigured()) {
     console.warn('⚠️ Supabase non configuré, impossible de charger les gammes')
     return []
@@ -17,10 +23,18 @@ export async function loadGammesFromSupabase(): Promise<string[]> {
   }
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('gammes')
-      .select('name')
+      .select('name, hidden')
       .order('name', { ascending: true })
+
+    // Si on ne veut pas les gammes masquées, filtrer
+    // On inclut les gammes avec hidden = false ou hidden = NULL (pour compatibilité)
+    if (!includeHidden) {
+      query = query.or('hidden.is.null,hidden.eq.false')
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error('❌ Erreur lors du chargement des gammes depuis Supabase:', error)
@@ -38,8 +52,11 @@ export async function loadGammesFromSupabase(): Promise<string[]> {
       return []
     }
 
-    // Extraire les noms des gammes
-    const gammes = data.map((row: any) => row.name).filter((name: string) => name && name.trim() !== '')
+    // Retourner les données avec le statut hidden
+    const gammes = data.map((row: any) => ({
+      name: row.name,
+      hidden: row.hidden || false
+    })).filter((gamme: GammeData) => gamme.name && gamme.name.trim() !== '')
     
     console.log(`✅ ${gammes.length} gamme(s) chargée(s) depuis Supabase`)
     return gammes
@@ -47,6 +64,14 @@ export async function loadGammesFromSupabase(): Promise<string[]> {
     console.error('❌ Erreur lors du chargement des gammes depuis Supabase:', error)
     return []
   }
+}
+
+/**
+ * Charge uniquement les noms des gammes (pour compatibilité)
+ */
+export async function loadGammesNamesFromSupabase(includeHidden: boolean = false): Promise<string[]> {
+  const gammes = await loadGammesFromSupabase(includeHidden)
+  return gammes.map(g => g.name)
 }
 
 /**
@@ -80,7 +105,8 @@ export async function addGammeToSupabase(gamme: string): Promise<boolean> {
     const { error } = await supabase
       .from('gammes')
       .insert({
-        name: gamme.trim()
+        name: gamme.trim(),
+        hidden: false // Par défaut, visible
       })
 
     if (error) {
@@ -144,6 +170,46 @@ export async function deleteGammeFromSupabase(gamme: string): Promise<boolean> {
     return true
   } catch (error: any) {
     console.error('❌ Erreur lors de la suppression de la gamme dans Supabase:', error)
+    return false
+  }
+}
+
+/**
+ * Bascule le statut hidden d'une gamme
+ */
+export async function toggleGammeHidden(gamme: string, hidden: boolean): Promise<boolean> {
+  if (!isSupabaseConfigured()) {
+    console.error('❌ Supabase non configuré. Impossible de modifier le statut de la gamme.')
+    return false
+  }
+
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    console.error('❌ Impossible de créer le client Supabase')
+    return false
+  }
+
+  try {
+    const { error } = await supabase
+      .from('gammes')
+      .update({ hidden })
+      .eq('name', gamme.trim())
+
+    if (error) {
+      console.error('❌ Erreur lors de la mise à jour du statut de la gamme dans Supabase:', error)
+      console.error('Détails:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
+      return false
+    }
+
+    console.log(`✅ Statut de la gamme "${gamme}" mis à jour (hidden: ${hidden})`)
+    return true
+  } catch (error: any) {
+    console.error('❌ Erreur lors de la mise à jour du statut de la gamme dans Supabase:', error)
     return false
   }
 }

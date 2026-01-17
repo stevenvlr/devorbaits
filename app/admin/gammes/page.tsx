@@ -2,18 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { Plus, Trash2, X, Factory, Tag, Upload, ImageIcon } from 'lucide-react'
-import { loadGammes, addGamme, removeGamme, onGammesUpdate, getGammeImage, setGammeImage, removeGammeImage, onGammesImagesUpdate } from '@/lib/gammes-manager'
+import { Plus, Trash2, X, Factory, Tag, Upload, ImageIcon, Eye, EyeOff } from 'lucide-react'
+import { loadGammesForAdmin, addGamme, removeGamme, onGammesUpdate, getGammeImage, setGammeImage, removeGammeImage, onGammesImagesUpdate, toggleGammeVisibility, type GammeData } from '@/lib/gammes-manager'
 import { optimizeImage } from '@/lib/image-optimizer'
 
 export default function GammesAdminPage() {
-  const [gammes, setGammes] = useState<string[]>([])
+  const [gammes, setGammes] = useState<GammeData[]>([])
   const [newGammeInput, setNewGammeInput] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [gammeImages, setGammeImages] = useState<Record<string, string>>({})
   const [editingImageFor, setEditingImageFor] = useState<string | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [togglingVisibility, setTogglingVisibility] = useState<string | null>(null)
 
   // Charger les gammes et leurs images
   const loadGammesData = async () => {
@@ -28,21 +29,23 @@ export default function GammesAdminPage() {
         fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/gammes/page.tsx:21',message:'calling loadGammes',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
       }
       // #endregion
-      const allGammes = await loadGammes()
+      const allGammes = await loadGammesForAdmin()
       // #region agent log
       if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/gammes/page.tsx:24',message:'loadGammes result',data:{gammesCount:allGammes?.length || 0,gammes:allGammes,isArray:Array.isArray(allGammes)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/gammes/page.tsx:24',message:'loadGammesForAdmin result',data:{gammesCount:allGammes?.length || 0,gammes:allGammes,isArray:Array.isArray(allGammes)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
       }
       // #endregion
       // S'assurer que allGammes est toujours un tableau
+      console.log('📋 Gammes chargées pour admin:', allGammes)
+      console.log('📋 Gammes masquées:', allGammes?.filter(g => g.hidden) || [])
       setGammes(Array.isArray(allGammes) ? allGammes : [])
       
       // Charger les images
       const images: Record<string, string> = {}
       allGammes.forEach(gamme => {
-        const image = getGammeImage(gamme)
+        const image = getGammeImage(gamme.name)
         if (image) {
-          images[gamme] = image
+          images[gamme.name] = image
         }
       })
       setGammeImages(images)
@@ -147,6 +150,31 @@ export default function GammesAdminPage() {
     } finally {
       setIsUploadingImage(false)
       e.target.value = '' // Réinitialiser l'input
+    }
+  }
+
+  // Basculer la visibilité d'une gamme
+  const handleToggleVisibility = async (gamme: string, currentHidden: boolean) => {
+    setTogglingVisibility(gamme)
+    try {
+      const success = await toggleGammeVisibility(gamme, !currentHidden)
+      if (success) {
+        setMessage({ 
+          type: 'success', 
+          text: `Gamme "${gamme}" ${!currentHidden ? 'masquée' : 'affichée'} avec succès` 
+        })
+        await loadGammesData()
+        setTimeout(() => setMessage(null), 3000)
+      } else {
+        setMessage({ type: 'error', text: 'Erreur lors de la modification du statut de la gamme' })
+        setTimeout(() => setMessage(null), 3000)
+      }
+    } catch (error) {
+      console.error('Erreur lors du basculement de la visibilité:', error)
+      setMessage({ type: 'error', text: 'Erreur lors de la modification du statut de la gamme' })
+      setTimeout(() => setMessage(null), 3000)
+    } finally {
+      setTogglingVisibility(null)
     }
   }
 
@@ -269,11 +297,13 @@ export default function GammesAdminPage() {
           ) : (
             <div className="grid md:grid-cols-2 gap-4">
               {(Array.isArray(gammes) ? gammes : []).map((gamme) => {
-                const gammeImage = gammeImages[gamme]
+                const gammeImage = gammeImages[gamme.name]
                 return (
                   <div
-                    key={gamme}
-                    className="bg-noir-900 border border-noir-700 rounded-lg p-4 hover:border-yellow-500/50 transition-all"
+                    key={gamme.name}
+                    className={`bg-noir-900 border rounded-lg p-4 hover:border-yellow-500/50 transition-all ${
+                      gamme.hidden ? 'border-gray-600 opacity-60' : 'border-noir-700'
+                    }`}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3 flex-1">
@@ -282,7 +312,7 @@ export default function GammesAdminPage() {
                           {gammeImage ? (
                             <Image
                               src={gammeImage}
-                              alt={gamme}
+                              alt={gamme.name}
                               fill
                               sizes="64px"
                               className="object-cover"
@@ -292,19 +322,26 @@ export default function GammesAdminPage() {
                             <Tag className="w-8 h-8 text-yellow-500" />
                           )}
                         </div>
-                        <span className="font-semibold text-lg">{gamme}</span>
+                        <div className="flex-1">
+                          <span className="font-semibold text-lg">{gamme.name}</span>
+                          {gamme.hidden && (
+                            <span className="ml-2 px-2 py-0.5 bg-gray-700 text-gray-400 text-xs rounded">
+                              Masquée
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     
                     {/* Actions */}
                     <div className="flex items-center gap-2">
-                      {editingImageFor === gamme ? (
+                      {editingImageFor === gamme.name ? (
                         <div className="flex items-center gap-2 flex-1">
                           <label className="flex-1">
                             <input
                               type="file"
                               accept="image/*"
-                              onChange={(e) => handleImageUpload(gamme, e)}
+                              onChange={(e) => handleImageUpload(gamme.name, e)}
                               disabled={isUploadingImage}
                               className="hidden"
                             />
@@ -314,7 +351,7 @@ export default function GammesAdminPage() {
                           </label>
                           {gammeImage && (
                             <button
-                              onClick={() => handleRemoveImage(gamme)}
+                              onClick={() => handleRemoveImage(gamme.name)}
                               className="px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm font-medium hover:bg-red-500/20 transition-colors"
                             >
                               Supprimer
@@ -330,7 +367,31 @@ export default function GammesAdminPage() {
                       ) : (
                         <>
                           <button
-                            onClick={() => setEditingImageFor(gamme)}
+                            onClick={() => handleToggleVisibility(gamme.name, gamme.hidden)}
+                            disabled={togglingVisibility === gamme.name}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                              gamme.hidden
+                                ? 'bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20'
+                                : 'bg-gray-500/10 border border-gray-500/30 text-gray-400 hover:bg-gray-500/20'
+                            }`}
+                            title={gamme.hidden ? 'Afficher la gamme' : 'Masquer la gamme'}
+                          >
+                            {togglingVisibility === gamme.name ? (
+                              <span className="text-xs">...</span>
+                            ) : gamme.hidden ? (
+                              <>
+                                <Eye className="w-4 h-4" />
+                                Afficher
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff className="w-4 h-4" />
+                                Masquer
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setEditingImageFor(gamme.name)}
                             className="flex-1 px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-yellow-400 text-sm font-medium hover:bg-yellow-500/20 transition-colors flex items-center justify-center gap-2"
                             title={gammeImage ? 'Modifier la photo' : 'Ajouter une photo'}
                           >
@@ -338,7 +399,7 @@ export default function GammesAdminPage() {
                             {gammeImage ? 'Modifier photo' : 'Ajouter photo'}
                           </button>
                           <button
-                            onClick={() => handleRemoveGamme(gamme)}
+                            onClick={() => handleRemoveGamme(gamme.name)}
                             className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
                             title="Supprimer la gamme d'appât"
                           >
@@ -359,6 +420,9 @@ export default function GammesAdminPage() {
           <p className="text-sm text-blue-400">
             <strong>Note :</strong> Les gammes d'appât par défaut (Méga Tutti, Krill Calamar, etc.) sont toujours présentes. 
             Vous pouvez ajouter de nouvelles gammes d'appât qui apparaîtront dans le sélecteur lors de l'ajout de produits.
+            <br />
+            <strong>Masquer une gamme :</strong> Utilisez le bouton "Masquer" pour cacher une gamme aux clients sans la supprimer. 
+            Les gammes masquées restent visibles dans l'interface admin et peuvent être réaffichées à tout moment.
           </p>
         </div>
       </div>
