@@ -6,6 +6,8 @@ import { X, ChevronLeft, ChevronRight, ShoppingCart, Package } from 'lucide-reac
 import { Product, ProductVariant, getProductImages } from '@/lib/products-manager'
 import { getAvailableStock } from '@/lib/stock-manager'
 import { useCart } from '@/contexts/CartContext'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
+import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 
 interface ProductDetailModalProps {
   isOpen: boolean
@@ -21,9 +23,15 @@ export default function ProductDetailModal({
   onAddToCart
 }: ProductDetailModalProps) {
   const { addToCart } = useCart()
+  const { promotion } = useGlobalPromotion()
   const [selectedVariantId, setSelectedVariantId] = useState<string>('')
   const [quantity, setQuantity] = useState(1)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+
+  // Fonction pour obtenir le prix avec promotion
+  const getPriceWithPromotion = (price: number) => {
+    return applyGlobalPromotion(price, promotion, product?.category, product?.gamme)
+  }
   
   // Pour les bouillettes : sélection par diamètre et conditionnement
   const isBouillettes = product?.category.toLowerCase() === 'bouillettes' && product?.variants && product.variants.length > 0
@@ -94,20 +102,28 @@ export default function ProductDetailModal({
     ? getAvailableStock(product.id, selectedVariant.id)
     : getAvailableStock(product.id)
 
-  const price = hasVariants && selectedVariant
+  const basePrice = hasVariants && selectedVariant
     ? (selectedVariant.price || 0)
     : (product.price || 0)
+  
+  const price = getPriceWithPromotion(basePrice)
+  const showPromotion = Boolean(promotion?.active && price < basePrice)
 
   const handleAddToCartClick = async () => {
     if (onAddToCart) {
       onAddToCart(product, selectedVariant, quantity)
     } else {
       // Fallback vers le système de panier
+      const prixOriginal = basePrice
+      
       await addToCart({
         produit: product.name,
         arome: product.gamme || selectedVariant?.arome || '',
         quantite: quantity,
         prix: price,
+        prixOriginal: prixOriginal, // Stocker le prix original pour recalculer si promotion activée après
+        category: product.category, // Stocker la catégorie pour appliquer la promotion
+        gamme: product.gamme, // Stocker la gamme pour appliquer la promotion
         productId: product.id,
         variantId: selectedVariant?.id,
         // Inclure les informations de variante pour les bouillettes et autres produits
@@ -262,9 +278,21 @@ export default function ProductDetailModal({
             <div className="space-y-6 min-w-0">
               {/* Prix */}
               <div>
-                <p className="text-3xl font-bold text-yellow-500">
-                  {price.toFixed(2)} €
-                </p>
+                {showPromotion && (
+                  <p className="text-sm text-gray-400 line-through">
+                    {basePrice.toFixed(2)} €
+                  </p>
+                )}
+                <div className="flex items-center gap-2">
+                  <p className="text-3xl font-bold text-yellow-500">
+                    {price.toFixed(2)} €
+                  </p>
+                  {showPromotion && promotion?.discountPercentage ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-500/15 text-red-400 border border-red-500/30">
+                      -{promotion.discountPercentage}%
+                    </span>
+                  ) : null}
+                </div>
                 {product.format && (
                   <p className="text-gray-400 text-sm mt-1">{product.format}</p>
                 )}
@@ -330,7 +358,7 @@ export default function ProductDetailModal({
                                   ? 'bg-yellow-500 text-noir-950'
                                   : 'bg-noir-800 border border-noir-700 text-gray-300 hover:bg-noir-700'
                               }`}
-                              title={`${variant?.price.toFixed(2)} €`}
+                              title={`${getPriceWithPromotion(variant?.price || 0).toFixed(2)} €`}
                             >
                               {conditionnement}
                             </button>
@@ -402,7 +430,7 @@ export default function ProductDetailModal({
                               : 'bg-noir-800 border border-noir-700 text-gray-300 hover:bg-noir-700'
                           }`}
                         >
-                          {variant.label} - {(variant.price || 0).toFixed(2)} €
+                          {variant.label} - {getPriceWithPromotion(variant.price || 0).toFixed(2)} €
                         </button>
                       )
                     })}

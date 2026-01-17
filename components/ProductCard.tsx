@@ -7,6 +7,8 @@ import { Product, ProductVariant, getProductImages } from '@/lib/products-manage
 import { loadFlashBoostImage, loadSprayPlusImage } from '@/lib/flash-spray-variables-manager'
 import { getAvailableStockSync, onStockUpdate } from '@/lib/stock-manager'
 import { useCart } from '@/contexts/CartContext'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
+import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 import ProductDetailModal from './ProductDetailModal'
 
 interface ProductCardProps {
@@ -23,10 +25,16 @@ export default function ProductCard({
   className = ''
 }: ProductCardProps) {
   const { addToCart } = useCart()
+  const { promotion } = useGlobalPromotion()
   const [selectedVariantId, setSelectedVariantId] = useState<string>('')
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({})
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [, forceUpdate] = useState(0)
+
+  // Fonction pour obtenir le prix avec promotion
+  const getPriceWithPromotion = (price: number) => {
+    return applyGlobalPromotion(price, promotion, product.category, product.gamme)
+  }
 
   // Écouter les mises à jour du stock en temps réel
   useEffect(() => {
@@ -92,6 +100,10 @@ export default function ProductCard({
     ? getAvailableStockSync(product.id, selectedVariant.id)
     : getAvailableStockSync(product.id)
 
+  const basePrice = hasVariants && selectedVariant ? (selectedVariant.price || 0) : (product.price || 0)
+  const priceWithPromotion = getPriceWithPromotion(basePrice)
+  const showPromotion = Boolean(promotion?.active && priceWithPromotion < basePrice)
+
   // Mémoriser les images du produit pour éviter les re-renders inutiles
   // et s'assurer que les images sont toujours à jour
   const productImages = useMemo(() => {
@@ -102,13 +114,24 @@ export default function ProductCard({
     if (onAddToCart) {
       onAddToCart(product, selectedVariant, quantity)
     } else {
+      const prixOriginal = basePrice
+      const prixAvecPromotion = priceWithPromotion
+      
       await addToCart({
         produit: product.name,
         arome: product.gamme || '',
         quantite: quantity,
-        prix: hasVariants && selectedVariant ? selectedVariant.price : product.price,
+        prix: prixAvecPromotion,
+        prixOriginal: prixOriginal, // Stocker le prix original pour recalculer si promotion activée après
+        category: product.category, // Stocker la catégorie pour appliquer la promotion
+        gamme: product.gamme, // Stocker la gamme pour appliquer la promotion
         productId: product.id,
-        variantId: selectedVariant?.id
+        variantId: selectedVariant?.id,
+        // Inclure les propriétés de la variante pour le calcul du poids
+        conditionnement: selectedVariant?.conditionnement,
+        diametre: selectedVariant?.diametre,
+        taille: selectedVariant?.taille,
+        couleur: selectedVariant?.couleur
       })
     }
     alert(`${product.name}${selectedVariant ? ` - ${selectedVariant.label}` : ''} ajouté au panier !`)
@@ -266,7 +289,7 @@ export default function ProductCard({
                           ? 'bg-yellow-500 text-noir-950 shadow-md shadow-yellow-500/30 scale-105'
                           : 'bg-noir-700/80 text-gray-300 hover:bg-noir-600 hover:scale-[1.02] border border-noir-600'
                       }`}
-                      title={variant ? `${variant.price.toFixed(2)} €` : 'Sélectionnez d\'abord un diamètre'}
+                      title={variant ? `${getPriceWithPromotion(variant.price).toFixed(2)} €` : 'Sélectionnez d\'abord un diamètre'}
                     >
                       {conditionnement}
                     </button>
@@ -309,7 +332,7 @@ export default function ProductCard({
                         ? 'bg-yellow-500 text-noir-950 shadow-md shadow-yellow-500/30 scale-105'
                         : 'bg-noir-700/80 text-gray-300 hover:bg-noir-600 hover:scale-102 border border-noir-600'
                     }`}
-                    title={`${variant?.price.toFixed(2)} €`}
+                    title={`${getPriceWithPromotion(variant?.price || 0).toFixed(2)} €`}
                   >
                     {taille}
                   </button>
@@ -345,7 +368,7 @@ export default function ProductCard({
                         : 'bg-noir-700/80 text-gray-300 hover:bg-noir-600 hover:scale-102 border border-noir-600'
                     }`}
                   >
-                    {variant.label} - {variant.price.toFixed(2)} €
+                    {variant.label} - {getPriceWithPromotion(variant.price).toFixed(2)} €
                   </button>
                 )
               })}
@@ -360,12 +383,23 @@ export default function ProductCard({
 
         <div className="flex items-center justify-between mb-5 pt-2 border-t border-noir-700/50">
           <div>
-            <p className="text-2xl font-bold text-yellow-500">
-              {hasVariants && selectedVariant
-                ? `${(selectedVariant.price || 0).toFixed(2)} €`
-                : `${(product.price || 0).toFixed(2)} €`
-              }
-            </p>
+            <div className="flex flex-col">
+              {showPromotion && (
+                <p className="text-sm text-gray-400 line-through">
+                  {basePrice.toFixed(2)} €
+                </p>
+              )}
+              <div className="flex items-center gap-2">
+                <p className="text-2xl font-bold text-yellow-500">
+                  {priceWithPromotion.toFixed(2)} €
+                </p>
+                {showPromotion && promotion?.discountPercentage ? (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-500/15 text-red-400 border border-red-500/30">
+                    -{promotion.discountPercentage}%
+                  </span>
+                ) : null}
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2.5 bg-noir-700/50 rounded-lg p-1">
             <button
