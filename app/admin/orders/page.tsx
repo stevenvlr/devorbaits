@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, CheckCircle, XCircle, Clock, Truck, Search, Filter, Download, Edit2, Save, X, MapPin } from 'lucide-react'
+import { Package, CheckCircle, XCircle, Clock, Truck, Search, Filter, Download, Edit2, Save, X, MapPin, Info, Calendar } from 'lucide-react'
 import { getAllOrders, updateOrderStatus, updateOrderTrackingNumber, type Order, type OrderItem } from '@/lib/revenue-supabase'
 import { getProductById } from '@/lib/products-manager'
 
@@ -14,8 +14,9 @@ interface OrderWithDetails extends Order {
   shipping_tracking_number?: string
   shipping_label_url?: string
   shipping_cost?: number
+  comment?: string
   shipping_address?: {
-    type?: 'chronopost-relais' | 'boxtal-relais' | 'livraison'
+    type?: 'chronopost-relais' | 'boxtal-relais' | 'livraison' | 'wavignies-rdv'
     adresse?: string
     codePostal?: string
     ville?: string
@@ -46,6 +47,9 @@ interface OrderWithDetails extends Order {
       latitude?: number
       longitude?: number
     }
+    // Pour Wavignies RDV
+    rdvDate?: string
+    rdvTimeSlot?: string
   }
 }
 
@@ -551,6 +555,62 @@ export default function OrdersAdminPage() {
                             )}
                           </div>
                         </div>
+                      ) : (order.shipping_address as any).type === 'wavignies-rdv' ? (
+                        // Retrait sur rendez-vous à Wavignies
+                        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Calendar className="w-5 h-5 text-yellow-500" />
+                            <p className="text-sm font-medium text-yellow-500">Retrait sur rendez-vous à Wavignies</p>
+                          </div>
+                          <div className="space-y-2 text-sm text-gray-300">
+                            {(order.shipping_address as any).rdvDate && (
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-yellow-400" />
+                                <p>
+                                  <span className="text-gray-400">Date :</span>{' '}
+                                  <span className="font-semibold text-white">
+                                    {(() => {
+                                      const dateStr = (order.shipping_address as any).rdvDate
+                                      if (!dateStr) return ''
+                                      try {
+                                        const [year, month, day] = dateStr.split('-').map(Number)
+                                        const date = new Date(year, month - 1, day)
+                                        const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+                                        const dayName = days[date.getDay()]
+                                        return `${dayName} ${day}/${month}/${year}`
+                                      } catch {
+                                        return dateStr
+                                      }
+                                    })()}
+                                  </span>
+                                </p>
+                              </div>
+                            )}
+                            {(order.shipping_address as any).rdvTimeSlot && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-yellow-400" />
+                                <p>
+                                  <span className="text-gray-400">Créneau horaire :</span>{' '}
+                                  <span className="font-semibold text-white">{(order.shipping_address as any).rdvTimeSlot}</span>
+                                </p>
+                              </div>
+                            )}
+                            {order.shipping_address.adresse && (
+                              <p className="mt-2">
+                                <span className="text-gray-400">Adresse :</span>{' '}
+                                <span className="text-white">{order.shipping_address.adresse}</span>
+                              </p>
+                            )}
+                            {(order.shipping_address.codePostal || order.shipping_address.ville) && (
+                              <p>
+                                <span className="text-gray-400">Ville :</span>{' '}
+                                <span className="text-white">
+                                  {order.shipping_address.codePostal} {order.shipping_address.ville}
+                                </span>
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       ) : (order.shipping_address as any).type === 'boxtal-relais' ? (
                         // Point relais Boxtal
                         <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
@@ -813,6 +873,19 @@ export default function OrdersAdminPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Commentaire de commande */}
+                  {order.comment && (
+                    <div className="border-t border-noir-700 pt-4 mt-4">
+                      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Info className="w-4 h-4 text-blue-400" />
+                          <p className="text-sm font-medium text-blue-400">Commentaire de commande</p>
+                        </div>
+                        <p className="text-sm text-gray-300 whitespace-pre-wrap">{order.comment}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
