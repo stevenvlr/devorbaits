@@ -1464,6 +1464,30 @@ export default function CheckoutPage() {
                             // La commande reste en "pending" (en attente) par défaut
                             // Le statut sera changé manuellement depuis l'admin
                             
+                            // Créer le rendez-vous pour Wavignies si nécessaire
+                            if (retraitMode === 'wavignies-rdv' && rdvDate && rdvTimeSlot && user) {
+                              try {
+                                const { createAppointment } = await import('@/lib/appointments-manager')
+                                const appointmentResult = createAppointment(
+                                  rdvDate,
+                                  rdvTimeSlot,
+                                  user.id || user.email,
+                                  user.nom || user.email,
+                                  user.email,
+                                  livraisonAddress.telephone,
+                                  order.id // Lier le rendez-vous à la commande
+                                )
+                                
+                                if (appointmentResult.success) {
+                                  console.log('✅ Rendez-vous créé pour Wavignies')
+                                } else {
+                                  console.warn('⚠️ Erreur création rendez-vous:', appointmentResult.message)
+                                }
+                              } catch (appointmentError) {
+                                console.warn('⚠️ Erreur lors de la création du rendez-vous:', appointmentError)
+                              }
+                            }
+                            
                             // Sauvegarder l'adresse de livraison dans la commande
                             if (retraitMode === 'livraison' && order.id) {
                               try {
@@ -1564,6 +1588,32 @@ export default function CheckoutPage() {
                                 }
                               } catch (relaisError) {
                                 console.warn('⚠️ Erreur lors de la sauvegarde du point relais:', relaisError)
+                              }
+                            }
+
+                            // Sauvegarder les informations de retrait à Wavignies
+                            if (retraitMode === 'wavignies-rdv' && order.id && rdvDate && rdvTimeSlot) {
+                              try {
+                                const { getSupabaseClient } = await import('@/lib/supabase')
+                                const supabase = getSupabaseClient()
+                                if (supabase) {
+                                  await supabase
+                                    .from('orders')
+                                    .update({
+                                      shipping_address: {
+                                        type: 'wavignies-rdv',
+                                        rdvDate: rdvDate,
+                                        rdvTimeSlot: rdvTimeSlot,
+                                        adresse: 'Retrait sur rendez-vous à Wavignies (60130)',
+                                        ville: 'Wavignies',
+                                        codePostal: '60130'
+                                      }
+                                    })
+                                    .eq('id', order.id)
+                                  console.log('✅ Informations de retrait Wavignies sauvegardées dans la commande (PayPal)')
+                                }
+                              } catch (wavigniesError) {
+                                console.warn('⚠️ Erreur lors de la sauvegarde du retrait Wavignies:', wavigniesError)
                               }
                             }
                           }

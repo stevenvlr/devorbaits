@@ -79,6 +79,8 @@ export default function PayPalButton({ amount, reference, onSuccess, onError, di
           onApprove={async (data: { orderID: string }) => {
             try {
               setIsProcessing(true)
+              console.log('🔄 Capture PayPal - Order ID:', data.orderID)
+              
               const response = await fetch('/api/paypal/capture-order', {
                 method: 'POST',
                 headers: {
@@ -89,20 +91,34 @@ export default function PayPalButton({ amount, reference, onSuccess, onError, di
                 }),
               })
 
-              if (!response.ok) {
-                const error = await response.json()
-                throw new Error(error.error || 'Erreur lors de la capture du paiement')
-              }
-
               const captureData = await response.json()
               
+              console.log('📦 Capture PayPal - Réponse:', captureData)
+
+              if (!response.ok) {
+                console.error('❌ Erreur capture PayPal - Response not OK:', captureData)
+                throw new Error(captureData.error || 'Erreur lors de la capture du paiement')
+              }
+              
+              // Vérifier si la capture a réussi
               if (captureData.success) {
+                console.log('✅ Capture PayPal réussie - Payment ID:', captureData.paymentId)
                 onSuccess(data.orderID, captureData.paymentId || data.orderID)
               } else {
-                throw new Error('Le paiement n\'a pas pu être capturé')
+                // Même si success est false, vérifier si le paiement existe
+                const hasPayment = captureData.paymentId || captureData.order?.purchase_units?.[0]?.payments?.captures?.[0]
+                
+                if (hasPayment) {
+                  console.warn('⚠️ Capture PayPal - Success false mais paiement existe:', captureData)
+                  // Essayer quand même de continuer si le paiement existe
+                  onSuccess(data.orderID, captureData.paymentId || data.orderID)
+                } else {
+                  console.error('❌ Capture PayPal - Aucun paiement trouvé:', captureData)
+                  throw new Error('Le paiement n\'a pas pu être capturé. Statut: ' + (captureData.status || 'inconnu'))
+                }
               }
             } catch (error: any) {
-              console.error('Erreur capture PayPal:', error)
+              console.error('❌ Erreur capture PayPal:', error)
               onError(error?.message || 'Erreur lors de la capture du paiement PayPal')
             } finally {
               setIsProcessing(false)
