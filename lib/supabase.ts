@@ -7,11 +7,9 @@ let supabaseClient: SupabaseClient | null = null
  * Vérifie si Supabase est configuré (variables d'environnement présentes)
  */
 export function isSupabaseConfigured(): boolean {
-  return !!(
-    typeof process !== 'undefined' &&
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  )
+  // En Next.js, les variables NEXT_PUBLIC_* sont remplacées au build.
+  // Sur Cloudflare/Pages, `process` peut être absent côté navigateur : ne pas en dépendre.
+  return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 }
 
 /**

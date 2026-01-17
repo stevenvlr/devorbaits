@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Factory, MapPin, Plus, Calendar, Tag, ImageIcon, BarChart3, Package, Ticket, ShoppingCart, AlertCircle, Zap, Truck, Scale } from 'lucide-react'
+import { Factory, MapPin, Plus, Calendar, Tag, ImageIcon, BarChart3, Package, Ticket, ShoppingCart, AlertCircle, Zap, Truck, Scale, Ban, Percent } from 'lucide-react'
 
 export default function AdminPage() {
   return (
@@ -205,6 +205,25 @@ export default function AdminPage() {
             <p className="text-gray-300">
               Créez et gérez les codes promo avec restrictions par utilisateur, produit, 
               catégorie, gamme d'appât ou conditionnement.
+            </p>
+          </Link>
+
+          <Link
+            href="/admin/global-promotion"
+            className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 bg-red-500/10 rounded-lg flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
+                <Percent className="w-8 h-8 text-red-500" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Promotion Globale</h2>
+                <p className="text-sm text-gray-400">Promotion sur tout le site ou types de produits</p>
+              </div>
+            </div>
+            <p className="text-gray-300">
+              Créez une promotion globale avec un pourcentage de réduction personnalisé. 
+              Appliquez-la sur tout le site ou seulement sur certains types de produits.
             </p>
           </Link>
 
