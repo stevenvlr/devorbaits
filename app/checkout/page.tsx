@@ -1619,7 +1619,7 @@ export default function CheckoutPage() {
                           }
 
                           clearCart()
-                          router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&paypal=true`)
+                          router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal`)
                         } catch (error) {
                           console.error('Erreur création commande:', error)
                           alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
