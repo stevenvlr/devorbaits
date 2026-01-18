@@ -15,6 +15,43 @@ export interface ProductWeight {
   active: boolean
 }
 
+/**
+ * Normalise un texte pour comparaison:
+ * - minuscules
+ * - suppression des accents
+ * - espaces multiples réduits
+ */
+function normalizeText(input: string): string {
+  return (input || '')
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // diacritiques
+    .replace(/\s+/g, ' ')
+}
+
+/**
+ * Extrait un conditionnement depuis un texte libre.
+ * Ex: "Sac 10 kilos" -> "10kg", "Farine 500 g" -> "500g", "2,5kg" -> "2.5kg"
+ */
+function extractConditionnementFromText(text: string): string | null {
+  const raw = (text || '').toLowerCase()
+
+  // Chercher d'abord un pattern kg/kilo/kilos
+  const kg = raw.match(/(\d+(?:[.,]\d+)?)\s*(kg|kilo|kilos)\b/)
+  if (kg) {
+    return normalizeConditionnement(`${kg[1]}kg`)
+  }
+
+  // Puis un pattern en grammes
+  const g = raw.match(/(\d+)\s*(g|gr|gramme|grammes)\b/)
+  if (g) {
+    return normalizeConditionnement(`${g[1]}g`)
+  }
+
+  return null
+}
+
 // Cache des poids pour éviter trop de requêtes
 let weightsCache: ProductWeight[] | null = null
 let lastFetch = 0
@@ -224,26 +261,25 @@ function normalizeConditionnement(cond: string | null): string {
   if (!cond) return ''
   
   // Nettoyer le conditionnement : minuscules, supprimer espaces
-  let cleaned = cond.toLowerCase().replace(/\s+/g, '')
-  
-  // Si c'est déjà au format normalisé, le retourner tel quel
-  if (cleaned === '10kg' || cleaned === '5kg' || cleaned === '2.5kg' || cleaned === '2,5kg' || cleaned === '1kg' || cleaned === '500g') {
-    // Normaliser 2,5kg en 2.5kg
-    if (cleaned === '2,5kg') return '2.5kg'
-    return cleaned
+  const cleaned = cond.toLowerCase().replace(/\s+/g, '')
+
+  // Formats stricts (les plus fiables)
+  const kgMatch = cleaned.match(/^(\d+(?:[.,]\d+)?)kg$/)
+  if (kgMatch) {
+    return `${kgMatch[1].replace(',', '.')}kg`
   }
-  
-  // Extraire les nombres pour la normalisation
-  const normalized = cleaned.replace(/g$/, '') // Enlever le 'g' final si présent
-  
-  // Normaliser les formats de poids
-  if (normalized.includes('10')) return '10kg'
-  if (normalized.includes('5') && !normalized.includes('2.5') && !normalized.includes('2,5')) return '5kg'
-  if (normalized.includes('2.5') || normalized.includes('2,5')) return '2.5kg'
-  if (normalized.includes('1') && !normalized.includes('10')) return '1kg'
-  if (normalized.includes('500')) return '500g'
-  
-  // Si on ne peut pas normaliser, retourner le format nettoyé
+  const gMatch = cleaned.match(/^(\d+)g$/)
+  if (gMatch) {
+    return `${gMatch[1]}g`
+  }
+
+  // Fallbacks tolérants (ex: "2,5" sans kg, "500" sans g)
+  if (cleaned.includes('2.5') || cleaned.includes('2,5')) return '2.5kg'
+  if (/\b10\b/.test(cleaned) || cleaned === '10') return '10kg'
+  if (/\b5\b/.test(cleaned) || cleaned === '5') return '5kg'
+  if (/\b1\b/.test(cleaned) || cleaned === '1') return '1kg'
+  if (cleaned.includes('500')) return '500g'
+
   return cleaned
 }
 
@@ -267,12 +303,13 @@ async function findWeightFromDB(productType: string, conditionnement?: string): 
     console.log(`    - ${w.product_type} | conditionnement: "${w.conditionnement || '(null)'}" | poids: ${w.weight_kg}kg | actif: ${w.active}`)
   })
   
+  const normalizedProductType = normalizeText(productType)
   const normalizedCond = conditionnement ? normalizeConditionnement(conditionnement) : ''
   console.log(`  → Conditionnement normalisé: "${normalizedCond}"`)
   
   // Chercher une correspondance exacte
   const exactMatch = weights.find(w => {
-    const typeMatch = w.product_type.toLowerCase() === productType.toLowerCase()
+    const typeMatch = normalizeText(w.product_type) === normalizedProductType
     if (!typeMatch) return false
     
     // Si le produit a un conditionnement, vérifier qu'il correspond
@@ -299,8 +336,8 @@ async function findWeightFromDB(productType: string, conditionnement?: string): 
   
   // Chercher une correspondance partielle sur le type (sans conditionnement spécifique)
   const partialMatch = weights.find(w => {
-    const typeMatch = productType.toLowerCase().includes(w.product_type.toLowerCase()) ||
-                     w.product_type.toLowerCase().includes(productType.toLowerCase())
+    const wType = normalizeText(w.product_type)
+    const typeMatch = normalizedProductType.includes(wType) || wType.includes(normalizedProductType)
     if (!typeMatch) return false
     
     // Si on cherche un conditionnement spécifique, il faut qu'il corresponde
@@ -342,14 +379,20 @@ export function getProductWeight(item: {
   name?: string
   title?: string
 }): number {
-  const productName = (item.produit || item.name || item.title || item.categorie || item.category || '').toLowerCase()
-  const conditionnement = (item.conditionnement || '').toLowerCase().replace(/\s+/g, '') // Supprimer les espaces
+  const rawName = item.produit || item.name || item.title || ''
+  const rawCategory = item.category || item.categorie || ''
+  // Important: utiliser la category si elle existe (beaucoup plus stable que le nom commercial)
+  const productName = normalizeText(rawCategory || rawName)
+  const categoryName = normalizeText(rawCategory)
+  // Si le conditionnement n'est pas fourni (produit sans variante), essayer de l'inférer depuis le nom
+  const inferred = extractConditionnementFromText(rawName)
+  const conditionnement = (item.conditionnement || inferred || '').toLowerCase().replace(/\s+/g, '') // Supprimer les espaces
   const quantity = item.quantite || item.quantity || 1
   
   console.log(`🔍 Calcul poids: produit="${productName}", conditionnement="${conditionnement}", qty=${quantity}`)
   
   // 1. Bouillettes - utiliser le conditionnement
-  if (productName.includes('bouillette') || productName.includes('boilies')) {
+  if (productName.includes('bouillette') || productName.includes('boilies') || categoryName.includes('bouillette')) {
     // Normaliser le conditionnement (1kg, 1 kg, 1KG, etc.)
     let normalizedCond = conditionnement
     if (conditionnement.includes('10')) normalizedCond = '10kg'
@@ -363,7 +406,7 @@ export function getProductWeight(item: {
   }
   
   // 2. Farines - vérifier le conditionnement
-  if (productName.includes('farine')) {
+  if (productName.includes('farine') || categoryName.includes('farine')) {
     if (conditionnement.includes('500')) {
       console.log(`  → Farine 500g détectée`)
       return 0.580 * quantity
@@ -398,9 +441,14 @@ export async function getProductWeightAsync(item: {
   name?: string
   title?: string
 }): Promise<number> {
-  const productName = (item.produit || item.name || item.title || item.categorie || item.category || '').toLowerCase()
+  const rawName = item.produit || item.name || item.title || ''
+  const rawCategory = item.category || item.categorie || ''
+  // Important: préférer la category (plus stable) au nom commercial
+  const productName = normalizeText(rawCategory || rawName)
+  const categoryName = normalizeText(rawCategory)
   const conditionnementOriginal = item.conditionnement || ''
-  let conditionnement = conditionnementOriginal.toLowerCase().replace(/\s+/g, '') // Supprimer les espaces
+  const inferred = extractConditionnementFromText(rawName) || extractConditionnementFromText(rawCategory)
+  let conditionnement = (conditionnementOriginal || inferred || '').toLowerCase().replace(/\s+/g, '') // Supprimer les espaces
   const quantity = item.quantite || item.quantity || 1
   
   console.log(`🔍 getProductWeightAsync - produit="${productName}", conditionnement original="${conditionnementOriginal}", conditionnement nettoyé="${conditionnement}", qty=${quantity}`)
@@ -410,7 +458,7 @@ export async function getProductWeightAsync(item: {
   let normalizedConditionnement = conditionnement
   
   // 1. Bouillettes - normaliser le type et le conditionnement
-  if (productName.includes('bouillette') || productName.includes('boilies')) {
+  if (productName.includes('bouillette') || productName.includes('boilies') || categoryName.includes('bouillette')) {
     productType = 'bouillette'
     // Normaliser le conditionnement (1kg, 1 kg, 1KG, etc.)
     if (conditionnement.includes('10')) {
@@ -422,7 +470,8 @@ export async function getProductWeightAsync(item: {
     } else if (conditionnement.includes('1')) {
       normalizedConditionnement = '1kg'
     } else if (!conditionnement || conditionnement === '') {
-      normalizedConditionnement = '1kg' // Par défaut
+      // Si on ne sait vraiment pas, on met 1kg par défaut
+      normalizedConditionnement = '1kg'
     } else {
       // Garder le conditionnement tel quel si on ne peut pas le normaliser
       normalizedConditionnement = conditionnement
@@ -431,13 +480,48 @@ export async function getProductWeightAsync(item: {
     console.log(`  → Bouillette détectée: type="${productType}", conditionnement normalisé="${normalizedConditionnement}"`)
   }
   // 2. Farines
-  else if (productName.includes('farine')) {
+  else if (productName.includes('farine') || categoryName.includes('farine')) {
     productType = 'farine'
     if (conditionnement.includes('500')) {
       normalizedConditionnement = '500g'
     } else {
       normalizedConditionnement = '1kg'
     }
+  }
+  // 3. Autres catégories stables (éviter les soucis d'accents / pluriels)
+  else if (categoryName.includes('equilibr')) {
+    productType = 'equilibre'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('pop-up duo') || categoryName.includes('popup duo')) {
+    productType = 'pop-up duo'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('bar a pop-up') || categoryName.includes('bar a pop up') || categoryName.includes('bar a popup') || categoryName.includes('bar a pop')) {
+    productType = 'bar à pop-up'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('flash boost')) {
+    productType = 'flash boost'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('spray plus') || categoryName.includes('spray+')) {
+    productType = 'spray plus'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('stick mix')) {
+    productType = 'stick mix'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('booster')) {
+    productType = 'booster'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('huile')) {
+    productType = 'huile'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('liquide')) {
+    productType = 'liquide'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('bird food')) {
+    productType = 'bird food'
+    normalizedConditionnement = ''
+  } else if (categoryName.includes('robin red')) {
+    productType = 'robin red'
+    normalizedConditionnement = ''
   }
   
   // Essayer de trouver dans la DB d'abord avec les valeurs normalisées

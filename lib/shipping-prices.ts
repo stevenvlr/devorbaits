@@ -4,7 +4,7 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 export interface ShippingPrice {
   id: string
   name: string
-  type: 'fixed' | 'margin_percent' | 'margin_fixed' | 'weight_ranges'
+  type: 'fixed' | 'margin_percent' | 'margin_fixed' | 'weight_ranges' | 'boxtal_only'
   shipping_type?: 'home' | 'relay' // 'home' = livraison à domicile, 'relay' = point relais
   fixed_price?: number
   margin_percent?: number
@@ -43,6 +43,8 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
       .select('*')
       .eq('active', true)
       .eq('shipping_type', shippingType)
+      // Important: on veut le plus récemment MODIFIÉ, pas le plus récemment CRÉÉ
+      .order('updated_at', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -55,27 +57,53 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
         code: error.code
       })
       
-      // Si aucun tarif spécifique n'est trouvé, essayer de récupérer un tarif sans type (rétrocompatibilité)
-      if (shippingType === 'home') {
-        console.log('🔄 Tentative de récupération d\'un tarif sans type (rétrocompatibilité)')
-        const { data: fallbackData, error: fallbackError } = await supabase
+      // Fallback 0 : si la colonne shipping_type n'existe pas encore (schéma pas à jour),
+      // on tente de récupérer le dernier tarif actif sans filtrer par shipping_type.
+      const maybeMissingColumn =
+        typeof error.message === 'string' &&
+        (error.message.includes('shipping_type') || error.message.includes('column') || error.message.includes('does not exist'))
+
+      if (maybeMissingColumn) {
+        console.log('🔄 Colonne shipping_type possiblement absente, fallback sans filtre shipping_type')
+        const { data: fallbackAny, error: fallbackAnyError } = await supabase
           .from('shipping_prices')
           .select('*')
           .eq('active', true)
-          .is('shipping_type', null)
+          .order('updated_at', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(1)
-        
-        if (fallbackError) {
-          console.error('❌ Erreur lors de la récupération du tarif fallback:', fallbackError)
+
+        if (fallbackAnyError) {
+          console.error('❌ Erreur lors du fallback sans shipping_type:', fallbackAnyError)
           return null
         }
-        
-        if (fallbackData && fallbackData.length > 0) {
-          console.log('✅ Tarif fallback trouvé:', fallbackData[0])
-          return fallbackData[0]
+        if (fallbackAny && fallbackAny.length > 0) {
+          console.log('✅ Tarif actif (fallback sans shipping_type) trouvé:', fallbackAny[0])
+          return fallbackAny[0]
         }
       }
+
+      // Fallback 1 : tarif sans type (rétrocompatibilité)
+      console.log('🔄 Tentative de récupération d\'un tarif sans type (rétrocompatibilité)')
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('shipping_prices')
+        .select('*')
+        .eq('active', true)
+        .is('shipping_type', null)
+        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (fallbackError) {
+        console.error('❌ Erreur lors de la récupération du tarif fallback:', fallbackError)
+        return null
+      }
+
+      if (fallbackData && fallbackData.length > 0) {
+        console.log('✅ Tarif fallback trouvé:', fallbackData[0])
+        return fallbackData[0]
+      }
+
       return null
     }
 
@@ -137,6 +165,7 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
       .select('*')
       .eq('active', true)
       .is('shipping_type', null)
+      .order('updated_at', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
     
@@ -153,6 +182,7 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
         .select('*')
         .eq('active', true)
         .eq('shipping_type', 'home')
+        .order('updated_at', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(1)
       
@@ -170,6 +200,7 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
         .select('*')
         .eq('active', true)
         .eq('shipping_type', 'relay')
+        .order('updated_at', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(1)
       
@@ -205,6 +236,11 @@ export async function calculateFinalShippingPrice(
   if (!shippingPrice) {
     // Pas de tarif personnalisé, utiliser le prix de base
     return basePrice
+  }
+
+  // Livraison gratuite si commande >= seuil
+  if (shippingPrice.free_shipping_threshold && orderValue >= shippingPrice.free_shipping_threshold) {
+    return 0
   }
 
   // Vérifier le prix minimum de commande
@@ -247,6 +283,9 @@ export async function calculateFinalShippingPrice(
         }
       }
       // Si aucune tranche ne correspond, utiliser le prix de base
+      return basePrice
+    
+    case 'boxtal_only':
       return basePrice
 
     default:
@@ -320,6 +359,35 @@ export async function saveShippingPrice(price: Partial<ShippingPrice>): Promise<
     if (price.max_weight !== undefined) cleanPrice.max_weight = price.max_weight
     if (price.min_order_value !== undefined) cleanPrice.min_order_value = price.min_order_value
     if (price.free_shipping_threshold !== undefined) cleanPrice.free_shipping_threshold = price.free_shipping_threshold
+
+    // Important: éviter plusieurs tarifs "active=true" pour un même shipping_type
+    // (sinon le checkout peut prendre un autre tarif actif que celui que tu viens de modifier).
+    if (cleanPrice.active === true && cleanPrice.shipping_type) {
+      const nowIso = new Date().toISOString()
+
+      const deactivate = async (filter: (q: any) => any) => {
+        let q = supabase
+          .from('shipping_prices')
+          .update({ active: false, updated_at: nowIso })
+        q = filter(q)
+        if (price.id) {
+          q = q.neq('id', price.id)
+        }
+        const { error: deactivateError } = await q
+        if (deactivateError) {
+          console.warn('⚠️ Impossible de désactiver les autres tarifs actifs:', deactivateError)
+        }
+      }
+
+      if (cleanPrice.shipping_type === 'home') {
+        // Désactiver les autres "home"
+        await deactivate((q: any) => q.eq('active', true).eq('shipping_type', 'home'))
+        // Désactiver aussi les anciens tarifs sans type (rétrocompatibilité)
+        await deactivate((q: any) => q.eq('active', true).is('shipping_type', null))
+      } else {
+        await deactivate((q: any) => q.eq('active', true).eq('shipping_type', cleanPrice.shipping_type))
+      }
+    }
 
     if (price.id) {
       // Mise à jour

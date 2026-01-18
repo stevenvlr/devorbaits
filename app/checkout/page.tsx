@@ -215,6 +215,13 @@ export default function CheckoutPage() {
           
           if (shippingPrice) {
             console.log('📦 Tarif trouvé:', shippingPrice.name, 'Type:', shippingPrice.type)
+
+            // Livraison gratuite si seuil atteint
+            if (shippingPrice.free_shipping_threshold && totalValue >= shippingPrice.free_shipping_threshold) {
+              console.log('🎁 Livraison gratuite: seuil atteint', shippingPrice.free_shipping_threshold, '€')
+              setShippingCost(0)
+              return
+            }
             
             // Vérifier le prix minimum de commande
             if (shippingPrice.min_order_value && totalValue < shippingPrice.min_order_value) {
@@ -279,7 +286,8 @@ export default function CheckoutPage() {
             }
             
             // Appliquer le prix calculé
-            setShippingCost(finalPrice)
+            const rounded = Math.round(finalPrice * 100) / 100
+            setShippingCost(rounded)
             console.log('✅ Prix d\'expédition final:', finalPrice, '€ (poids:', totalWeight.toFixed(2), 'kg, valeur:', totalValue.toFixed(2), '€)')
           } else {
             // Pas de tarif configuré, utiliser un prix par défaut simple
@@ -300,7 +308,7 @@ export default function CheckoutPage() {
     }
 
     calculateShippingCost()
-  }, [retraitMode, livraisonAddress, cartItems])
+  }, [retraitMode, livraisonAddress, cartItems, totalWeight, promotion])
 
   // Vérifier si un produit est disponible à l'amicale
   const isAvailableAtAmicale = (item: typeof cartItems[0]): boolean => {
