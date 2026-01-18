@@ -18,6 +18,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi
 # PayPal - Mode PRODUCTION
 NEXT_PUBLIC_PAYPAL_CLIENT_ID = "AVhuxTCciFLSxPYJE2a9BGE8wZK3ugyaKZlCDf5FtwACsEsj0rREhnK9YdYzpslmyGkvONQ9V-yJpcwh"
 NEXT_PUBLIC_PAYPAL_BASE_URL = "https://api-m.paypal.com"
+# Domaine public (prod)
 NEXT_PUBLIC_SITE_URL = "https://devorbaits.com"
 
 # Monetico
