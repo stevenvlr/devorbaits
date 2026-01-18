@@ -62,51 +62,11 @@ function generateInvoiceNumber(now = new Date()) {
 }
 
 async function getInvoiceLines(params: {
-  supabase: any
-  orderId: string
   order: any
 }): Promise<InvoiceLine[]> {
-  const { supabase, orderId, order } = params
+  const { order } = params
 
-  // 1) Essayer order_items (si encore utilisé côté DB)
-  try {
-    const { data, error } = await supabase
-      .from('order_items')
-      // On sélectionne "large" car les schémas peuvent varier (name/unit_price/qty vs price/quantity vs produit)
-      .select('name,unit_price,qty,quantity,price,product_id,produit')
-      .eq('order_id', orderId)
-
-    if (!error && Array.isArray(data) && data.length > 0) {
-      const mapped: InvoiceLine[] = []
-      for (const raw of data) {
-        const r = raw as any
-        const name =
-          (typeof r?.name === 'string' && r.name.trim() !== ''
-            ? r.name.trim()
-            : typeof r?.produit === 'string' && r.produit.trim() !== ''
-              ? r.produit.trim()
-              : typeof r?.product_id === 'string' && r.product_id.trim() !== ''
-                ? r.product_id.trim()
-                : 'Article') || 'Article'
-        const qty = toNumber(r?.qty ?? r?.quantity) ?? 0
-        const unitPrice = toNumber(r?.unit_price ?? r?.price) ?? 0
-        if (qty <= 0) continue
-        mapped.push({
-          name,
-          qty,
-          unitPrice,
-          lineTotal: qty * unitPrice,
-        })
-      }
-      if (mapped.length > 0) return mapped
-    }
-
-    // Si la table n'existe pas / colonnes manquantes, on fallback sur orders.items
-  } catch {
-    // ignore
-  }
-
-  // 2) Fallback: items stockés dans orders.items (JSONB)
+  // Source de vérité: items stockés dans orders.items (JSONB)
   const items = Array.isArray(order?.items) ? order.items : []
   const mapped: InvoiceLine[] = []
   for (const raw of items) {
@@ -588,7 +548,7 @@ export async function POST(request: NextRequest) {
               }
             }
 
-            const lines = await getInvoiceLines({ supabase, orderId, order })
+            const lines = await getInvoiceLines({ order })
             const itemsSubtotal = lines.reduce((sum, l) => sum + (l.lineTotal || 0), 0)
             const shippingCost = toNumber((order as any).shipping_cost) ?? 0
             const totalFromOrder = toNumber((order as any).total)
