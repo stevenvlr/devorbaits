@@ -18,7 +18,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi
 # PayPal - Mode PRODUCTION
 NEXT_PUBLIC_PAYPAL_CLIENT_ID = "AVhuxTCciFLSxPYJE2a9BGE8wZK3ugyaKZlCDf5FtwACsEsj0rREhnK9YdYzpslmyGkvONQ9V-yJpcwh"
 NEXT_PUBLIC_PAYPAL_BASE_URL = "https://api-m.paypal.com"
-NEXT_PUBLIC_SITE_URL = "https://6b67fd8b.devorbaits.pages.dev"
+NEXT_PUBLIC_SITE_URL = "https://devorbaits.com"
 
 # Monetico
 NEXT_PUBLIC_MONETICO_TPE = "0917217"
@@ -27,8 +27,8 @@ MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
 NEXT_PUBLIC_MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
 # URL de test Monetico (pour production, utilisez: https://paiement.monetico.fr/paiement.cgi)
 NEXT_PUBLIC_MONETICO_URL = "https://p.monetico-services.com/test/paiement.cgi"
-NEXT_PUBLIC_MONETICO_URL_RETOUR = "https://6b67fd8b.devorbaits.pages.dev/payment/success"
-NEXT_PUBLIC_MONETICO_URL_RETOUR_ERR = "https://6b67fd8b.devorbaits.pages.dev/payment/error"
+NEXT_PUBLIC_MONETICO_URL_RETOUR = "https://devorbaits.com/payment/success/"
+NEXT_PUBLIC_MONETICO_URL_RETOUR_ERR = "https://devorbaits.com/payment/error/"
 
 # Boxtal : L'URL du script est récupérée depuis Supabase (table boxtal_config, colonne map_script_url)
 # Plus besoin de variable d'environnement ici

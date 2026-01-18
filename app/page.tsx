@@ -6,8 +6,12 @@ import Image from 'next/image'
 import { ArrowRight, Factory, Shield, Award } from 'lucide-react'
 import { loadHomepageImage, onHomepageImageUpdate } from '@/lib/homepage-manager'
 
+const DEFAULT_HERO_IMAGE = '/images/accueil-photo.jpg'
+const LEGACY_DEFAULT_HERO_IMAGE = '/images/acueil-photo.jpg'
+
 export default function Home() {
   const [heroImage, setHeroImage] = useState<string | null>(null)
+  const [defaultHeroImage, setDefaultHeroImage] = useState(DEFAULT_HERO_IMAGE)
 
   useEffect(() => {
     let cancelled = false
@@ -49,12 +53,19 @@ export default function Home() {
             />
           ) : (
             <Image
-              src="/images/acueil-photo.jpg"
+              src={defaultHeroImage}
               alt="Photo d'accueil"
               fill
+              sizes="100vw"
               className="object-cover opacity-80"
               priority
               quality={85}
+              onError={() => {
+                // fallback si /images/accueil-photo.jpg n'existe pas
+                if (defaultHeroImage !== LEGACY_DEFAULT_HERO_IMAGE) {
+                  setDefaultHeroImage(LEGACY_DEFAULT_HERO_IMAGE)
+                }
+              }}
             />
           )}
         </div>

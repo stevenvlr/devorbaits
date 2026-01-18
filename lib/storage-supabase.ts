@@ -1,6 +1,25 @@
 // Gestion du stockage Supabase pour les images
 import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 
+function toSafeStorageSegment(input: string): string {
+  const raw = String(input ?? '').trim()
+  if (!raw) return 'file'
+
+  // Supabase Storage peut refuser certaines clés avec espaces/accents.
+  // On transforme en slug ASCII safe.
+  const ascii = raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // accents
+    .toLowerCase()
+
+  const slug = ascii
+    .replace(/[^a-z0-9._-]+/g, '-') // remplacer le reste par tirets
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  return slug || 'file'
+}
+
 /**
  * Upload une image de la page d'accueil vers Supabase Storage
  * Si Supabase n'est pas configuré, retourne une URL base64
@@ -104,8 +123,9 @@ export async function uploadSharedImage(type: string, file: File): Promise<strin
   }
 
   try {
-    const fileExt = file.name.split('.').pop() || 'jpg'
-    const fileName = `${type}-${Date.now()}.${fileExt}`
+    const fileExt = toSafeStorageSegment(file.name.split('.').pop() || 'jpg')
+    const safeType = toSafeStorageSegment(type)
+    const fileName = `${safeType}-${Date.now()}.${fileExt}`
     const filePath = `shared/${fileName}`
 
     console.log(`📤 Upload vers Supabase Storage: ${filePath}`)
