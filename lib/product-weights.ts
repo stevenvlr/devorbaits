@@ -60,6 +60,7 @@ const CACHE_DURATION = 60000 // 1 minute
 // Poids des bouillettes par défaut selon le conditionnement (conditionnement + 10% emballage)
 export const BOUILLETTE_WEIGHTS: Record<string, number> = {
   '1kg': 1.1,
+  '2kg': 2.2,
   '2.5kg': 2.75,
   '5kg': 5.5,
   '10kg': 11,
@@ -393,16 +394,26 @@ export function getProductWeight(item: {
   
   // 1. Bouillettes - utiliser le conditionnement
   if (productName.includes('bouillette') || productName.includes('boilies') || categoryName.includes('bouillette')) {
-    // Normaliser le conditionnement (1kg, 1 kg, 1KG, etc.)
-    let normalizedCond = conditionnement
-    if (conditionnement.includes('10')) normalizedCond = '10kg'
-    else if (conditionnement.includes('5') && !conditionnement.includes('2.5')) normalizedCond = '5kg'
-    else if (conditionnement.includes('2.5') || conditionnement.includes('2,5')) normalizedCond = '2.5kg'
-    else if (conditionnement.includes('1')) normalizedCond = '1kg'
-    
-    const weight = BOUILLETTE_WEIGHTS[normalizedCond] || BOUILLETTE_WEIGHTS['1kg'] || 1.1
-    console.log(`  → Bouillette détectée, conditionnement=${normalizedCond}, poids unitaire=${weight}kg`)
-    return weight * quantity
+    // Normaliser proprement le conditionnement (évite les erreurs type "2kg" => "1kg")
+    const normalizedCond = normalizeConditionnement(conditionnement || '1kg')
+
+    // Priorité: table de correspondance, sinon calcul générique (kg × 1.1) si possible
+    let weight = BOUILLETTE_WEIGHTS[normalizedCond]
+    if (weight === undefined) {
+      const kgMatch = normalizedCond.match(/^(\d+(?:\.\d+)?)kg$/)
+      if (kgMatch) {
+        weight = parseFloat(kgMatch[1]) * 1.1
+      } else {
+        const gMatch = normalizedCond.match(/^(\d+)g$/)
+        if (gMatch) {
+          weight = (parseInt(gMatch[1], 10) / 1000) * 1.1
+        }
+      }
+    }
+
+    const safeWeight = weight ?? (BOUILLETTE_WEIGHTS['1kg'] || 1.1)
+    console.log(`  → Bouillette détectée, conditionnement=${normalizedCond}, poids unitaire=${safeWeight}kg`)
+    return safeWeight * quantity
   }
   
   // 2. Farines - vérifier le conditionnement
@@ -460,22 +471,8 @@ export async function getProductWeightAsync(item: {
   // 1. Bouillettes - normaliser le type et le conditionnement
   if (productName.includes('bouillette') || productName.includes('boilies') || categoryName.includes('bouillette')) {
     productType = 'bouillette'
-    // Normaliser le conditionnement (1kg, 1 kg, 1KG, etc.)
-    if (conditionnement.includes('10')) {
-      normalizedConditionnement = '10kg'
-    } else if (conditionnement.includes('5') && !conditionnement.includes('2.5') && !conditionnement.includes('2,5')) {
-      normalizedConditionnement = '5kg'
-    } else if (conditionnement.includes('2.5') || conditionnement.includes('2,5')) {
-      normalizedConditionnement = '2.5kg'
-    } else if (conditionnement.includes('1')) {
-      normalizedConditionnement = '1kg'
-    } else if (!conditionnement || conditionnement === '') {
-      // Si on ne sait vraiment pas, on met 1kg par défaut
-      normalizedConditionnement = '1kg'
-    } else {
-      // Garder le conditionnement tel quel si on ne peut pas le normaliser
-      normalizedConditionnement = conditionnement
-    }
+    // Normaliser proprement (supporte 2kg, 3kg, 500g, etc.)
+    normalizedConditionnement = normalizeConditionnement(conditionnement || '1kg') || '1kg'
     
     console.log(`  → Bouillette détectée: type="${productType}", conditionnement normalisé="${normalizedConditionnement}"`)
   }
