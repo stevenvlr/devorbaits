@@ -314,16 +314,55 @@ async function sendResendEmail(params: { to: string; subject: string; html: stri
 export async function POST(request: NextRequest) {
   try {
     const expectedKey = process.env.EMAIL_INTERNAL_KEY
-    if (!expectedKey) {
-      return NextResponse.json(
-        { ok: false, error: 'EMAIL_INTERNAL_KEY manquant' },
-        { status: 500 }
-      )
-    }
-
     const providedKey = request.headers.get('x-internal-key')
-    if (!providedKey || providedKey !== expectedKey) {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+
+    // 1) Autorisation via clé interne (mode "script"/maintenance)
+    const internalKeyOk = !!expectedKey && !!providedKey && providedKey === expectedKey
+
+    // 2) Autorisation via session Supabase (admin connecté)
+    // Permet à l'UI admin (client) d'appeler l'API sans exposer EMAIL_INTERNAL_KEY.
+    if (!internalKeyOk) {
+      const supabaseUrl =
+        process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+      const anonKey =
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+      if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+        return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const authHeader = request.headers.get('authorization') || ''
+      const token = authHeader.toLowerCase().startsWith('bearer ')
+        ? authHeader.slice(7).trim()
+        : ''
+      if (!token) {
+        return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const authClient = createClient(supabaseUrl, anonKey, {
+        auth: { persistSession: false },
+      })
+
+      const { data: userData, error: userError } = await authClient.auth.getUser(token)
+      const userId = userData?.user?.id
+      if (userError || !userId) {
+        return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false },
+      })
+
+      const { data: profile, error: profileError } = await serviceClient
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+
+      if (profileError || (profile as any)?.role !== 'admin') {
+        return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     let body: any

@@ -198,10 +198,34 @@ export async function updateOrderStatus(orderId: string, status: Order['status']
   if (isSupabaseConfigured()) {
     const supabase = getSupabaseClient()
     if (supabase) {
-      await supabase
-        .from('orders')
-        .update({ status })
-        .eq('id', orderId)
+      // IMPORTANT:
+      // Ne pas faire un update direct, sinon les emails/factures ne sont pas déclenchés.
+      // On passe par l'API admin qui gère:
+      // - génération facture + email préparation
+      // - email expédié
+      // - anti-doublon
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData?.session?.access_token || null
+
+      const res = await fetch('/api/admin/orders/set-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ orderId, status }),
+      })
+
+      if (!res.ok) {
+        let msg = `Erreur API set-status (${res.status})`
+        try {
+          const j: any = await res.json()
+          msg = j?.error || msg
+        } catch {
+          // ignore
+        }
+        throw new Error(msg)
+      }
     }
   } else {
     if (typeof window === 'undefined') return
