@@ -6,11 +6,33 @@ export interface GammeData {
   hidden: boolean
 }
 
+// Cache en mémoire (les gammes changent rarement)
+let gammesCacheVisible: GammeData[] | null = null
+let gammesCacheVisibleFetchedAt = 0
+let gammesCacheAll: GammeData[] | null = null
+let gammesCacheAllFetchedAt = 0
+const GAMMES_CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
+
+function invalidateGammesCache() {
+  gammesCacheVisible = null
+  gammesCacheVisibleFetchedAt = 0
+  gammesCacheAll = null
+  gammesCacheAllFetchedAt = 0
+}
+
 /**
  * Charge toutes les gammes depuis Supabase (avec statut hidden)
  * @param includeHidden Si true, inclut aussi les gammes masquées (pour l'admin)
  */
 export async function loadGammesFromSupabase(includeHidden: boolean = false): Promise<GammeData[]> {
+  // Cache
+  if (!includeHidden && gammesCacheVisible && Date.now() - gammesCacheVisibleFetchedAt < GAMMES_CACHE_TTL_MS) {
+    return gammesCacheVisible
+  }
+  if (includeHidden && gammesCacheAll && Date.now() - gammesCacheAllFetchedAt < GAMMES_CACHE_TTL_MS) {
+    return gammesCacheAll
+  }
+
   if (!isSupabaseConfigured()) {
     console.warn('⚠️ Supabase non configuré, impossible de charger les gammes')
     return []
@@ -59,6 +81,15 @@ export async function loadGammesFromSupabase(includeHidden: boolean = false): Pr
     })).filter((gamme: GammeData) => gamme.name && gamme.name.trim() !== '')
     
     console.log(`✅ ${gammes.length} gamme(s) chargée(s) depuis Supabase`)
+
+    if (includeHidden) {
+      gammesCacheAll = gammes
+      gammesCacheAllFetchedAt = Date.now()
+    } else {
+      gammesCacheVisible = gammes
+      gammesCacheVisibleFetchedAt = Date.now()
+    }
+
     return gammes
   } catch (error: any) {
     console.error('❌ Erreur lors du chargement des gammes depuis Supabase:', error)
@@ -127,6 +158,7 @@ export async function addGammeToSupabase(gamme: string): Promise<boolean> {
     }
 
     console.log(`✅ Gamme "${gamme}" ajoutée dans Supabase`)
+    invalidateGammesCache()
     return true
   } catch (error: any) {
     console.error('❌ Erreur lors de l\'ajout de la gamme dans Supabase:', error)
@@ -167,6 +199,7 @@ export async function deleteGammeFromSupabase(gamme: string): Promise<boolean> {
     }
 
     console.log(`✅ Gamme "${gamme}" supprimée de Supabase`)
+    invalidateGammesCache()
     return true
   } catch (error: any) {
     console.error('❌ Erreur lors de la suppression de la gamme dans Supabase:', error)
@@ -207,6 +240,7 @@ export async function toggleGammeHidden(gamme: string, hidden: boolean): Promise
     }
 
     console.log(`✅ Statut de la gamme "${gamme}" mis à jour (hidden: ${hidden})`)
+    invalidateGammesCache()
     return true
   } catch (error: any) {
     console.error('❌ Erreur lors de la mise à jour du statut de la gamme dans Supabase:', error)

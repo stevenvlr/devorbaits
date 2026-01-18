@@ -15,10 +15,30 @@ export interface GlobalPromotion {
   updatedAt: number
 }
 
+const GLOBAL_PROMOTION_SELECT =
+  'id,active,discount_percentage,apply_to_all,allowed_categories,allowed_gammes,description,valid_from,valid_until,created_at,updated_at'
+
+// Cache en mémoire (la promo globale change rarement)
+let globalPromotionCache: GlobalPromotion | null = null
+let globalPromotionCacheFetchedAt = 0
+const GLOBAL_PROMOTION_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+function invalidateGlobalPromotionCache() {
+  globalPromotionCache = null
+  globalPromotionCacheFetchedAt = 0
+}
+
 /**
  * Charge la promotion globale active depuis Supabase
  */
 export async function loadGlobalPromotionFromSupabase(): Promise<GlobalPromotion | null> {
+  if (
+    globalPromotionCacheFetchedAt &&
+    Date.now() - globalPromotionCacheFetchedAt < GLOBAL_PROMOTION_CACHE_TTL_MS
+  ) {
+    return globalPromotionCache
+  }
+
   if (!isSupabaseConfigured()) {
     return null
   }
@@ -31,7 +51,7 @@ export async function loadGlobalPromotionFromSupabase(): Promise<GlobalPromotion
   try {
     const { data, error } = await supabase
       .from('global_promotion')
-      .select('*')
+      .select(GLOBAL_PROMOTION_SELECT)
       .eq('active', true)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -39,6 +59,8 @@ export async function loadGlobalPromotionFromSupabase(): Promise<GlobalPromotion
 
     if (error || !data) {
       // Pas de promotion active, c'est normal
+      globalPromotionCache = null
+      globalPromotionCacheFetchedAt = Date.now()
       return null
     }
 
@@ -74,7 +96,7 @@ export async function loadGlobalPromotionFromSupabase(): Promise<GlobalPromotion
     }
 
     // Convertir les données Supabase en GlobalPromotion
-    return {
+    const promotion: GlobalPromotion = {
       id: data.id,
       active: data.active !== false,
       discountPercentage: parseFloat(data.discount_percentage) || 0,
@@ -87,8 +109,14 @@ export async function loadGlobalPromotionFromSupabase(): Promise<GlobalPromotion
       createdAt: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
       updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : Date.now()
     }
+
+    globalPromotionCache = promotion
+    globalPromotionCacheFetchedAt = Date.now()
+    return promotion
   } catch (error) {
     console.error('Erreur lors du chargement de la promotion globale depuis Supabase:', error)
+    // En cas d'erreur, ne pas figer un cache invalide
+    invalidateGlobalPromotionCache()
     return null
   }
 }
@@ -109,7 +137,7 @@ export async function loadAllGlobalPromotionsFromSupabase(): Promise<GlobalPromo
   try {
     const { data, error } = await supabase
       .from('global_promotion')
-      .select('*')
+      .select(GLOBAL_PROMOTION_SELECT)
       .order('created_at', { ascending: false })
 
     if (error || !data) {
@@ -184,6 +212,7 @@ export async function saveGlobalPromotionToSupabase(promotion: GlobalPromotion):
         return { success: false }
       }
 
+      invalidateGlobalPromotionCache()
       return { success: true, id: data.id }
     } else {
       const { data, error } = await supabase
@@ -197,6 +226,7 @@ export async function saveGlobalPromotionToSupabase(promotion: GlobalPromotion):
         return { success: false }
       }
 
+      invalidateGlobalPromotionCache()
       return { success: true, id: data.id }
     }
   } catch (error) {
@@ -229,6 +259,7 @@ export async function deleteGlobalPromotionFromSupabase(promotionId: string): Pr
       return false
     }
 
+    invalidateGlobalPromotionCache()
     return true
   } catch (error) {
     console.error('Erreur lors de la suppression de la promotion dans Supabase:', error)

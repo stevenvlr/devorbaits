@@ -15,6 +15,9 @@ export interface User {
   dateCreation: string
 }
 
+const PROFILE_SELECT =
+  'id,email,nom,prenom,telephone,adresse,code_postal,ville,role,created_at,updated_at'
+
 /**
  * Charge tous les utilisateurs (pour l'admin)
  * Note: Pour Supabase, on récupère uniquement les profils (sans les infos auth complètes)
@@ -30,7 +33,7 @@ export async function getAllUsers(): Promise<User[]> {
       // Récupérer tous les profils depuis Supabase
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(PROFILE_SELECT)
         .order('created_at', { ascending: false })
 
       if (error || !profiles) {
@@ -126,7 +129,7 @@ export async function loginUser(email: string, password: string): Promise<{ succ
     // Charger le profil
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_SELECT)
       .eq('id', data.user.id)
       .single()
 
@@ -153,7 +156,7 @@ export async function loginUser(email: string, password: string): Promise<{ succ
         // Recharger le profil créé
         const { data: newProfile } = await supabase
           .from('profiles')
-          .select('*')
+          .select(PROFILE_SELECT)
           .eq('id', data.user.id)
           .single()
         
@@ -355,7 +358,7 @@ export async function getCurrentUser(): Promise<User | null> {
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('*')
+        .select(PROFILE_SELECT)
         .eq('id', supabaseUser.id)
         .single()
 
@@ -398,7 +401,7 @@ export async function updateUserProfile(userId: string, updates: Partial<User>):
         updated_at: new Date().toISOString()
       })
       .eq('id', userId)
-      .select()
+      .select(PROFILE_SELECT)
       .single()
 
     if (error) {

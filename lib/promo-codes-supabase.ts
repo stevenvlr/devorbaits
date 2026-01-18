@@ -2,10 +2,27 @@
 import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 import type { PromoCode } from './promo-codes-manager'
 
+const PROMO_CODES_SELECT =
+  'id,code,discount_type,discount_value,min_purchase,max_uses,valid_from,valid_until,active,allowed_user_ids,allowed_product_ids,allowed_categories,allowed_gammes,allowed_conditionnements,description,created_at,updated_at'
+
+// Cache en mémoire (admin seulement, mais évite des rechargements inutiles)
+let promoCodesCache: PromoCode[] | null = null
+let promoCodesCacheFetchedAt = 0
+const PROMO_CODES_CACHE_TTL_MS = 2 * 60 * 1000 // 2 minutes
+
+function invalidatePromoCodesCache() {
+  promoCodesCache = null
+  promoCodesCacheFetchedAt = 0
+}
+
 /**
  * Charge tous les codes promo depuis Supabase
  */
 export async function loadPromoCodesFromSupabase(): Promise<PromoCode[]> {
+  if (promoCodesCache && Date.now() - promoCodesCacheFetchedAt < PROMO_CODES_CACHE_TTL_MS) {
+    return promoCodesCache
+  }
+
   if (!isSupabaseConfigured()) {
     return []
   }
@@ -18,7 +35,7 @@ export async function loadPromoCodesFromSupabase(): Promise<PromoCode[]> {
   try {
     const { data, error } = await supabase
       .from('promo_codes')
-      .select('*')
+      .select(PROMO_CODES_SELECT)
       .order('created_at', { ascending: false })
 
     if (error || !data) {
@@ -27,7 +44,7 @@ export async function loadPromoCodesFromSupabase(): Promise<PromoCode[]> {
     }
 
     // Convertir les données Supabase en PromoCode
-    return data.map((row: any) => ({
+    const promoCodes = data.map((row: any) => ({
       id: row.id,
       code: row.code,
       discountType: row.discount_type as 'percentage' | 'fixed',
@@ -46,6 +63,10 @@ export async function loadPromoCodesFromSupabase(): Promise<PromoCode[]> {
       createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
       updatedAt: row.created_at ? new Date(row.created_at).getTime() : Date.now()
     }))
+
+    promoCodesCache = promoCodes
+    promoCodesCacheFetchedAt = Date.now()
+    return promoCodes
   } catch (error) {
     console.error('Erreur lors du chargement des codes promo depuis Supabase:', error)
     return []
@@ -125,9 +146,11 @@ export async function savePromoCodeToSupabase(promoCode: PromoCode): Promise<{ s
     if (data && data.id) {
       // Mettre à jour l'ID du code promo avec celui généré par Supabase
       promoCode.id = data.id
+      invalidatePromoCodesCache()
       return { success: true, id: data.id }
     }
 
+    invalidatePromoCodesCache()
     return { success: true, id: promoCode.id }
   } catch (error) {
     console.error('Erreur lors de la sauvegarde du code promo dans Supabase:', error)
@@ -159,6 +182,7 @@ export async function deletePromoCodeFromSupabase(promoCodeId: string): Promise<
       return false
     }
 
+    invalidatePromoCodesCache()
     return true
   } catch (error) {
     console.error('Erreur lors de la suppression du code promo dans Supabase:', error)

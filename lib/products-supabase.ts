@@ -2,40 +2,73 @@
 import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 import type { Product, ProductVariant } from './products-manager'
 
+// Cache en mémoire pour réduire les appels PostgREST répétés
+let productsCache: Product[] | null = null
+let productsCacheFetchedAt = 0
+const PRODUCTS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+// Cache persistant navigateur (localStorage) pour réduire les appels même après refresh
+const PRODUCTS_LOCAL_CACHE_KEY = 'supabase_products_cache_v1'
+const PRODUCTS_LOCAL_CACHE_TTL_MS = 25 * 60 * 1000 // 25 minutes
+
+function invalidateProductsCache() {
+  productsCache = null
+  productsCacheFetchedAt = 0
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem(PRODUCTS_LOCAL_CACHE_KEY)
+    } catch {
+      // ignore
+    }
+  }
+}
+
 /**
  * Charge tous les produits depuis Supabase
  */
 export async function loadProductsFromSupabase(): Promise<Product[]> {
-  // #region agent log
+  // Cache persistant navigateur (utile pour les visiteurs + refresh)
   if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/products-supabase.ts:8',message:'loadProductsFromSupabase entry',data:{isSupabaseConfigured:isSupabaseConfigured()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
+    try {
+      const raw = window.localStorage.getItem(PRODUCTS_LOCAL_CACHE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as { fetchedAt: number; data: Product[] } | null
+        if (
+          parsed &&
+          typeof parsed.fetchedAt === 'number' &&
+          Array.isArray(parsed.data) &&
+          Date.now() - parsed.fetchedAt < PRODUCTS_LOCAL_CACHE_TTL_MS
+        ) {
+          // Hydrater aussi le cache mémoire pour accélérer les appels suivants
+          productsCache = parsed.data
+          productsCacheFetchedAt = parsed.fetchedAt
+          return parsed.data
+        }
+      }
+    } catch {
+      // ignore (localStorage bloqué / JSON invalide)
+    }
   }
-  // #endregion
+
+  // Cache (utile surtout quand plusieurs pages/components chargent les produits)
+  if (productsCache && Date.now() - productsCacheFetchedAt < PRODUCTS_CACHE_TTL_MS) {
+    return productsCache
+  }
+
   if (!isSupabaseConfigured()) {
     return []
   }
 
   const supabase = getSupabaseClient()
   if (!supabase) {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/products-supabase.ts:23',message:'no supabase client',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
-    }
-    // #endregion
     return []
   }
 
   try {
     const { data, error } = await supabase
       .from('products')
-      .select('*')
+      .select('id,name,category,price,description,image,images,gamme,format,available,variants,created_at,updated_at')
       .order('created_at', { ascending: false })
-
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/products-supabase.ts:34',message:'products query result',data:{hasError:!!error,errorCode:error?.code,errorMessage:error?.message,hasData:!!data,dataLength:data?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
-    }
-    // #endregion
 
     if (error || !data) {
       console.error('Erreur lors du chargement des produits depuis Supabase:', error)
@@ -43,7 +76,7 @@ export async function loadProductsFromSupabase(): Promise<Product[]> {
     }
 
     // Convertir les données Supabase en Product
-    return data.map((row: any) => ({
+    const products = data.map((row: any) => ({
       id: row.id,
       name: row.name,
       category: row.category,
@@ -58,6 +91,23 @@ export async function loadProductsFromSupabase(): Promise<Product[]> {
       createdAt: row.created_at,
       updatedAt: row.updated_at
     }))
+
+    productsCache = products
+    productsCacheFetchedAt = Date.now()
+
+    // Écrire dans le cache persistant navigateur
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(
+          PRODUCTS_LOCAL_CACHE_KEY,
+          JSON.stringify({ fetchedAt: productsCacheFetchedAt, data: products })
+        )
+      } catch {
+        // ignore (quota / localStorage bloqué)
+      }
+    }
+
+    return products
   } catch (error) {
     console.error('Erreur lors du chargement des produits depuis Supabase:', error)
     return []
@@ -110,6 +160,7 @@ export async function saveProductToSupabase(product: Product): Promise<boolean> 
     }
 
     console.log(`✅ Produit "${product.name}" sauvegardé dans Supabase`)
+    invalidateProductsCache()
     return true
   } catch (error: any) {
     console.error('❌ Erreur lors de la sauvegarde du produit dans Supabase:', error)
@@ -206,6 +257,7 @@ export async function saveAllProductsToSupabase(products: Product[]): Promise<bo
     }
 
     console.log(`✅ ${successCount} produit(s) sauvegardé(s) dans Supabase`)
+    invalidateProductsCache()
     return true
   } catch (error: any) {
     console.error('❌ Erreur lors de la sauvegarde des produits dans Supabase:', error)
@@ -238,6 +290,7 @@ export async function deleteProductFromSupabase(productId: string): Promise<bool
       return false
     }
 
+    invalidateProductsCache()
     return true
   } catch (error) {
     console.error('Erreur lors de la suppression du produit dans Supabase:', error)
