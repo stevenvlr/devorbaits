@@ -5,6 +5,7 @@ import { ShoppingCart, Factory, Droplet, Package } from 'lucide-react'
 import { getAllAromesAndSaveurs } from '@/lib/all-aromes-saveurs-manager'
 import { useCart } from '@/contexts/CartContext'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { getSprayPlusId, getPrixPersonnalise } from '@/lib/price-utils'
 import { loadSprayPlusFormats, loadSprayPlusImage } from '@/lib/flash-spray-variables-manager'
 
@@ -17,6 +18,7 @@ export default function SprayPlusPage() {
   const [productImage, setProductImage] = useState<string | null>(null)
   const { addToCart } = useCart()
   const prixPersonnalises = usePrixPersonnalises()
+  const { promotion } = useGlobalPromotion()
 
   // Charger tous les arômes/saveurs disponibles
   useEffect(() => {
@@ -44,7 +46,7 @@ export default function SprayPlusPage() {
   const getPrice = () => {
     if (!selectedArome) return 5.99
     const productId = getSprayPlusId(selectedArome)
-    return getPrixPersonnalise(prixPersonnalises, productId, 5.99)
+    return getPrixPersonnalise(prixPersonnalises, productId, 5.99, promotion, 'spray plus', undefined)
   }
 
   const handleAddToCart = async () => {
@@ -52,12 +54,18 @@ export default function SprayPlusPage() {
       alert('Veuillez sélectionner un arôme')
       return
     }
+    const prixOriginal = 5.99
+    const prixAvecPromotion = getPrice()
+    
     await addToCart({
       produit: `Spray+ ${selectedArome}`,
       arome: selectedArome,
       format: selectedFormat,
       quantite: quantity,
-      prix: getPrice()
+      prix: prixAvecPromotion,
+      prixOriginal: prixOriginal,
+      category: 'spray plus',
+      gamme: undefined
     })
     alert(`Spray+ ${selectedArome} ajouté au panier !`)
   }

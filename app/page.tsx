@@ -10,14 +10,23 @@ export default function Home() {
   const [heroImage, setHeroImage] = useState<string | null>(null)
 
   useEffect(() => {
-    const loadImage = () => {
-      const saved = loadHomepageImage()
-      setHeroImage(saved)
+    let cancelled = false
+
+    const loadImage = async () => {
+      const saved = await loadHomepageImage()
+      if (!cancelled) setHeroImage(saved)
     }
-    
+
     loadImage()
-    const unsubscribe = onHomepageImageUpdate(loadImage)
-    return () => unsubscribe()
+    const unsubscribe = onHomepageImageUpdate(() => {
+      // on ignore la Promise ici, React n'en a pas besoin
+      void loadImage()
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
 
   return (

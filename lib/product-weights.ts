@@ -218,10 +218,57 @@ export async function deleteProductWeight(id: string): Promise<boolean> {
 }
 
 /**
+ * Normalise un conditionnement pour la comparaison (10kg, 10 kg, 10KG -> 10kg)
+ */
+function normalizeConditionnement(cond: string | null): string {
+  if (!cond) return ''
+  
+  // Nettoyer le conditionnement : minuscules, supprimer espaces
+  let cleaned = cond.toLowerCase().replace(/\s+/g, '')
+  
+  // Si c'est déjà au format normalisé, le retourner tel quel
+  if (cleaned === '10kg' || cleaned === '5kg' || cleaned === '2.5kg' || cleaned === '2,5kg' || cleaned === '1kg' || cleaned === '500g') {
+    // Normaliser 2,5kg en 2.5kg
+    if (cleaned === '2,5kg') return '2.5kg'
+    return cleaned
+  }
+  
+  // Extraire les nombres pour la normalisation
+  const normalized = cleaned.replace(/g$/, '') // Enlever le 'g' final si présent
+  
+  // Normaliser les formats de poids
+  if (normalized.includes('10')) return '10kg'
+  if (normalized.includes('5') && !normalized.includes('2.5') && !normalized.includes('2,5')) return '5kg'
+  if (normalized.includes('2.5') || normalized.includes('2,5')) return '2.5kg'
+  if (normalized.includes('1') && !normalized.includes('10')) return '1kg'
+  if (normalized.includes('500')) return '500g'
+  
+  // Si on ne peut pas normaliser, retourner le format nettoyé
+  return cleaned
+}
+
+/**
  * Trouve le poids d'un produit depuis la DB ou les valeurs par défaut
  */
 async function findWeightFromDB(productType: string, conditionnement?: string): Promise<number | null> {
   const weights = await getProductWeightsFromDB()
+  
+  console.log(`  → findWeightFromDB: Recherche pour productType="${productType}", conditionnement="${conditionnement}"`)
+  console.log(`  → Nombre d'entrées dans la DB: ${weights.length}`)
+  
+  if (weights.length === 0) {
+    console.log(`  ⚠️ Aucune entrée dans la DB`)
+    return null
+  }
+  
+  // Afficher toutes les entrées de la DB pour debug
+  console.log(`  → Entrées dans la DB:`)
+  weights.forEach(w => {
+    console.log(`    - ${w.product_type} | conditionnement: "${w.conditionnement || '(null)'}" | poids: ${w.weight_kg}kg | actif: ${w.active}`)
+  })
+  
+  const normalizedCond = conditionnement ? normalizeConditionnement(conditionnement) : ''
+  console.log(`  → Conditionnement normalisé: "${normalizedCond}"`)
   
   // Chercher une correspondance exacte
   const exactMatch = weights.find(w => {
@@ -229,28 +276,56 @@ async function findWeightFromDB(productType: string, conditionnement?: string): 
     if (!typeMatch) return false
     
     // Si le produit a un conditionnement, vérifier qu'il correspond
-    if (conditionnement && w.conditionnement) {
-      return w.conditionnement.toLowerCase() === conditionnement.toLowerCase()
+    if (normalizedCond && w.conditionnement) {
+      const dbCond = normalizeConditionnement(w.conditionnement)
+      const match = dbCond === normalizedCond
+      console.log(`    → Comparaison exacte: "${w.product_type}" === "${productType}" && "${dbCond}" === "${normalizedCond}" → ${match}`)
+      return match
     }
     
     // Si pas de conditionnement spécifié, prendre celui sans conditionnement
-    return !w.conditionnement
+    if (!normalizedCond && !w.conditionnement) {
+      console.log(`    → Correspondance sans conditionnement`)
+      return true
+    }
+    
+    return false
   })
   
   if (exactMatch) {
+    console.log(`✅ Correspondance exacte trouvée: ${exactMatch.product_type} ${exactMatch.conditionnement || ''} = ${exactMatch.weight_kg}kg`)
     return exactMatch.weight_kg
   }
   
-  // Chercher une correspondance partielle sur le type
-  const partialMatch = weights.find(w => 
-    productType.toLowerCase().includes(w.product_type.toLowerCase()) ||
-    w.product_type.toLowerCase().includes(productType.toLowerCase())
-  )
+  // Chercher une correspondance partielle sur le type (sans conditionnement spécifique)
+  const partialMatch = weights.find(w => {
+    const typeMatch = productType.toLowerCase().includes(w.product_type.toLowerCase()) ||
+                     w.product_type.toLowerCase().includes(productType.toLowerCase())
+    if (!typeMatch) return false
+    
+    // Si on cherche un conditionnement spécifique, il faut qu'il corresponde
+    if (normalizedCond && w.conditionnement) {
+      const dbCond = normalizeConditionnement(w.conditionnement)
+      const match = dbCond === normalizedCond
+      console.log(`    → Comparaison partielle: type match && "${dbCond}" === "${normalizedCond}" → ${match}`)
+      return match
+    }
+    
+    // Sinon, prendre le premier qui correspond au type
+    if (!normalizedCond) {
+      console.log(`    → Correspondance partielle sans conditionnement`)
+      return true
+    }
+    
+    return false
+  })
   
   if (partialMatch) {
+    console.log(`✅ Correspondance partielle trouvée: ${partialMatch.product_type} ${partialMatch.conditionnement || ''} = ${partialMatch.weight_kg}kg`)
     return partialMatch.weight_kg
   }
   
+  console.log(`  ❌ Aucune correspondance trouvée`)
   return null
 }
 
@@ -320,19 +395,64 @@ export async function getProductWeightAsync(item: {
   category?: string
   quantite?: number
   quantity?: number
+  name?: string
+  title?: string
 }): Promise<number> {
-  const productName = (item.produit || item.categorie || item.category || '').toLowerCase()
-  const conditionnement = (item.conditionnement || '').toLowerCase()
+  const productName = (item.produit || item.name || item.title || item.categorie || item.category || '').toLowerCase()
+  const conditionnementOriginal = item.conditionnement || ''
+  let conditionnement = conditionnementOriginal.toLowerCase().replace(/\s+/g, '') // Supprimer les espaces
   const quantity = item.quantite || item.quantity || 1
   
-  // Essayer de trouver dans la DB d'abord
-  const dbWeight = await findWeightFromDB(productName, conditionnement)
+  console.log(`🔍 getProductWeightAsync - produit="${productName}", conditionnement original="${conditionnementOriginal}", conditionnement nettoyé="${conditionnement}", qty=${quantity}`)
+  
+  // Normaliser le type de produit et le conditionnement pour la recherche en DB
+  let productType = productName
+  let normalizedConditionnement = conditionnement
+  
+  // 1. Bouillettes - normaliser le type et le conditionnement
+  if (productName.includes('bouillette') || productName.includes('boilies')) {
+    productType = 'bouillette'
+    // Normaliser le conditionnement (1kg, 1 kg, 1KG, etc.)
+    if (conditionnement.includes('10')) {
+      normalizedConditionnement = '10kg'
+    } else if (conditionnement.includes('5') && !conditionnement.includes('2.5') && !conditionnement.includes('2,5')) {
+      normalizedConditionnement = '5kg'
+    } else if (conditionnement.includes('2.5') || conditionnement.includes('2,5')) {
+      normalizedConditionnement = '2.5kg'
+    } else if (conditionnement.includes('1')) {
+      normalizedConditionnement = '1kg'
+    } else if (!conditionnement || conditionnement === '') {
+      normalizedConditionnement = '1kg' // Par défaut
+    } else {
+      // Garder le conditionnement tel quel si on ne peut pas le normaliser
+      normalizedConditionnement = conditionnement
+    }
+    
+    console.log(`  → Bouillette détectée: type="${productType}", conditionnement normalisé="${normalizedConditionnement}"`)
+  }
+  // 2. Farines
+  else if (productName.includes('farine')) {
+    productType = 'farine'
+    if (conditionnement.includes('500')) {
+      normalizedConditionnement = '500g'
+    } else {
+      normalizedConditionnement = '1kg'
+    }
+  }
+  
+  // Essayer de trouver dans la DB d'abord avec les valeurs normalisées
+  console.log(`  → Recherche en DB: productType="${productType}", normalizedConditionnement="${normalizedConditionnement}"`)
+  const dbWeight = await findWeightFromDB(productType, normalizedConditionnement || undefined)
   if (dbWeight !== null) {
+    console.log(`✅ Poids trouvé en DB: ${dbWeight}kg pour ${productType} (${normalizedConditionnement}) x ${quantity} = ${dbWeight * quantity}kg`)
     return dbWeight * quantity
   }
   
+  console.log(`⚠️ Poids non trouvé en DB pour ${productType} (${normalizedConditionnement}), utilisation des valeurs par défaut`)
   // Sinon utiliser la fonction synchrone avec les valeurs par défaut
-  return getProductWeight(item)
+  const fallbackWeight = getProductWeight(item)
+  console.log(`  → Poids fallback: ${fallbackWeight}kg`)
+  return fallbackWeight
 }
 
 /**
@@ -364,12 +484,26 @@ export async function calculateCartWeightAsync(cartItems: Array<{
   category?: string
   quantite?: number
   quantity?: number
+  name?: string
+  title?: string
 }>): Promise<number> {
+  console.log(`📦 calculateCartWeightAsync - ${cartItems.length} articles dans le panier`)
+  
   const weights = await Promise.all(
-    cartItems.map(item => getProductWeightAsync(item))
+    cartItems.map((item, index) => {
+      console.log(`  → Article ${index + 1}:`, {
+        produit: item.produit,
+        conditionnement: item.conditionnement,
+        quantite: item.quantite || item.quantity,
+        category: item.category || item.categorie
+      })
+      return getProductWeightAsync(item)
+    })
   )
   
   const totalWeight = weights.reduce((sum, w) => sum + w, 0)
+  
+  console.log(`📦 Poids total calculé: ${totalWeight.toFixed(2)}kg (minimum: 0.5kg)`)
   
   // Minimum 0.5kg pour l'expédition
   return Math.max(totalWeight, 0.5)

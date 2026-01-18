@@ -8,6 +8,7 @@ import { useCart } from '@/contexts/CartContext'
 import ProductModal from '@/components/ProductModal'
 import GammeProductModal from '@/components/GammeProductModal'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { getBouilletteId, getEquilibreId, getBoosterId, getPrixPersonnalise } from '@/lib/price-utils'
 import { getAvailableStock, getAvailableStockSync, onStockUpdate } from '@/lib/stock-manager'
 import { getProductsByCategory, getProductsByGamme, getProductsByCategorySync, onProductsUpdate, type Product, type ProductVariant } from '@/lib/products-manager'
@@ -103,6 +104,7 @@ export default function GammePageClient() {
 
   // Charger les prix personnalisés
   const prixPersonnalises = usePrixPersonnalises()
+  const { promotion } = useGlobalPromotion()
 
   // Charger tous les produits de cette gamme depuis l'admin
   const [adminProducts, setAdminProducts] = useState<Product[]>([])
@@ -203,19 +205,19 @@ export default function GammePageClient() {
     }
     
     const defaultPrice = (isRobinRed || isMureCassis) ? basePrice + 2 : basePrice
-    return getPrixPersonnalise(prixPersonnalises, productId, defaultPrice)
+    return getPrixPersonnalise(prixPersonnalises, productId, defaultPrice, promotion, 'bouillettes', gamme)
   }
   
   // Calcul du prix pour les équilibrées
   const getEquilibrePrice = () => {
     const productId = getEquilibreId(gamme, equilibreTaille)
-    return getPrixPersonnalise(prixPersonnalises, productId, 8.99)
+    return getPrixPersonnalise(prixPersonnalises, productId, 8.99, promotion, 'équilibrées', gamme)
   }
 
   // Calcul du prix pour les boosters
   const getBoosterPrice = () => {
     const productId = getBoosterId(gamme)
-    return getPrixPersonnalise(prixPersonnalises, productId, 14.99)
+    return getPrixPersonnalise(prixPersonnalises, productId, 14.99, promotion, 'boosters', gamme)
   }
 
   // Obtenir le stock disponible pour la bouillette sélectionnée
@@ -308,13 +310,40 @@ export default function GammePageClient() {
       productId = getBouilletteId(gamme, bouilletteDiametre, bouilletteConditionnement)
     }
     
+    // Calculer le prix original (sans promotion)
+    const is10mm = bouilletteDiametre === '10'
+    const isRobinRed = gamme === 'Robin Red Vers de vase'
+    const isMureCassis = gamme === 'Mure Cassis'
+    let prixOriginal = 0
+    
+    if (bouilletteConditionnement === '1kg') {
+      prixOriginal = is10mm ? 11.99 : 9.99
+    } else if (bouilletteConditionnement === '2.5kg') {
+      prixOriginal = is10mm ? 28.99 : 23.99
+    } else if (bouilletteConditionnement === '5kg') {
+      prixOriginal = is10mm ? 56.99 : 46.99
+    } else if (bouilletteConditionnement === '10kg') {
+      prixOriginal = is10mm ? 109.99 : 89.99
+    } else {
+      prixOriginal = 9.99
+    }
+    
+    if (isRobinRed || isMureCassis) {
+      prixOriginal += 2
+    }
+    
+    const prixAvecPromotion = getBouillettePrice()
+    
     await addToCart({
       produit: 'Bouillette',
       diametre: bouilletteDiametre,
       arome: gamme,
       conditionnement: bouilletteConditionnement,
       quantite: bouilletteQuantity,
-      prix: getBouillettePrice(),
+      prix: prixAvecPromotion,
+      prixOriginal: prixOriginal,
+      category: 'bouillettes',
+      gamme: gamme,
       productId: productId,
       variantId: variantId
     })
@@ -322,23 +351,35 @@ export default function GammePageClient() {
   }
 
   const handleAddEquilibre = async () => {
+    const prixOriginal = 8.99
+    const prixAvecPromotion = getEquilibrePrice()
+    
     await addToCart({
       produit: 'Équilibrée',
       taille: equilibreTaille,
       arome: gamme,
       quantite: equilibreQuantity,
-      prix: getEquilibrePrice()
+      prix: prixAvecPromotion,
+      prixOriginal: prixOriginal,
+      category: 'équilibrées',
+      gamme: gamme
     })
     alert('Équilibrée ajoutée au panier !')
   }
 
   const handleAddBooster = async () => {
+    const prixOriginal = 14.99
+    const prixAvecPromotion = getBoosterPrice()
+    
     await addToCart({
       produit: 'Booster',
       arome: gamme,
       type: boosterType,
       quantite: boosterQuantity,
-      prix: getBoosterPrice()
+      prix: prixAvecPromotion,
+      prixOriginal: prixOriginal,
+      category: 'boosters',
+      gamme: gamme
     })
     alert('Booster ajouté au panier !')
   }

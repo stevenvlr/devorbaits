@@ -16,11 +16,6 @@ export interface PopupVariableItem {
  * Charger les variables d'une catégorie depuis Supabase
  */
 export async function loadPopupVariablesFromSupabase(category: string): Promise<string[] | Couleur[]> {
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/popup-variables-supabase.ts:13',message:'loadPopupVariablesFromSupabase entry',data:{category,isSupabaseConfigured:isSupabaseConfigured()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
-  }
-  // #endregion
   if (!isSupabaseConfigured()) {
     console.error('❌ Supabase non configuré')
     return []
@@ -30,11 +25,6 @@ export async function loadPopupVariablesFromSupabase(category: string): Promise<
   if (!supabase) return []
 
   try {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/popup-variables-supabase.ts:25',message:'querying popup_variables table',data:{category},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
-    }
-    // #endregion
     const { data, error } = await supabase
       .from('popup_variables')
       .select('value, metadata')
@@ -42,22 +32,11 @@ export async function loadPopupVariablesFromSupabase(category: string): Promise<
       .order('value', { ascending: true })
 
     if (error) {
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/popup-variables-supabase.ts:33',message:'popup_variables query error',data:{category,errorCode:error.code,errorMessage:error.message,errorDetails:error.details},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
-      }
-      // #endregion
       console.error('Erreur lors du chargement des variables:', error)
       return []
     }
 
     if (!data) return []
-
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/popup-variables-supabase.ts:42',message:'popup_variables query success',data:{category,itemsCount:data.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
-    }
-    // #endregion
 
     // Si c'est une catégorie de couleurs, retourner des objets Couleur
     if (category.includes('couleurs')) {
@@ -71,11 +50,6 @@ export async function loadPopupVariablesFromSupabase(category: string): Promise<
     // Sinon, retourner un tableau de strings
     return data.map(item => item.value)
   } catch (error: any) {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/popup-variables-supabase.ts:56',message:'loadPopupVariablesFromSupabase catch error',data:{category,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
-    }
-    // #endregion
     console.error('Erreur lors du chargement des variables:', error)
     return []
   }

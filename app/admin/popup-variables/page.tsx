@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Package, Palette, Upload, ImageIcon } from 'lucide-react'
+import { Plus, Trash2, Package, Palette, Upload, ImageIcon, Ban } from 'lucide-react'
+import Link from 'next/link'
 import {
   // Pop-up Duo
   loadPopupDuoSaveurs, addPopupDuoSaveur, removePopupDuoSaveur, onPopupDuoSaveursUpdate,
@@ -58,42 +59,17 @@ export default function PopupVariablesAdminPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const loadAllData = async () => {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:41',message:'loadAllData entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-    }
-    // #endregion
     try {
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:44',message:'calling Promise.all for popup variables',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-      }
-      // #endregion
       const [saveurs, formes, aromesData, couleursFluoData, couleursPastelData, taillesFluoData, taillesPastelData, formeImages, variantImages, couleurImagesData] = await Promise.all([
         loadPopupDuoSaveurs().catch(err => {
-          // #region agent log
-          if (typeof window !== 'undefined') {
-            fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:48',message:'loadPopupDuoSaveurs error',data:{errorMessage:err?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-          }
-          // #endregion
           console.error('Erreur loadPopupDuoSaveurs:', err)
           return []
         }),
         loadPopupDuoFormes().catch(err => {
-          // #region agent log
-          if (typeof window !== 'undefined') {
-            fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:53',message:'loadPopupDuoFormes error',data:{errorMessage:err?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-          }
-          // #endregion
           console.error('Erreur loadPopupDuoFormes:', err)
           return []
         }),
         loadBarPopupAromes().catch(err => {
-          // #region agent log
-          if (typeof window !== 'undefined') {
-            fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:58',message:'loadBarPopupAromes error',data:{errorMessage:err?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-          }
-          // #endregion
           console.error('Erreur loadBarPopupAromes:', err)
           return []
         }),
@@ -127,12 +103,6 @@ export default function PopupVariablesAdminPage() {
         })
       ])
       
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:78',message:'loadAllData results',data:{saveursCount:saveurs.length,formesCount:formes.length,aromesCount:aromesData.length,couleursFluoCount:couleursFluoData.length,couleursPastelCount:couleursPastelData.length,taillesFluoCount:taillesFluoData.length,taillesPastelCount:taillesPastelData.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-      }
-      // #endregion
-      
       // S'assurer que toutes les valeurs sont des tableaux
       setPopupDuoSaveurs(Array.isArray(saveurs) ? saveurs : [])
       setPopupDuoFormes(Array.isArray(formes) ? formes : [])
@@ -155,22 +125,12 @@ export default function PopupVariablesAdminPage() {
       
       // Vérifier si toutes les données sont vides (problème de connexion Supabase)
       if (saveurs.length === 0 && formes.length === 0 && aromesData.length === 0) {
-        // #region agent log
-        if (typeof window !== 'undefined') {
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:92',message:'all data empty warning',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
-        }
-        // #endregion
         setMessage({ 
           type: 'error', 
           text: 'Aucune donnée chargée. Vérifiez que la table popup_variables existe dans Supabase et que le script SQL a été exécuté.' 
         })
       }
     } catch (error: any) {
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:100',message:'loadAllData catch error',data:{errorMessage:error?.message,errorStack:error?.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-      }
-      // #endregion
       console.error('Erreur lors du chargement des variables:', error)
       setMessage({ 
         type: 'error', 
@@ -180,11 +140,6 @@ export default function PopupVariablesAdminPage() {
   }
 
   useEffect(() => {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/popup-variables/page.tsx:66',message:'PopupVariablesAdminPage useEffect',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    }
-    // #endregion
     loadAllData()
     
     const unsubscribes = [
@@ -538,7 +493,16 @@ export default function PopupVariablesAdminPage() {
     <div className="min-h-screen bg-noir-950 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-bold mb-2">Gestion des Variables Pop-up</h1>
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-4xl font-bold">Gestion des Variables Pop-up</h1>
+            <Link
+              href="/admin/bar-popup-disabled"
+              className="btn btn-secondary btn-md flex items-center gap-2"
+            >
+              <Ban className="w-4 h-4" />
+              Combinaisons Désactivées
+            </Link>
+          </div>
           <p className="text-gray-400">Gérez les options disponibles pour Pop-up Duo et Bar à Pop-up</p>
         </div>
 
@@ -982,6 +946,27 @@ export default function PopupVariablesAdminPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+
+            {/* Bar à Pop-up - Combinaisons désactivées */}
+            <div className="bg-noir-800/50 border border-red-500/30 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <Ban className="w-6 h-6 text-red-500" />
+                  Combinaisons Désactivées
+                </h2>
+                <Link
+                  href="/admin/bar-popup-disabled"
+                  className="btn btn-secondary btn-sm flex items-center gap-2"
+                >
+                  <Ban className="w-4 h-4" />
+                  Gérer
+                </Link>
+              </div>
+              <p className="text-gray-400 text-sm">
+                Désactivez certaines combinaisons taille/couleur pour le bar à pop-up. 
+                Les combinaisons désactivées ne seront pas disponibles à la sélection.
+              </p>
             </div>
 
             {/* Bar à Pop-up - Images par couleur */}

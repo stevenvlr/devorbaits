@@ -150,11 +150,6 @@ function getProductDescription(name: string, category: string, gamme?: string): 
  */
 function productExists(name: string, category: string): boolean {
   const products = loadProductsSync()
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'import-default-products.ts:151',message:'productExists check',data:{productName:name,category,productsCount:products.length,exists:products.some(p => p.name.toLowerCase() === name.toLowerCase() && p.category.toLowerCase() === category.toLowerCase())},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  }
-  // #endregion
   return products.some(p => 
     p.name.toLowerCase() === name.toLowerCase() && 
     p.category.toLowerCase() === category.toLowerCase()

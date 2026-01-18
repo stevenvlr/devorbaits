@@ -5,6 +5,7 @@ import { ShoppingCart, Factory, Package, Zap, Droplet } from 'lucide-react'
 import { loadPopupDuoSaveurs, loadPopupDuoFormes, loadPopupDuoFormeImages, loadPopupDuoVariantImages, onPopupDuoSaveursUpdate, onPopupDuoFormesUpdate, onPopupDuoFormeImagesUpdate, onPopupDuoVariantImagesUpdate } from '@/lib/popup-variables-manager'
 import { useCart } from '@/contexts/CartContext'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { getPopUpDuoId, getPrixPersonnalise } from '@/lib/price-utils'
 import { getAvailableStock, getAvailableStockSync, onStockUpdate } from '@/lib/stock-manager'
 import { onProductsUpdate, type Product, type ProductVariant, getProductFirstImage } from '@/lib/products-manager'
@@ -66,6 +67,7 @@ export default function PopupsPage() {
   const [quantity, setQuantity] = useState(1)
   const { addToCart, cartItems, shouldShowPromoModal, addPromoItem } = useCart()
   const prixPersonnalises = usePrixPersonnalises()
+  const { promotion } = useGlobalPromotion()
   const [showPromoModal, setShowPromoModal] = useState(false)
 
   // État pour le produit Pop-up Duo
@@ -89,9 +91,6 @@ export default function PopupsPage() {
     }
     
     const loadProducts = async () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:75',message:'loadProducts entry',data:{selectedSaveur},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,E'})}).catch(()=>{});
-      // #endregion
       // Importer getProductsByCategory une seule fois
       const { getProductsByCategory } = await import('@/lib/products-manager')
       
@@ -134,10 +133,6 @@ export default function PopupsPage() {
         new Map(allFlashBoost.map(p => [p.id, p])).values()
       )
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:95',message:'Flash boost products loaded',data:{selectedSaveur,flashBoostCount:uniqueFlashBoost.length,flashBoostProducts:uniqueFlashBoost.map(p=>({name:p.name,category:p.category,gamme:p.gamme}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      
       const [sprayPlus1, sprayPlus2, sprayPlus3] = await Promise.all([
         getProductsByCategory('spray plus', true),
         getProductsByCategory('Spray plus', true),
@@ -149,10 +144,6 @@ export default function PopupsPage() {
       const uniqueSprayPlus = Array.from(
         new Map(allSprayPlus.map(p => [p.id, p])).values()
       )
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:108',message:'Spray plus products loaded',data:{selectedSaveur,sprayPlusCount:uniqueSprayPlus.length,sprayPlusProducts:uniqueSprayPlus.map(p=>({name:p.name,category:p.category,gamme:p.gamme}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       
       console.log(`🔍 Recherche Flash boost pour saveur: "${selectedSaveur}"`, {
         produitsDisponibles: uniqueFlashBoost.length,
@@ -225,9 +216,6 @@ export default function PopupsPage() {
         console.log(`✅ Produit Flash boost sélectionné: "${flashBoost.name}"`, {
           variantes: flashBoost.variants?.length || 0
         })
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:166',message:'Flash boost product found',data:{productName:flashBoost.name,productId:flashBoost.id,variantsCount:flashBoost.variants?.length||0,selectedSaveur,variants:flashBoost.variants?.map(v=>({label:v.label,arome:v.arome,saveur:v.saveur}))||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         setFlashBoostProduct(flashBoost)
         // Sélectionner la variante correspondant à la saveur pop-up duo (insensible à la casse)
         const normalizedSaveur = selectedSaveur.toLowerCase().trim()
@@ -241,28 +229,16 @@ export default function PopupsPage() {
         })
         if (variant) {
           console.log(`✅ Variante Flash boost sélectionnée: "${variant.label}" (arome: "${variant.arome || variant.saveur}")`)
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:182',message:'Flash boost variant matched',data:{variantLabel:variant.label,variantArome:variant.arome,variantSaveur:variant.saveur,selectedSaveur},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
-          // #endregion
           setFlashBoostVariant(variant)
         } else if (flashBoost.variants && flashBoost.variants.length > 0) {
           console.log(`⚠️ Aucune variante correspondante pour "${selectedSaveur}", utilisation de la première: "${flashBoost.variants[0].label}"`)
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:185',message:'Flash boost variant fallback to first',data:{firstVariantLabel:flashBoost.variants[0].label,firstVariantArome:flashBoost.variants[0].arome,firstVariantSaveur:flashBoost.variants[0].saveur,selectedSaveur,allVariants:flashBoost.variants.map(v=>({label:v.label,arome:v.arome,saveur:v.saveur}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
-          // #endregion
           setFlashBoostVariant(flashBoost.variants[0])
         } else {
           console.warn(`⚠️ Aucune variante disponible pour "${flashBoost.name}"`)
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:188',message:'Flash boost no variants',data:{productName:flashBoost.name,selectedSaveur},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
           setFlashBoostVariant(null)
         }
       } else {
         console.warn(`⚠️ Aucun produit Flash boost trouvé pour la saveur "${selectedSaveur}"`)
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:192',message:'Flash boost product not found',data:{selectedSaveur,allProducts:uniqueFlashBoost.map(p=>({name:p.name,category:p.category,gamme:p.gamme}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         setFlashBoostProduct(null)
         setFlashBoostVariant(null)
       }
@@ -337,9 +313,6 @@ export default function PopupsPage() {
         console.log(`✅ Produit Spray plus sélectionné: "${sprayPlus.name}"`, {
           variantes: sprayPlus.variants?.length || 0
         })
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:263',message:'Spray plus product found',data:{productName:sprayPlus.name,productId:sprayPlus.id,variantsCount:sprayPlus.variants?.length||0,selectedSaveur,variants:sprayPlus.variants?.map(v=>({label:v.label,arome:v.arome,saveur:v.saveur}))||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         setSprayPlusProduct(sprayPlus)
         // Sélectionner la variante correspondant à la saveur pop-up duo (insensible à la casse)
         const normalizedSaveur = selectedSaveur.toLowerCase().trim()
@@ -353,28 +326,16 @@ export default function PopupsPage() {
         })
         if (variant) {
           console.log(`✅ Variante Spray plus sélectionnée: "${variant.label}" (arome: "${variant.arome || variant.saveur}")`)
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:279',message:'Spray plus variant matched',data:{variantLabel:variant.label,variantArome:variant.arome,variantSaveur:variant.saveur,selectedSaveur},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
-          // #endregion
           setSprayPlusVariant(variant)
         } else if (sprayPlus.variants && sprayPlus.variants.length > 0) {
           console.log(`⚠️ Aucune variante correspondante pour "${selectedSaveur}", utilisation de la première: "${sprayPlus.variants[0].label}"`)
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:282',message:'Spray plus variant fallback to first',data:{firstVariantLabel:sprayPlus.variants[0].label,firstVariantArome:sprayPlus.variants[0].arome,firstVariantSaveur:sprayPlus.variants[0].saveur,selectedSaveur,allVariants:sprayPlus.variants.map(v=>({label:v.label,arome:v.arome,saveur:v.saveur}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,E'})}).catch(()=>{});
-          // #endregion
           setSprayPlusVariant(sprayPlus.variants[0])
         } else {
           console.warn(`⚠️ Aucune variante disponible pour "${sprayPlus.name}"`)
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:285',message:'Spray plus no variants',data:{productName:sprayPlus.name,selectedSaveur},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
           setSprayPlusVariant(null)
         }
       } else {
         console.warn(`⚠️ Aucun produit Spray plus trouvé pour la saveur "${selectedSaveur}"`)
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:289',message:'Spray plus product not found',data:{selectedSaveur,allProducts:uniqueSprayPlus.map(p=>({name:p.name,category:p.category,gamme:p.gamme}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         setSprayPlusProduct(null)
         setSprayPlusVariant(null)
       }
@@ -382,9 +343,6 @@ export default function PopupsPage() {
     
     loadProducts().catch(error => {
       console.error('Erreur lors du chargement des produits Flash boost/Spray plus:', error)
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:335',message:'loadProducts error',data:{selectedSaveur,error:error?.message||'Unknown error'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
     })
     const unsubscribe = onProductsUpdate(() => {
       loadProducts().catch(error => {
@@ -484,7 +442,7 @@ export default function PopupsPage() {
   const getPrice = () => {
     const productId = getPopUpDuoId(selectedSaveur, selectedForme)
     const defaultPrice = formesPrixReduit.includes(selectedForme) ? 7.99 : 8.99
-    return getPrixPersonnalise(prixPersonnalises, productId, defaultPrice)
+    return getPrixPersonnalise(prixPersonnalises, productId, defaultPrice, promotion, 'pop-up duo', undefined)
   }
   
   // Calcul du prix pour Flash boost
@@ -601,14 +559,8 @@ export default function PopupsPage() {
   }
 
   const handleFlashBoostAdd = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:480',message:'handleFlashBoostAdd entry',data:{selectedSaveur,flashBoostProduct:flashBoostProduct?{name:flashBoostProduct.name,id:flashBoostProduct.id}:null,flashBoostVariant:flashBoostVariant?{label:flashBoostVariant.label,arome:flashBoostVariant.arome,saveur:flashBoostVariant.saveur,id:flashBoostVariant.id}:null,flashBoostQuantity},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,D'})}).catch(()=>{});
-    // #endregion
     // Vérifier d'abord si le produit existe
     if (!flashBoostProduct) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:483',message:'Flash boost product missing',data:{selectedSaveur},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       alert(`❌ Produit Flash boost non trouvé pour la saveur "${selectedSaveur}".\n\n💡 Vérifiez que le produit existe dans Admin → Flash/Spray Variables.`)
       return
     }
@@ -636,9 +588,6 @@ export default function PopupsPage() {
     }
     
     if (!variantToUse) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:509',message:'Flash boost variant missing',data:{selectedSaveur,productName:flashBoostProduct.name,availableVariants:flashBoostProduct.variants?.map(v=>({label:v.label,arome:v.arome,saveur:v.saveur}))||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       alert(`❌ Aucune variante Flash boost disponible pour la saveur "${selectedSaveur}".\n\n💡 Vérifiez que les variantes existent dans Admin → Flash/Spray Variables.`)
       return
     }
@@ -649,18 +598,12 @@ export default function PopupsPage() {
     if (availableStock >= 0) {
       // Si le stock est insuffisant mais pas à zéro, bloquer
       if (availableStock > 0 && availableStock < flashBoostQuantity) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:519',message:'Flash boost stock insufficient',data:{availableStock,flashBoostQuantity},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
         alert(`Stock insuffisant. Stock disponible : ${availableStock}`)
         return
       }
       // Si le stock est à zéro, le message sera affiché dans addToCart
     }
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:525',message:'Flash boost before addToCart',data:{productName:flashBoostProduct.name,productId:flashBoostProduct.id,variantLabel:variantToUse.label,variantId:variantToUse.id,arome:variantToUse.arome||variantToUse.saveur||variantToUse.label||selectedSaveur,quantity:flashBoostQuantity,price:variantToUse.price||getFlashBoostPrice()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     await addToCart({
       produit: flashBoostProduct.name,
       arome: variantToUse.arome || variantToUse.saveur || variantToUse.label || selectedSaveur,
@@ -669,21 +612,12 @@ export default function PopupsPage() {
       productId: flashBoostProduct.id,
       variantId: variantToUse.id
     })
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:535',message:'Flash boost addToCart success',data:{variantLabel:variantToUse.label},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     alert(`✅ Flash boost ${variantToUse.label} ajouté au panier !`)
   }
 
   const handleSprayPlusAdd = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:540',message:'handleSprayPlusAdd entry',data:{selectedSaveur,sprayPlusProduct:sprayPlusProduct?{name:sprayPlusProduct.name,id:sprayPlusProduct.id}:null,sprayPlusVariant:sprayPlusVariant?{label:sprayPlusVariant.label,arome:sprayPlusVariant.arome,saveur:sprayPlusVariant.saveur,id:sprayPlusVariant.id}:null,sprayPlusQuantity},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,D'})}).catch(()=>{});
-    // #endregion
     // Vérifier d'abord si le produit existe
     if (!sprayPlusProduct) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:543',message:'Spray plus product missing',data:{selectedSaveur},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       alert(`❌ Produit Spray plus non trouvé pour la saveur "${selectedSaveur}".\n\n💡 Vérifiez que le produit existe dans Admin → Flash/Spray Variables.`)
       return
     }
@@ -711,9 +645,6 @@ export default function PopupsPage() {
     }
     
     if (!variantToUse) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:569',message:'Spray plus variant missing',data:{selectedSaveur,productName:sprayPlusProduct.name,availableVariants:sprayPlusProduct.variants?.map(v=>({label:v.label,arome:v.arome,saveur:v.saveur}))||[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       alert(`❌ Aucune variante Spray plus disponible pour la saveur "${selectedSaveur}".\n\n💡 Vérifiez que les variantes existent dans Admin → Flash/Spray Variables.`)
       return
     }
@@ -724,18 +655,12 @@ export default function PopupsPage() {
     if (availableStock >= 0) {
       // Si le stock est insuffisant mais pas à zéro, bloquer
       if (availableStock > 0 && availableStock < sprayPlusQuantity) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:579',message:'Spray plus stock insufficient',data:{availableStock,sprayPlusQuantity},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
         alert(`Stock insuffisant. Stock disponible : ${availableStock}`)
         return
       }
       // Si le stock est à zéro, le message sera affiché dans addToCart
     }
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:585',message:'Spray plus before addToCart',data:{productName:sprayPlusProduct.name,productId:sprayPlusProduct.id,variantLabel:variantToUse.label,variantId:variantToUse.id,arome:variantToUse.arome||variantToUse.saveur||variantToUse.label||selectedSaveur,quantity:sprayPlusQuantity,price:variantToUse.price||getSprayPlusPrice()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     await addToCart({
       produit: sprayPlusProduct.name,
       arome: variantToUse.arome || variantToUse.saveur || variantToUse.label || selectedSaveur,
@@ -744,9 +669,6 @@ export default function PopupsPage() {
       productId: sprayPlusProduct.id,
       variantId: variantToUse.id
     })
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:595',message:'Spray plus addToCart success',data:{variantLabel:variantToUse.label},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     alert(`✅ Spray plus ${variantToUse.label} ajouté au panier !`)
   }
 
@@ -989,9 +911,6 @@ export default function PopupsPage() {
                         const hasVariant = !!flashBoostVariant
                         const availableStock = getFlashBoostStock()
                         const isDisabled = hasProduct && (availableStock === 0 || (availableStock > 0 && availableStock < flashBoostQuantity))
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:817',message:'Flash boost button disabled check',data:{hasProduct,hasVariant,availableStock,flashBoostQuantity,isDisabled},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                        // #endregion
                         return isDisabled
                       })()}
                       className="w-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 rounded px-2 py-1 text-xs font-semibold hover:bg-yellow-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1078,9 +997,6 @@ export default function PopupsPage() {
                         const hasVariant = !!sprayPlusVariant
                         const availableStock = getSprayPlusStock()
                         const isDisabled = hasProduct && (availableStock === 0 || (availableStock > 0 && availableStock < sprayPlusQuantity))
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'popups/page.tsx:982',message:'Spray plus button disabled check',data:{hasProduct,hasVariant,availableStock,sprayPlusQuantity,isDisabled},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                        // #endregion
                         return isDisabled
                       })()}
                       className="w-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 rounded px-2 py-1 text-xs font-semibold hover:bg-yellow-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

@@ -6,20 +6,19 @@ import Image from 'next/image'
 import { Factory, Package } from 'lucide-react'
 import { encodeGamme } from '@/lib/constants'
 import { getProductsByCategorySync, onProductsUpdate, type Product, type ProductVariant } from '@/lib/products-manager'
-import { loadGammes, onGammesUpdate, getGammeImage, onGammesImagesUpdate } from '@/lib/gammes-manager'
+import { loadGammes, onGammesUpdate, loadGammesImages, onGammesImagesUpdate } from '@/lib/gammes-manager'
 import ProductCard from '@/components/ProductCard'
 import { useCart } from '@/contexts/CartContext'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
+import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 
 export default function BouillettesPage() {
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/categories/bouillettes/page.tsx:12',message:'BouillettesPage rendered',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-  }
-  // #endregion
   const router = useRouter()
   const { addToCart } = useCart()
+  const { promotion } = useGlobalPromotion()
   const [products, setProducts] = useState<Product[]>([])
   const [gammes, setGammes] = useState<string[]>([])
+  const [gammeImages, setGammeImages] = useState<Record<string, string>>({})
 
   // Charger les produits depuis l'admin
   const loadProducts = useCallback(() => {
@@ -36,6 +35,14 @@ export default function BouillettesPage() {
       console.error('Erreur lors du chargement des gammes:', err)
       setGammes([])
     })
+
+    // Charger les images de gammes (global)
+    loadGammesImages()
+      .then((images) => setGammeImages(images))
+      .catch((err) => {
+        console.error('Erreur lors du chargement des images de gammes:', err)
+        setGammeImages({})
+      })
     
     const unsubscribeProducts = onProductsUpdate(loadProducts)
     const unsubscribeGammes = onGammesUpdate(async () => {
@@ -43,9 +50,8 @@ export default function BouillettesPage() {
       setGammes(Array.isArray(gammesData) ? gammesData : [])
     })
     const unsubscribeGammesImages = onGammesImagesUpdate(async () => {
-      // Forcer le re-render pour mettre à jour les images
-      const gammesData = await loadGammes()
-      setGammes(Array.isArray(gammesData) ? gammesData : [])
+      const images = await loadGammesImages()
+      setGammeImages(images)
     })
     
     return () => {
@@ -77,22 +83,39 @@ export default function BouillettesPage() {
         return
       }
       
+      const prixOriginal = variant.price
+      const prixAvecPromotion = applyGlobalPromotion(prixOriginal, promotion, product.category, product.gamme)
+      
       await addToCart({
         produit: product.name,
         arome: product.gamme || '',
         quantite: quantity,
-        prix: variant.price,
+        prix: prixAvecPromotion,
+        prixOriginal: prixOriginal,
+        category: product.category,
+        gamme: product.gamme,
         productId: product.id,
-        variantId: variant.id
+        variantId: variant.id,
+        // Inclure les propriétés de la variante pour le calcul du poids
+        conditionnement: variant.conditionnement,
+        diametre: variant.diametre,
+        taille: variant.taille,
+        couleur: variant.couleur
       })
       return
     }
+    
+    const prixOriginal = product.price
+    const prixAvecPromotion = applyGlobalPromotion(prixOriginal, promotion, product.category, product.gamme)
     
     await addToCart({
       produit: product.name,
       arome: product.gamme || '',
       quantite: quantity,
-      prix: product.price,
+      prix: prixAvecPromotion,
+      prixOriginal: prixOriginal,
+      category: product.category,
+      gamme: product.gamme,
       productId: product.id
     })
   }, [addToCart])
@@ -119,7 +142,7 @@ export default function BouillettesPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {(Array.isArray(gammes) ? gammes : []).map((gamme) => {
-              const gammeImage = getGammeImage(gamme)
+              const gammeImage = gammeImages[gamme]
               return (
                 <button
                   key={gamme}

@@ -7,6 +7,7 @@ import { getAvailableStockSync } from '@/lib/amicale-blanc-stock'
 import { useCart } from '@/contexts/CartContext'
 import { getBouilletteId, getPrixPersonnalise } from '@/lib/price-utils'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 
 interface AmicaleBlancProductModalProps {
   isOpen: boolean
@@ -23,6 +24,7 @@ export default function AmicaleBlancProductModal({
 }: AmicaleBlancProductModalProps) {
   const { addToCart } = useCart()
   const prixPersonnalises = usePrixPersonnalises()
+  const { promotion } = useGlobalPromotion()
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -57,7 +59,7 @@ export default function AmicaleBlancProductModal({
     }
     
     const defaultPrice = (isRobinRed || isMureCassis) ? basePrice + 2 : basePrice
-    return getPrixPersonnalise(prixPersonnalises, productId, defaultPrice)
+    return getPrixPersonnalise(prixPersonnalises, productId, defaultPrice, promotion, 'bouillettes', product.gamme)
   }
 
   const productId = product.diametre && product.conditionnement && product.gamme

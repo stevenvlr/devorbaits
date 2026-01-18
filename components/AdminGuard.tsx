@@ -13,7 +13,7 @@ interface AdminGuardProps {
 export default function AdminGuard({ children }: AdminGuardProps) {
   const router = useRouter()
   const { user, isAuthenticated } = useAuth()
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [hasChecked, setHasChecked] = useState(false)
 
@@ -36,10 +36,16 @@ export default function AdminGuard({ children }: AdminGuardProps) {
     if (!hasChecked) return
 
     const verifyAdmin = async () => {
+      const redirectPath =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`
+          : '/admin'
+
       // Si l'utilisateur n'est pas authentifié, rediriger vers login
       if (!isAuthenticated || !user) {
         console.log('[AdminGuard] Utilisateur non authentifié, redirection vers login')
-        router.push('/account/login?redirect=/admin')
+        setIsAdmin(false)
+        router.push(`/account/login?redirect=${encodeURIComponent(redirectPath)}`)
         setLoading(false)
         return
       }
@@ -56,7 +62,8 @@ export default function AdminGuard({ children }: AdminGuardProps) {
         }
       } catch (error) {
         console.error('[AdminGuard] Erreur lors de la vérification admin:', error)
-        router.push('/account/login?redirect=/admin')
+        setIsAdmin(false)
+        router.push(`/account/login?redirect=${encodeURIComponent(redirectPath)}`)
       } finally {
         setLoading(false)
       }
@@ -65,7 +72,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
     verifyAdmin()
   }, [hasChecked, isAuthenticated, user, router])
 
-  if (loading || isAdmin === null) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-noir-950 flex items-center justify-center">
         <div className="text-center">
@@ -77,7 +84,36 @@ export default function AdminGuard({ children }: AdminGuardProps) {
   }
 
   if (!isAdmin) {
-    return null // La redirection est gérée dans le useEffect
+    return (
+      <div className="min-h-screen bg-noir-950 flex items-center justify-center px-6">
+        <div className="text-center max-w-md">
+          <p className="text-xl font-bold mb-2">Accès administration refusé</p>
+          <p className="text-gray-400 mb-6">
+            Connectez-vous avec un compte <strong>admin</strong> (role = admin dans Supabase).
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => {
+                const redirectPath =
+                  typeof window !== 'undefined'
+                    ? `${window.location.pathname}${window.location.search}`
+                    : '/admin'
+                router.push(`/account/login?redirect=${encodeURIComponent(redirectPath)}`)
+              }}
+              className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-noir-950 font-medium rounded-lg transition-colors"
+            >
+              Se connecter
+            </button>
+            <button
+              onClick={() => router.push('/')}
+              className="px-4 py-2 bg-noir-800 hover:bg-noir-700 border border-noir-700 text-gray-200 font-medium rounded-lg transition-colors"
+            >
+              Retour au site
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return <>{children}</>

@@ -578,6 +578,7 @@ export default function BoxtalRelayMap({
             onChange={(e) => setSearchCity(e.target.value)}
             placeholder="Paris"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ color: '#000000', backgroundColor: '#ffffff' }}
           />
         </div>
         <div className="flex-1 min-w-[200px]">
@@ -591,6 +592,7 @@ export default function BoxtalRelayMap({
             onChange={(e) => setSearchPostalCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
             placeholder="75001"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ color: '#000000', backgroundColor: '#ffffff' }}
             maxLength={5}
           />
         </div>

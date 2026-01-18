@@ -1,11 +1,22 @@
 import { encodeGamme } from './constants'
+import { applyGlobalPromotion, type GlobalPromotion } from './global-promotion-manager'
 
 export function getPrixPersonnalise(
   prixPersonnalises: Record<string, number>,
   productId: string,
-  prixParDefaut: number
+  prixParDefaut: number,
+  promotion?: GlobalPromotion | null,
+  productCategory?: string,
+  productGamme?: string
 ): number {
-  return prixPersonnalises[productId] ?? prixParDefaut
+  const prix = prixPersonnalises[productId] ?? prixParDefaut
+  
+  // Appliquer la promotion globale si elle existe
+  if (promotion) {
+    return applyGlobalPromotion(prix, promotion, productCategory, productGamme)
+  }
+  
+  return prix
 }
 
 // Fonctions pour générer les IDs (même format que dans amicale-blanc-config.ts)

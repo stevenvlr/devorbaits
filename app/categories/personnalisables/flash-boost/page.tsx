@@ -5,6 +5,7 @@ import { ShoppingCart, Factory, Zap, Package } from 'lucide-react'
 import { getAllAromesAndSaveurs } from '@/lib/all-aromes-saveurs-manager'
 import { useCart } from '@/contexts/CartContext'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { getFlashBoostId, getPrixPersonnalise } from '@/lib/price-utils'
 import { loadFlashBoostFormats, loadFlashBoostImage } from '@/lib/flash-spray-variables-manager'
 
@@ -17,6 +18,7 @@ export default function FlashBoostPage() {
   const [productImage, setProductImage] = useState<string | null>(null)
   const { addToCart } = useCart()
   const prixPersonnalises = usePrixPersonnalises()
+  const { promotion } = useGlobalPromotion()
 
   // Charger tous les arômes/saveurs disponibles
   useEffect(() => {
@@ -44,7 +46,7 @@ export default function FlashBoostPage() {
   const getPrice = () => {
     if (!selectedArome) return 10.99
     const productId = getFlashBoostId(selectedArome)
-    return getPrixPersonnalise(prixPersonnalises, productId, 10.99)
+    return getPrixPersonnalise(prixPersonnalises, productId, 10.99, promotion, 'flash boost', undefined)
   }
 
   const handleAddToCart = async () => {
@@ -52,12 +54,18 @@ export default function FlashBoostPage() {
       alert('Veuillez sélectionner un arôme')
       return
     }
+    const prixOriginal = 10.99
+    const prixAvecPromotion = getPrice()
+    
     await addToCart({
       produit: `Flash boost ${selectedArome}`,
       arome: selectedArome,
       format: selectedFormat,
       quantite: quantity,
-      prix: getPrice()
+      prix: prixAvecPromotion,
+      prixOriginal: prixOriginal,
+      category: 'flash boost',
+      gamme: undefined
     })
     alert(`Flash boost ${selectedArome} ajouté au panier !`)
   }

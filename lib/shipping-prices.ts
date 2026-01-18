@@ -37,6 +37,7 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
 
   try {
     // D'abord, essayer de récupérer un tarif avec le type spécifique
+    console.log(`🔍 Recherche d'un tarif actif pour le type "${shippingType}"`)
     const { data, error } = await supabase
       .from('shipping_prices')
       .select('*')
@@ -47,6 +48,12 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
 
     if (error) {
       console.error('❌ Erreur lors de la récupération du tarif:', error)
+      console.error('Détails de l\'erreur:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
       
       // Si aucun tarif spécifique n'est trouvé, essayer de récupérer un tarif sans type (rétrocompatibilité)
       if (shippingType === 'home') {
@@ -74,32 +81,105 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
 
     if (data && data.length > 0) {
       console.log(`✅ Tarif ${shippingType} trouvé:`, data[0])
+      console.log(`   - Nom: ${data[0].name}`)
+      console.log(`   - Type: ${data[0].type}`)
+      console.log(`   - Shipping Type: ${data[0].shipping_type}`)
+      console.log(`   - Actif: ${data[0].active}`)
       return data[0]
+    } else {
+      console.log(`⚠️ Aucun tarif trouvé avec shipping_type="${shippingType}" et active=true`)
+      
+      // Debug : Vérifier tous les tarifs actifs pour voir ce qui existe
+      const { data: allActivePrices, error: allActiveError } = await supabase
+        .from('shipping_prices')
+        .select('id, name, shipping_type, active, type')
+        .eq('active', true)
+      
+      if (allActiveError) {
+        console.error('❌ Erreur lors de la récupération de tous les tarifs actifs:', allActiveError)
+      } else if (allActivePrices && allActivePrices.length > 0) {
+        console.log(`📋 ${allActivePrices.length} tarif(s) actif(s) trouvé(s) dans la base:`)
+        allActivePrices.forEach((p: any) => {
+          console.log(`   - ${p.name} (shipping_type: ${p.shipping_type || 'null'}, type: ${p.type}, actif: ${p.active})`)
+        })
+        
+        // Vérifier spécifiquement les tarifs 'relay'
+        const relayPrices = allActivePrices.filter((p: any) => p.shipping_type === 'relay')
+        if (relayPrices.length > 0) {
+          console.log(`✅ ${relayPrices.length} tarif(s) "relay" trouvé(s):`, relayPrices)
+        } else {
+          console.log(`⚠️ Aucun tarif avec shipping_type="relay" trouvé parmi les tarifs actifs`)
+        }
+      } else {
+        console.log(`⚠️ Aucun tarif actif trouvé dans la base de données`)
+      }
+      
+      // Debug supplémentaire : vérifier TOUS les tarifs (actifs et inactifs)
+      const { data: allPrices } = await supabase
+        .from('shipping_prices')
+        .select('id, name, shipping_type, active, type')
+        .order('created_at', { ascending: false })
+      
+      if (allPrices && allPrices.length > 0) {
+        console.log(`📋 Total de ${allPrices.length} tarif(s) dans la base (actifs et inactifs):`)
+        allPrices.forEach((p: any) => {
+          console.log(`   - ${p.name} (shipping_type: ${p.shipping_type || 'null'}, type: ${p.type}, actif: ${p.active})`)
+        })
+      }
     }
 
-    // Si aucun tarif avec le type spécifique n'est trouvé, essayer le fallback pour 'home'
-    if (shippingType === 'home') {
-      console.log('🔄 Aucun tarif "home" trouvé, recherche d\'un tarif sans type')
-      const { data: fallbackData, error: fallbackError } = await supabase
+    // Si aucun tarif avec le type spécifique n'est trouvé, essayer les fallbacks
+    console.log(`🔄 Aucun tarif "${shippingType}" trouvé, recherche d'un tarif de secours`)
+    
+    // Fallback 1 : Chercher un tarif sans type (rétrocompatibilité)
+    const { data: fallbackData1, error: fallbackError1 } = await supabase
+      .from('shipping_prices')
+      .select('*')
+      .eq('active', true)
+      .is('shipping_type', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    
+    if (!fallbackError1 && fallbackData1 && fallbackData1.length > 0) {
+      console.log('✅ Tarif fallback (sans type) trouvé:', fallbackData1[0])
+      return fallbackData1[0]
+    }
+    
+    // Fallback 2 : Pour 'relay', essayer de trouver un tarif 'home' comme alternative
+    if (shippingType === 'relay') {
+      console.log('🔄 Tentative de récupération d\'un tarif "home" comme alternative pour "relay"')
+      const { data: fallbackData2, error: fallbackError2 } = await supabase
         .from('shipping_prices')
         .select('*')
         .eq('active', true)
-        .is('shipping_type', null)
+        .eq('shipping_type', 'home')
         .order('created_at', { ascending: false })
         .limit(1)
       
-      if (fallbackError) {
-        console.error('❌ Erreur lors de la récupération du tarif fallback:', fallbackError)
-        return null
+      if (!fallbackError2 && fallbackData2 && fallbackData2.length > 0) {
+        console.log('✅ Tarif "home" utilisé comme alternative pour "relay":', fallbackData2[0])
+        return fallbackData2[0]
       }
+    }
+    
+    // Fallback 3 : Pour 'home', essayer de trouver un tarif 'relay' comme alternative
+    if (shippingType === 'home') {
+      console.log('🔄 Tentative de récupération d\'un tarif "relay" comme alternative pour "home"')
+      const { data: fallbackData3, error: fallbackError3 } = await supabase
+        .from('shipping_prices')
+        .select('*')
+        .eq('active', true)
+        .eq('shipping_type', 'relay')
+        .order('created_at', { ascending: false })
+        .limit(1)
       
-      if (fallbackData && fallbackData.length > 0) {
-        console.log('✅ Tarif fallback trouvé:', fallbackData[0])
-        return fallbackData[0]
+      if (!fallbackError3 && fallbackData3 && fallbackData3.length > 0) {
+        console.log('✅ Tarif "relay" utilisé comme alternative pour "home":', fallbackData3[0])
+        return fallbackData3[0]
       }
     }
 
-    console.warn(`⚠️ Aucun tarif actif trouvé pour le type "${shippingType}"`)
+    console.warn(`⚠️ Aucun tarif actif trouvé pour le type "${shippingType}" (ni fallback)`)
     return null
   } catch (error) {
     console.error('❌ Erreur lors de la récupération du tarif:', error)
@@ -125,11 +205,6 @@ export async function calculateFinalShippingPrice(
   if (!shippingPrice) {
     // Pas de tarif personnalisé, utiliser le prix de base
     return basePrice
-  }
-
-  // Vérifier la livraison gratuite
-  if (shippingPrice.free_shipping_threshold && orderValue >= shippingPrice.free_shipping_threshold) {
-    return 0
   }
 
   // Vérifier le prix minimum de commande
@@ -224,10 +299,19 @@ export async function saveShippingPrice(price: Partial<ShippingPrice>): Promise<
     const cleanPrice: any = {
       name: price.name,
       type: price.type,
-      active: price.active !== undefined ? price.active : true,
-      // Toujours définir shipping_type avec une valeur par défaut si non spécifié
-      shipping_type: price.shipping_type || 'home'
+      active: price.active !== undefined ? price.active : true
     }
+    
+    // Définir shipping_type : utiliser la valeur fournie, ou 'home' par défaut seulement si vraiment non défini
+    // Important : ne pas utiliser || car 'relay' est truthy, mais on veut préserver null/undefined si vraiment non défini
+    if (price.shipping_type !== undefined && price.shipping_type !== null) {
+      cleanPrice.shipping_type = price.shipping_type
+    } else {
+      // Valeur par défaut uniquement si vraiment non défini
+      cleanPrice.shipping_type = 'home'
+    }
+    
+    console.log('💾 Sauvegarde tarif avec shipping_type:', cleanPrice.shipping_type, '(valeur originale:', price.shipping_type, ')')
     if (price.fixed_price !== undefined) cleanPrice.fixed_price = price.fixed_price
     if (price.margin_percent !== undefined) cleanPrice.margin_percent = price.margin_percent
     if (price.margin_fixed !== undefined) cleanPrice.margin_fixed = price.margin_fixed

@@ -45,20 +45,10 @@ export default function FlashSprayVariablesAdminPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const loadAllData = async () => {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/flash-spray-variables/page.tsx:28',message:'loadAllData entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-    }
-    // #endregion
     try {
       const [allAromesData, aromesFB, formatsFB, aromesSP, formatsSP, imageFB, imageSP] = await Promise.all([
         getAllAromesAndSaveurs().catch(() => []),
         loadFlashBoostAromes().catch(err => {
-          // #region agent log
-          if (typeof window !== 'undefined') {
-            fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/flash-spray-variables/page.tsx:35',message:'loadFlashBoostAromes error',data:{errorMessage:err?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-          }
-          // #endregion
           console.error('Erreur loadFlashBoostAromes:', err)
           return []
         }),
@@ -78,12 +68,6 @@ export default function FlashSprayVariablesAdminPage() {
         loadSprayPlusImage().catch(() => null)
       ])
       
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/flash-spray-variables/page.tsx:52',message:'loadAllData results',data:{allAromesCount:allAromesData.length,aromesFBCount:aromesFB.length,formatsFBCount:formatsFB.length,aromesSPCount:aromesSP.length,formatsSPCount:formatsSP.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-      }
-      // #endregion
-      
       // S'assurer que toutes les valeurs sont des tableaux
       setAllAromes(Array.isArray(allAromesData) ? allAromesData : [])
       setFlashBoostAromes(Array.isArray(aromesFB) ? aromesFB : [])
@@ -93,11 +77,6 @@ export default function FlashSprayVariablesAdminPage() {
       setFlashBoostImage(imageFB)
       setSprayPlusImage(imageSP)
     } catch (error: any) {
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/flash-spray-variables/page.tsx:63',message:'loadAllData catch error',data:{errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-      }
-      // #endregion
       console.error('Erreur lors du chargement des variables:', error)
       setMessage({ 
         type: 'error', 
@@ -107,11 +86,6 @@ export default function FlashSprayVariablesAdminPage() {
   }
 
   useEffect(() => {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/flash-spray-variables/page.tsx:75',message:'FlashSprayVariablesAdminPage useEffect',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    }
-    // #endregion
     loadAllData()
     
     const unsubscribes = [

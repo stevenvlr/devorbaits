@@ -45,9 +45,6 @@ export default function RegisterPage() {
     }
 
     setLoading(true)
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/account/register/page.tsx:47',message:'handleSubmit - before registerUser',data:{email:formData.email,hasNom:!!formData.nom,hasPrenom:!!formData.prenom},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
 
     try {
       const result = await registerUser({
@@ -60,10 +57,6 @@ export default function RegisterPage() {
         codePostal: formData.codePostal || undefined,
         ville: formData.ville || undefined
       })
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/account/register/page.tsx:61',message:'handleSubmit - after registerUser',data:{success:result.success,hasUser:!!result.user,hasError:!!result.error,error:result.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
 
       setLoading(false)
 
@@ -75,9 +68,6 @@ export default function RegisterPage() {
       }
     } catch (error: any) {
       setLoading(false)
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/account/register/page.tsx:77',message:'handleSubmit - catch error',data:{errorMessage:error?.message,errorStack:error?.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       console.error('Erreur inscription:', error)
       setError(error.message || 'Erreur lors de l\'inscription. Veuillez réessayer.')
     }

@@ -12,9 +12,11 @@ import {
   loadBarPopupCouleurImages, getBarPopupCouleurImage, onBarPopupCouleurImagesUpdate,
   type Couleur
 } from '@/lib/popup-variables-manager'
+import { loadDisabledCombinationsSet } from '@/lib/bar-popup-disabled-combinations'
 // Note: Les constantes COULEURS_FLUO, COULEURS_PASTEL, AROMES ne sont plus utilisées directement
 import { useCart } from '@/contexts/CartContext'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { getBarPopupId, getPrixPersonnalise } from '@/lib/price-utils'
 import PromoItemModal, { PromoCharacteristics } from '@/components/PromoItemModal'
 import { getProductsByCategory, type Product, type ProductVariant } from '@/lib/products-manager'
@@ -32,24 +34,27 @@ export default function BarPopupPage() {
   const [quantity, setQuantity] = useState(1)
   const { addToCart, cartItems, shouldShowPromoModal, addPromoItem } = useCart()
   const prixPersonnalises = usePrixPersonnalises()
+  const { promotion } = useGlobalPromotion()
   const [showPromoModal, setShowPromoModal] = useState(false)
   const [barPopupProduct, setBarPopupProduct] = useState<Product | null>(null)
   const [barPopupVariant, setBarPopupVariant] = useState<ProductVariant | null>(null)
   const [couleurImages, setCouleurImages] = useState<Record<string, string>>({})
   const [selectedCouleurImage, setSelectedCouleurImage] = useState<string | null>(null)
+  const [disabledCombinations, setDisabledCombinations] = useState<Set<string>>(new Set())
 
   // Charger les variables depuis le gestionnaire
   useEffect(() => {
     const loadData = async () => {
       try {
         console.log('🔍 Chargement des variables Bar à Pop-up...')
-        const [loadedAromes, loadedCouleursFluo, loadedCouleursPastel, loadedTaillesFluo, loadedTaillesPastel, loadedCouleurImages] = await Promise.all([
+        const [loadedAromes, loadedCouleursFluo, loadedCouleursPastel, loadedTaillesFluo, loadedTaillesPastel, loadedCouleurImages, loadedDisabledCombinations] = await Promise.all([
           loadBarPopupAromes(),
           loadBarPopupCouleursFluo(),
           loadBarPopupCouleursPastel(),
           loadBarPopupTaillesFluo(),
           loadBarPopupTaillesPastel(),
-          loadBarPopupCouleurImages()
+          loadBarPopupCouleurImages(),
+          loadDisabledCombinationsSet()
         ])
         
         // S'assurer que toutes les valeurs sont des tableaux
@@ -71,6 +76,7 @@ export default function BarPopupPage() {
         setTaillesFluo(taillesFluoArray)
         setTaillesPastel(taillesPastelArray)
         setCouleurImages(loadedCouleurImages && typeof loadedCouleurImages === 'object' ? loadedCouleurImages : {})
+        setDisabledCombinations(loadedDisabledCombinations || new Set())
         
         if (couleursFluoArray.length > 0 && !selectedCouleur) {
           setSelectedCouleur(couleursFluoArray[0])
@@ -141,8 +147,16 @@ export default function BarPopupPage() {
   }, [selectedCouleur, selectedTaille, selectedArome])
   
   // Déterminer les tailles disponibles selon la couleur sélectionnée
-  const availableTailles = Array.isArray(selectedCouleur?.type === 'fluo' ? taillesFluo : taillesPastel) 
+  // Filtrer les tailles désactivées pour la couleur sélectionnée
+  const baseTailles = Array.isArray(selectedCouleur?.type === 'fluo' ? taillesFluo : taillesPastel) 
     ? (selectedCouleur?.type === 'fluo' ? taillesFluo : taillesPastel)
+    : []
+  
+  const availableTailles = selectedCouleur
+    ? baseTailles.filter(taille => {
+        const combinationKey = `${selectedCouleur.name}|${taille}`
+        return !disabledCombinations.has(combinationKey)
+      })
     : []
   const allCouleurs = [
     ...(Array.isArray(couleursFluo) ? couleursFluo : []),
@@ -187,7 +201,7 @@ export default function BarPopupPage() {
   const getPrice = () => {
     if (!selectedCouleur || !selectedTaille || !selectedArome) return 6.99
     const productId = getBarPopupId(selectedCouleur.name, selectedTaille, selectedArome)
-    return getPrixPersonnalise(prixPersonnalises, productId, 6.99)
+    return getPrixPersonnalise(prixPersonnalises, productId, 6.99, promotion, 'bar à pop-up', undefined)
   }
 
   const handleAddToCart = async () => {
@@ -214,13 +228,19 @@ export default function BarPopupPage() {
       }
     }
     
+    const prixOriginal = barPopupVariant.price || 6.99
+    const prixAvecPromotion = getPrice()
+    
     await addToCart({
       produit: barPopupProduct.name,
       taille: selectedTaille,
       couleur: selectedCouleur?.name || '',
       arome: selectedArome,
       quantite: quantity,
-      prix: barPopupVariant.price || getPrice(),
+      prix: prixAvecPromotion,
+      prixOriginal: prixOriginal, // Stocker le prix original pour recalculer si promotion activée après
+      category: 'bar à pop-up', // Stocker la catégorie pour appliquer la promotion
+      gamme: undefined, // Bar à pop-up n'a pas de gamme
       productId: barPopupProduct.id,
       variantId: barPopupVariant.id
     })

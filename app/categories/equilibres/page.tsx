@@ -5,6 +5,7 @@ import { ShoppingCart, Factory } from 'lucide-react'
 import { GAMMES_BOUILLETTES, TAILLES_EQUILIBRES } from '@/lib/constants'
 import { useCart } from '@/contexts/CartContext'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { getEquilibreId, getPrixPersonnalise } from '@/lib/price-utils'
 
 export default function EquilibresPage() {
@@ -13,19 +14,26 @@ export default function EquilibresPage() {
   const [quantity, setQuantity] = useState(1)
   const { addToCart } = useCart()
   const prixPersonnalises = usePrixPersonnalises()
+  const { promotion } = useGlobalPromotion()
 
   const getPrice = () => {
     const productId = getEquilibreId(selectedArome, selectedTaille)
-    return getPrixPersonnalise(prixPersonnalises, productId, 8.99)
+    return getPrixPersonnalise(prixPersonnalises, productId, 8.99, promotion, 'équilibrées', selectedArome)
   }
 
   const handleAddToCart = async () => {
+    const prixOriginal = 8.99
+    const prixAvecPromotion = getPrice()
+    
     await addToCart({
       produit: 'Équilibrée',
       taille: selectedTaille,
       arome: selectedArome,
       quantite: quantity,
-      prix: getPrice()
+      prix: prixAvecPromotion,
+      prixOriginal: prixOriginal,
+      category: 'équilibrées',
+      gamme: selectedArome
     })
     alert('Produit ajouté au panier !')
   }

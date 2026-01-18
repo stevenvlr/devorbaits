@@ -5,6 +5,7 @@ import { Package, ShoppingCart, MapPin } from 'lucide-react'
 import { TOUTES_LES_BOUILLETTES, PRODUITS_DISPONIBLES_AMICALE_BLANC_DEFAULT, type ProduitDisponible } from '@/lib/amicale-blanc-config'
 import { useCart } from '@/contexts/CartContext'
 import { usePrixPersonnalises } from '@/hooks/usePrixPersonnalises'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { getBouilletteId, getPrixPersonnalise } from '@/lib/price-utils'
 import { getAvailableStockSync, onStockUpdate } from '@/lib/amicale-blanc-stock'
 import AmicaleBlancProductModal from '@/components/AmicaleBlancProductModal'
@@ -13,6 +14,7 @@ export default function AmicaleBlancPage() {
   const { addToCart } = useCart()
   const [produitsDisponibles, setProduitsDisponibles] = useState<string[]>([])
   const prixPersonnalises = usePrixPersonnalises()
+  const { promotion } = useGlobalPromotion()
   const [, forceUpdate] = useState(0)
   const [selectedProduct, setSelectedProduct] = useState<ProduitDisponible | null>(null)
 
@@ -64,7 +66,7 @@ export default function AmicaleBlancPage() {
     }
     
     const defaultPrice = (isRobinRed || isMureCassis) ? basePrice + 2 : basePrice
-    return getPrixPersonnalise(prixPersonnalises, productId, defaultPrice)
+    return getPrixPersonnalise(prixPersonnalises, productId, defaultPrice, promotion, 'bouillettes', gamme)
   }
 
   const handleAddToCart = (bouillette: typeof TOUTES_LES_BOUILLETTES[0]) => {
@@ -82,14 +84,40 @@ export default function AmicaleBlancPage() {
       return
     }
     
-    const prix = getPrice(bouillette.diametre, bouillette.conditionnement, bouillette.gamme)
+    // Calculer le prix original (sans promotion) pour pouvoir le recalculer si promotion activée après
+    const is10mm = bouillette.diametre === '10'
+    const isRobinRed = bouillette.gamme === 'Robin Red Vers de vase'
+    const isMureCassis = bouillette.gamme === 'Mure Cassis'
+    let prixOriginal = 0
+    
+    if (bouillette.conditionnement === '1kg') {
+      prixOriginal = is10mm ? 11.99 : 9.99
+    } else if (bouillette.conditionnement === '2.5kg') {
+      prixOriginal = is10mm ? 28.99 : 23.99
+    } else if (bouillette.conditionnement === '5kg') {
+      prixOriginal = is10mm ? 56.99 : 46.99
+    } else if (bouillette.conditionnement === '10kg') {
+      prixOriginal = is10mm ? 109.99 : 89.99
+    } else {
+      prixOriginal = 9.99
+    }
+    
+    if (isRobinRed || isMureCassis) {
+      prixOriginal += 2
+    }
+    
+    const prixAvecPromotion = getPrice(bouillette.diametre, bouillette.conditionnement, bouillette.gamme)
+    
     addToCart({
       produit: bouillette.nom,
       arome: bouillette.gamme,
       taille: `${bouillette.diametre}mm`,
       conditionnement: bouillette.conditionnement,
       quantite: 1,
-      prix: prix,
+      prix: prixAvecPromotion,
+      prixOriginal: prixOriginal,
+      category: 'bouillettes',
+      gamme: bouillette.gamme,
       pointRetrait: 'amicale-blanc',
       productId: productId
     })

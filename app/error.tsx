@@ -12,11 +12,6 @@ export default function Error({
   useEffect(() => {
     // Log l'erreur pour le débogage
     console.error(error);
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/error.tsx:12',message:'Error boundary triggered',data:{errorMessage:error?.message,errorStack:error?.stack,errorDigest:error?.digest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,B,C,E'})}).catch(()=>{});
-    }
-    // #endregion
   }, [error]);
 
   return (

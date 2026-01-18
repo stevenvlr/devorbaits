@@ -3,8 +3,18 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { Plus, Trash2, X, Factory, Tag, Upload, ImageIcon, Eye, EyeOff } from 'lucide-react'
-import { loadGammesForAdmin, addGamme, removeGamme, onGammesUpdate, getGammeImage, setGammeImage, removeGammeImage, onGammesImagesUpdate, toggleGammeVisibility, type GammeData } from '@/lib/gammes-manager'
+import { loadGammesForAdmin, addGamme, removeGamme, onGammesUpdate, loadGammesImages, setGammeImage, removeGammeImage, onGammesImagesUpdate, toggleGammeVisibility, type GammeData } from '@/lib/gammes-manager'
 import { optimizeImage } from '@/lib/image-optimizer'
+import { uploadSharedImage } from '@/lib/storage-supabase'
+
+function dataUrlToFile(dataUrl: string, fileName: string): File {
+  const [meta, base64] = dataUrl.split(',')
+  const mime = meta?.match(/data:(.*?);base64/i)?.[1] || 'image/jpeg'
+  const binary = atob(base64 || '')
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new File([bytes], fileName, { type: mime })
+}
 
 export default function GammesAdminPage() {
   const [gammes, setGammes] = useState<GammeData[]>([])
@@ -18,54 +28,23 @@ export default function GammesAdminPage() {
 
   // Charger les gammes et leurs images
   const loadGammesData = async () => {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/gammes/page.tsx:18',message:'loadGammesData entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-    }
-    // #endregion
     try {
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/gammes/page.tsx:21',message:'calling loadGammes',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-      }
-      // #endregion
       const allGammes = await loadGammesForAdmin()
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/gammes/page.tsx:24',message:'loadGammesForAdmin result',data:{gammesCount:allGammes?.length || 0,gammes:allGammes,isArray:Array.isArray(allGammes)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-      }
-      // #endregion
       // S'assurer que allGammes est toujours un tableau
       console.log('📋 Gammes chargées pour admin:', allGammes)
       console.log('📋 Gammes masquées:', allGammes?.filter(g => g.hidden) || [])
       setGammes(Array.isArray(allGammes) ? allGammes : [])
       
-      // Charger les images
-      const images: Record<string, string> = {}
-      allGammes.forEach(gamme => {
-        const image = getGammeImage(gamme.name)
-        if (image) {
-          images[gamme.name] = image
-        }
-      })
+      // Charger les images (global via Supabase)
+      const images = await loadGammesImages()
       setGammeImages(images)
     } catch (error: any) {
-      // #region agent log
-      if (typeof window !== 'undefined') {
-        fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/gammes/page.tsx:36',message:'loadGammesData error',data:{errorMessage:error?.message,errorStack:error?.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C,E'})}).catch(()=>{});
-      }
-      // #endregion
       console.error('Erreur lors du chargement des gammes:', error)
       setMessage({ type: 'error', text: 'Erreur lors du chargement des gammes d\'appât' })
     }
   }
 
   useEffect(() => {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/admin/gammes/page.tsx:38',message:'GammesAdminPage useEffect',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    }
-    // #endregion
     loadGammesData()
     const unsubscribeGammes = onGammesUpdate(loadGammesData)
     const unsubscribeImages = onGammesImagesUpdate(loadGammesData)
@@ -107,7 +86,7 @@ export default function GammesAdminPage() {
     
     if (success) {
       // Supprimer aussi l'image associée
-      removeGammeImage(gamme)
+      await removeGammeImage(gamme)
       setMessage({ type: 'success', text: `Gamme d'appât "${gamme}" supprimée avec succès` })
       await loadGammesData()
       setTimeout(() => setMessage(null), 3000)
@@ -136,11 +115,19 @@ export default function GammesAdminPage() {
     setMessage(null)
 
     try {
-      // Optimiser l'image
-      const optimizedImage = await optimizeImage(file, { maxSizeKB: 500 })
-      setGammeImage(gamme, optimizedImage)
-      setMessage({ type: 'success', text: `Photo de la gamme d'appât "${gamme}" mise à jour !` })
-      loadGammesData()
+      // Optimiser l'image (data URL) puis upload dans Supabase Storage (URL publique)
+      const optimizedDataUrl = await optimizeImage(file, { maxSizeKB: 500, mimeType: 'image/webp' })
+      const optimizedFile = dataUrlToFile(optimizedDataUrl, `gamme-${gamme}-${Date.now()}.webp`)
+      const publicUrl = await uploadSharedImage(`gamme-${gamme}`, optimizedFile)
+
+      const ok = await setGammeImage(gamme, publicUrl)
+      if (!ok) {
+        setMessage({ type: 'error', text: `Image uploadée, mais impossible de l’enregistrer en global (Supabase) pour "${gamme}".` })
+      } else {
+        setMessage({ type: 'success', text: `Photo de la gamme d'appât "${gamme}" mise à jour (global) !` })
+      }
+
+      await loadGammesData()
       setEditingImageFor(null)
       setTimeout(() => setMessage(null), 3000)
     } catch (error) {
@@ -183,11 +170,18 @@ export default function GammesAdminPage() {
     if (!confirm(`Supprimer la photo de la gamme d'appât "${gamme}" ?`)) {
       return
     }
-    removeGammeImage(gamme)
-    setMessage({ type: 'success', text: `Photo de la gamme d'appât "${gamme}" supprimée` })
-    loadGammesData()
-    setEditingImageFor(null)
-    setTimeout(() => setMessage(null), 3000)
+    void (async () => {
+      const ok = await removeGammeImage(gamme)
+      if (!ok) {
+        setMessage({ type: 'error', text: `Impossible de supprimer la photo (global) pour "${gamme}".` })
+        setTimeout(() => setMessage(null), 3000)
+        return
+      }
+      setMessage({ type: 'success', text: `Photo de la gamme d'appât "${gamme}" supprimée (global)` })
+      await loadGammesData()
+      setEditingImageFor(null)
+      setTimeout(() => setMessage(null), 3000)
+    })()
   }
 
   return (

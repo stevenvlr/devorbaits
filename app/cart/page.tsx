@@ -7,18 +7,83 @@ import { useCart } from '@/contexts/CartContext'
 import { confirmOrder as confirmOrderAmicale } from '@/lib/amicale-blanc-stock'
 import { confirmOrder } from '@/lib/stock-manager'
 import { SAVEURS_POPUP_DUO, FORMES_POPUP_DUO, AROMES, COULEURS_FLUO, COULEURS_PASTEL, TAILLES_FLUO, TAILLES_PASTEL } from '@/lib/constants'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
+import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 
 export default function CartPage() {
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/cart/page.tsx:11',message:'CartPage rendered',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-  }
-  // #endregion
    const { cartItems, removeFromCart, total, clearCart, updatePromoItem } = useCart()
+  const { promotion, loading: promotionLoading } = useGlobalPromotion()
   const [hasMixedRetrait, setHasMixedRetrait] = useState(false)
   const [produitsAmicaleBlanc, setProduitsAmicaleBlanc] = useState<typeof cartItems>([])
   const [produitsAutres, setProduitsAutres] = useState<typeof cartItems>([])
   const [expandedPromoItems, setExpandedPromoItems] = useState<Set<string>>(new Set())
+  
+  // Log de débogage pour la promotion
+  useEffect(() => {
+    console.log('🛒 Panier - Promotion:', {
+      promotion,
+      loading: promotionLoading,
+      active: promotion?.active,
+      discountPercentage: promotion?.discountPercentage,
+      applyToAll: promotion?.applyToAll,
+      allowedCategories: promotion?.allowedCategories,
+      allowedGammes: promotion?.allowedGammes
+    })
+  }, [promotion, promotionLoading])
+  
+  // Fonction pour obtenir le prix avec promotion pour un item
+  const getItemPrice = (item: typeof cartItems[0]) => {
+    if (item.isGratuit) return 0
+    
+    // Si on a une promotion active
+    if (promotion && promotion.active) {
+      // Si on a le prix original, l'utiliser (meilleur cas)
+      const prixBase = item.prixOriginal !== undefined ? item.prixOriginal : item.prix
+      
+      // Si la promotion s'applique à tout le site, l'appliquer même sans category/gamme
+      if (promotion.applyToAll) {
+        const prixAvecPromo = applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+        console.log('💰 Promotion globale appliquée:', {
+          produit: item.produit,
+          prixBase,
+          prixAvecPromo,
+          discountPercentage: promotion.discountPercentage,
+          applyToAll: true
+        })
+        return prixAvecPromo
+      }
+      
+      // Si on a category ou gamme, vérifier l'éligibilité
+      if (item.category || item.gamme) {
+        const prixAvecPromo = applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+        console.log('💰 Promotion appliquée:', {
+          produit: item.produit,
+          prixBase,
+          prixAvecPromo,
+          category: item.category,
+          gamme: item.gamme,
+          discountPercentage: promotion.discountPercentage
+        })
+        return prixAvecPromo
+      }
+      
+      // Si pas de category/gamme et pas applyToAll, pas de promotion
+      console.log('💰 Pas de promotion (pas de category/gamme):', {
+        produit: item.produit,
+        prix: prixBase,
+        applyToAll: promotion.applyToAll
+      })
+    }
+    
+    // Sinon, utiliser le prix stocké
+    return item.prix
+  }
+  
+  // Calculer le total avec promotion
+  const totalWithPromotion = cartItems.reduce((sum, item) => {
+    if (item.isGratuit) return sum
+    return sum + (getItemPrice(item) * item.quantite)
+  }, 0)
 
   // Vérifier si le panier contient un mélange de produits
   useEffect(() => {
@@ -70,27 +135,12 @@ export default function CartPage() {
   }
 
 
-  // #region agent log
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cart/page.tsx:68',message:'CartPage render',data:{pathname:window.location.pathname,cartItemsCount:cartItems.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    }
-  }, [cartItems.length]);
-  // #endregion
-
   return (
     <div className="min-h-screen bg-noir-950 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
           <Link
             href="/"
-            onClick={() => {
-              // #region agent log
-              if (typeof window !== 'undefined') {
-                fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cart/page.tsx:75',message:'Link to home clicked',data:{from:'/cart'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-              }
-              // #endregion
-            }}
             className="inline-flex items-center gap-2 text-gray-400 hover:text-yellow-500 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -202,7 +252,7 @@ export default function CartPage() {
                             </p>
                           ) : (
                             <p className="text-2xl font-bold text-yellow-500">
-                              {(item.prix * item.quantite).toFixed(2)} €
+                              {(getItemPrice(item) * item.quantite).toFixed(2)} €
                             </p>
                           )}
                         </div>
@@ -335,7 +385,7 @@ export default function CartPage() {
                 <div className="space-y-4 mb-8">
                   <div className="flex justify-between text-gray-400">
                     <span>Sous-total:</span>
-                    <span className="text-white">{total.toFixed(2)} €</span>
+                    <span className="text-white">{totalWithPromotion.toFixed(2)} €</span>
                   </div>
                   {cartItems.some(item => item.isGratuit) && (
                     <div className="flex justify-between text-yellow-500">
@@ -354,7 +404,7 @@ export default function CartPage() {
                   <div className="border-t border-noir-700 pt-4">
                     <div className="flex justify-between text-xl font-bold">
                       <span>Total:</span>
-                      <span className="text-yellow-500">{total.toFixed(2)} €</span>
+                      <span className="text-yellow-500">{totalWithPromotion.toFixed(2)} €</span>
                     </div>
                   </div>
                 </div>

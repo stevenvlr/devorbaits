@@ -12,6 +12,7 @@ import {
 // Exporter GammeData pour utilisation dans les composants
 export type { GammeData }
 import { isSupabaseConfigured } from './supabase'
+import { getSupabaseClient } from './supabase'
 
 // Gammes par défaut (utilisées si Supabase n'est pas configuré)
 const DEFAULT_GAMMES = [
@@ -209,7 +210,13 @@ export function onGammesUpdate(callback: () => void): () => void {
 // GESTION DES IMAGES DE GAMMES
 // ============================================
 
-const GAMMES_IMAGES_STORAGE_KEY = 'site-gammes-images'
+const GAMMES_IMAGES_STORAGE_KEY = 'site-gammes-images' // cache navigateur
+const GAMME_IMAGE_CATEGORY = 'gamme-image' // stocké dans Supabase (table popup_variables)
+
+// Cache mémoire (évite de recharger en boucle)
+let gammesImagesCache: Record<string, string> | null = null
+let gammesImagesCacheFetchedAt = 0
+const GAMMES_IMAGES_CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
 
 export interface GammeImage {
   gamme: string
@@ -217,27 +224,66 @@ export interface GammeImage {
 }
 
 /**
- * Charge toutes les images de gammes
+ * Charge toutes les images de gammes (global via Supabase si configuré).
  */
-export function loadGammesImages(): Record<string, string> {
+export async function loadGammesImages(): Promise<Record<string, string>> {
   if (typeof window === 'undefined') return {}
+
+  // Cache mémoire
+  if (gammesImagesCache && Date.now() - gammesImagesCacheFetchedAt < GAMMES_IMAGES_CACHE_TTL_MS) {
+    return gammesImagesCache
+  }
+
+  // Mode global : Supabase
+  if (isSupabaseConfigured()) {
+    const supabase = getSupabaseClient()
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('popup_variables')
+          .select('value, metadata')
+          .eq('category', GAMME_IMAGE_CATEGORY)
+          .order('value', { ascending: true })
+
+        if (!error && Array.isArray(data)) {
+          const images: Record<string, string> = {}
+          for (const row of data as any[]) {
+            const gammeName = String(row?.value || '').trim()
+            const imageUrl = String(row?.metadata?.imageUrl || '').trim()
+            if (gammeName && imageUrl) {
+              images[gammeName] = imageUrl
+            }
+          }
+
+          gammesImagesCache = images
+          gammesImagesCacheFetchedAt = Date.now()
+
+          // Cache navigateur (optionnel)
+          try {
+            localStorage.setItem(GAMMES_IMAGES_STORAGE_KEY, JSON.stringify(images))
+          } catch {
+            // ignore cache errors
+          }
+
+          return images
+        }
+      } catch (e) {
+        console.error('Erreur lors du chargement des images de gammes (Supabase):', e)
+      }
+    }
+  }
+
+  // Fallback : cache localStorage (ancien mode / perf)
   try {
     const saved = localStorage.getItem(GAMMES_IMAGES_STORAGE_KEY)
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gammes-manager.ts:112',message:'loadGammesImages',data:{hasSaved:!!saved,savedLength:saved?.length||0,storageKey:GAMMES_IMAGES_STORAGE_KEY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gammes-manager.ts:116',message:'parsed gamme images',data:{parsedKeys:Object.keys(parsed),parsedCount:Object.keys(parsed).length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
-      return parsed
-    }
-    return {}
-  } catch (e) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gammes-manager.ts:121',message:'loadGammesImages error',data:{errorMessage:String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
+    if (!saved) return {}
+    const parsed = JSON.parse(saved)
+    const safeImages =
+      (parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, string>
+    gammesImagesCache = safeImages
+    gammesImagesCacheFetchedAt = Date.now()
+    return safeImages
+  } catch {
     return {}
   }
 }
@@ -259,44 +305,115 @@ function saveGammesImages(images: Record<string, string>): void {
  * Obtient l'image d'une gamme
  */
 export function getGammeImage(gamme: string): string | null {
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gammes-manager.ts:138',message:'getGammeImage entry',data:{gamme:gamme,gammeLength:gamme.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B,C'})}).catch(()=>{});
+  if (!gamme) return null
+
+  // 1) Cache mémoire
+  if (gammesImagesCache && gamme in gammesImagesCache) {
+    return gammesImagesCache[gamme] || null
   }
-  // #endregion
-  
-  const images = loadGammesImages()
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gammes-manager.ts:141',message:'loaded gamme images',data:{totalImages:Object.keys(images).length,imageKeys:Object.keys(images),requestedGamme:gamme,hasGammeImage:gamme in images},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+
+  // 2) Cache navigateur
+  if (typeof window === 'undefined') return null
+  try {
+    const saved = localStorage.getItem(GAMMES_IMAGES_STORAGE_KEY)
+    if (!saved) return null
+    const parsed = JSON.parse(saved) as Record<string, string>
+    const url = parsed?.[gamme] || null
+    return url
+  } catch {
+    return null
   }
-  // #endregion
-  
-  const result = images[gamme] || null
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/0b33c946-95d3-4a77-b860-13fb338bf549',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'gammes-manager.ts:145',message:'getGammeImage result',data:{gamme:gamme,resultFound:!!result,resultType:typeof result,resultLength:result?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,E'})}).catch(()=>{});
-  }
-  // #endregion
-  return result
 }
 
 /**
  * Définit l'image d'une gamme
  */
-export function setGammeImage(gamme: string, image: string): void {
-  const images = loadGammesImages()
-  images[gamme] = image
-  saveGammesImages(images)
+export async function setGammeImage(gamme: string, imageUrl: string): Promise<boolean> {
+  if (!gamme || !imageUrl) return false
+
+  // Mode global : écrire dans Supabase
+  if (!isSupabaseConfigured()) {
+    console.error('❌ Supabase non configuré: impossible de sauvegarder une image de gamme en global')
+    return false
+  }
+
+  const supabase = getSupabaseClient()
+  if (!supabase) return false
+
+  try {
+    const { data: existing } = await supabase
+      .from('popup_variables')
+      .select('id')
+      .eq('category', GAMME_IMAGE_CATEGORY)
+      .eq('value', gamme.trim())
+      .maybeSingle()
+
+    if (existing) {
+      const { error } = await supabase
+        .from('popup_variables')
+        .update({ metadata: { imageUrl } })
+        .eq('category', GAMME_IMAGE_CATEGORY)
+        .eq('value', gamme.trim())
+
+      if (error) return false
+    } else {
+      const { error } = await supabase
+        .from('popup_variables')
+        .insert({
+          category: GAMME_IMAGE_CATEGORY,
+          value: gamme.trim(),
+          metadata: { imageUrl }
+        })
+
+      if (error) return false
+    }
+
+    // Mettre à jour le cache local (pour l'UI)
+    const images = (typeof window !== 'undefined' ? (await loadGammesImages()) : {}) as Record<string, string>
+    images[gamme] = imageUrl
+    gammesImagesCache = images
+    gammesImagesCacheFetchedAt = Date.now()
+    saveGammesImages(images)
+    return true
+  } catch (e) {
+    console.error('Erreur lors de la sauvegarde image gamme (Supabase):', e)
+    return false
+  }
 }
 
 /**
  * Supprime l'image d'une gamme
  */
-export function removeGammeImage(gamme: string): void {
-  const images = loadGammesImages()
-  delete images[gamme]
-  saveGammesImages(images)
+export async function removeGammeImage(gamme: string): Promise<boolean> {
+  if (!gamme) return false
+
+  // Supprimer dans Supabase (global)
+  if (!isSupabaseConfigured()) {
+    console.error('❌ Supabase non configuré: impossible de supprimer une image de gamme en global')
+    return false
+  }
+
+  const supabase = getSupabaseClient()
+  if (!supabase) return false
+
+  try {
+    const { error } = await supabase
+      .from('popup_variables')
+      .delete()
+      .eq('category', GAMME_IMAGE_CATEGORY)
+      .eq('value', gamme.trim())
+    if (error) return false
+
+    const images = (typeof window !== 'undefined' ? (await loadGammesImages()) : {}) as Record<string, string>
+    delete images[gamme]
+    gammesImagesCache = images
+    gammesImagesCacheFetchedAt = Date.now()
+    saveGammesImages(images)
+    return true
+  } catch (e) {
+    console.error('Erreur lors de la suppression image gamme (Supabase):', e)
+    return false
+  }
 }
 
 /**

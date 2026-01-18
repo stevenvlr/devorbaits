@@ -110,8 +110,7 @@ export default function ShippingPricesAdminPage() {
       name: '',
       type: 'fixed',
       shipping_type: 'home',
-      active: true,
-      free_shipping_threshold: 100
+      active: true
     })
     setShowForm(true)
   }
@@ -365,34 +364,18 @@ export default function ShippingPricesAdminPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Livraison gratuite à partir de (€)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={editingPrice.free_shipping_threshold || ''}
-                    onChange={(e) => setEditingPrice({ ...editingPrice, free_shipping_threshold: parseFloat(e.target.value) || undefined })}
-                    className="w-full px-4 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
-                    placeholder="100.00"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Actif
-                  </label>
-                  <select
-                    value={editingPrice.active ? 'true' : 'false'}
-                    onChange={(e) => setEditingPrice({ ...editingPrice, active: e.target.value === 'true' })}
-                    className="w-full px-4 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
-                  >
-                    <option value="true">Oui</option>
-                    <option value="false">Non</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Actif
+                </label>
+                <select
+                  value={editingPrice.active ? 'true' : 'false'}
+                  onChange={(e) => setEditingPrice({ ...editingPrice, active: e.target.value === 'true' })}
+                  className="w-full px-4 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                >
+                  <option value="true">Oui</option>
+                  <option value="false">Non</option>
+                </select>
               </div>
 
               <div className="flex justify-end gap-4">
@@ -471,12 +454,6 @@ export default function ShippingPricesAdminPage() {
                     </button>
                   </div>
                 </div>
-
-                {price.free_shipping_threshold && (
-                  <p className="text-sm text-gray-400">
-                    🎁 Livraison gratuite à partir de {price.free_shipping_threshold}€
-                  </p>
-                )}
               </div>
             ))}
             {prices.filter(p => p.shipping_type === 'home' || !p.shipping_type).length === 0 && (
@@ -530,12 +507,6 @@ export default function ShippingPricesAdminPage() {
                     </button>
                   </div>
                 </div>
-
-                {price.free_shipping_threshold && (
-                  <p className="text-sm text-gray-400">
-                    🎁 Livraison gratuite à partir de {price.free_shipping_threshold}€
-                  </p>
-                )}
               </div>
             ))}
             {prices.filter(p => p.shipping_type === 'relay').length === 0 && (

@@ -22,6 +22,7 @@
     "typescript": "^5.3.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260118.0",
     "@netlify/plugin-nextjs": "^4.41.5",
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.32",

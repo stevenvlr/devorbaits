@@ -11,14 +11,14 @@ export default function HomepageAdminPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  const loadImage = () => {
-    const saved = loadHomepageImage()
+  const loadImage = async () => {
+    const saved = await loadHomepageImage()
     setCurrentImage(saved)
   }
 
   useEffect(() => {
-    loadImage()
-    const unsubscribe = onHomepageImageUpdate(loadImage)
+    void loadImage()
+    const unsubscribe = onHomepageImageUpdate(() => void loadImage())
     return () => unsubscribe()
   }, [])
 
@@ -38,9 +38,13 @@ export default function HomepageAdminPage() {
     try {
       // Upload vers Supabase Storage si configuré, sinon base64
       const uploadedImage = await uploadHomepageImage(file)
-      saveHomepageImage(uploadedImage)
+      const saved = await saveHomepageImage(uploadedImage)
+      if (!saved) {
+        setMessage({ type: 'error', text: 'Image uploadée, mais impossible de l’enregistrer en global (Supabase).' })
+      } else {
+        setMessage({ type: 'success', text: 'Photo d\'accueil mise à jour (global) avec succès !' })
+      }
       setCurrentImage(uploadedImage)
-      setMessage({ type: 'success', text: 'Photo d\'accueil mise à jour avec succès !' })
     } catch (error) {
       console.error('Erreur lors de l\'upload:', error)
       setMessage({ type: 'error', text: 'Erreur lors de l\'upload de l\'image' })
@@ -53,9 +57,15 @@ export default function HomepageAdminPage() {
 
   const handleRemoveImage = () => {
     if (confirm('Êtes-vous sûr de vouloir supprimer la photo personnalisée et revenir à l\'image par défaut ?')) {
-      removeHomepageImage()
-      setCurrentImage(null)
-      setMessage({ type: 'success', text: 'Photo d\'accueil réinitialisée à l\'image par défaut' })
+      void (async () => {
+        const ok = await removeHomepageImage()
+        if (!ok) {
+          setMessage({ type: 'error', text: 'Impossible de réinitialiser en global (Supabase).' })
+          return
+        }
+        setCurrentImage(null)
+        setMessage({ type: 'success', text: 'Photo d\'accueil réinitialisée à l\'image par défaut (global)' })
+      })()
     }
   }
 
