@@ -2,27 +2,67 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'edge'
 
+function parseMoney(input: unknown): number {
+  if (typeof input === 'number') return input
+  if (typeof input === 'string') return Number(input.replace(',', '.'))
+  return Number(input)
+}
+
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
 // Cette route crée une commande PayPal côté serveur
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { amount, reference, currency = 'EUR' } = body
+    const { amount, itemTotal, shippingTotal, reference, currency = 'EUR' } = body
 
     // Vérifier que les paramètres sont présents
-    if (!amount || !reference) {
+    if (amount == null || itemTotal == null || shippingTotal == null || !reference) {
       return NextResponse.json(
-        { error: 'Montant et référence requis' },
+        { error: 'Montants (amount, itemTotal, shippingTotal) et référence requis' },
         { status: 400 }
       )
     }
 
-    // Normaliser le montant (accepte number ou string, point ou virgule)
-    const numericAmount =
-      typeof amount === 'string' ? Number(amount.replace(',', '.')) : Number(amount)
+    // Normaliser les montants (accepte number ou string, point ou virgule)
+    const numericAmount = parseMoney(amount)
+    const numericItemTotal = parseMoney(itemTotal)
+    const numericShippingTotal = parseMoney(shippingTotal)
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    if (
+      !Number.isFinite(numericAmount) ||
+      !Number.isFinite(numericItemTotal) ||
+      !Number.isFinite(numericShippingTotal) ||
+      numericAmount <= 0 ||
+      numericItemTotal < 0 ||
+      numericShippingTotal < 0
+    ) {
       return NextResponse.json(
         { error: 'Montant invalide' },
+        { status: 400 }
+      )
+    }
+
+    const computedTotal = round2(numericItemTotal + numericShippingTotal)
+    const expectedTotal = round2(numericAmount)
+
+    // Validation serveur: amount doit être = item_total + shipping (arrondi 2 décimales)
+    if (Math.abs(computedTotal - expectedTotal) > 0.01) {
+      console.error('❌ PayPal create-order: montants incohérents', {
+        reference,
+        currency,
+        amountProvided: expectedTotal,
+        itemTotalProvided: round2(numericItemTotal),
+        shippingTotalProvided: round2(numericShippingTotal),
+        computedTotal,
+      })
+      return NextResponse.json(
+        {
+          error:
+            'Montants incohérents: amount doit être égal à itemTotal + shippingTotal (arrondi 2 décimales)',
+        },
         { status: 400 }
       )
     }
@@ -87,7 +127,17 @@ export async function POST(request: NextRequest) {
           description: `Commande ${reference}`,
           amount: {
             currency_code: currency,
-            value: numericAmount.toFixed(2),
+            value: computedTotal.toFixed(2),
+            breakdown: {
+              item_total: {
+                currency_code: currency,
+                value: round2(numericItemTotal).toFixed(2),
+              },
+              shipping: {
+                currency_code: currency,
+                value: round2(numericShippingTotal).toFixed(2),
+              },
+            },
           },
         },
       ],

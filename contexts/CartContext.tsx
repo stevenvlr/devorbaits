@@ -50,6 +50,31 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
+function normalizeConditionnementFromText(text: string): string | undefined {
+  const raw = (text || '').toLowerCase()
+  const kg = raw.match(/(\d+(?:[.,]\d+)?)\s*(kg|kilo|kilos)\b/)
+  if (kg) return `${kg[1].replace(',', '.')}kg`
+  const g = raw.match(/(\d+)\s*(g|gr|gramme|grammes)\b/)
+  if (g) return `${g[1]}g`
+  return undefined
+}
+
+function extractDiametreFromText(text: string): string | undefined {
+  const raw = (text || '').toLowerCase()
+  const mm = raw.match(/(\d+)\s*mm\b/)
+  if (mm) return mm[1]
+  // Cas fréquent: id de variante "variant-16-5kg"
+  const fromVariantId = raw.match(/\bvariant-(\d+)-/)
+  if (fromVariantId) return fromVariantId[1]
+  return undefined
+}
+
+function shouldTreatAsBouillette(item: Omit<CartItem, 'id'>): boolean {
+  const category = (item.category || '').toLowerCase()
+  const produit = (item.produit || '').toLowerCase()
+  return category.includes('bouillette') || produit.includes('bouillette')
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const { promotion } = useGlobalPromotion()
@@ -232,9 +257,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // Si availableStock < 0 (illimité), on continue sans réserver
     }
     
-    const id = `${item.produit}-${Date.now()}-${Math.random()}`
+    // Normaliser certains champs variants (diamètre / conditionnement) pour le checkout + calcul poids
+    // Important: certains items arrivent sans `conditionnement` (ex: variante stockée via label/format/variantId)
+    const variantText = `${item.variantId || ''} ${item.format || ''} ${item.produit || ''}`
+    const derivedDiametre = item.diametre || extractDiametreFromText(variantText)
+    const derivedConditionnement =
+      item.conditionnement ||
+      (shouldTreatAsBouillette(item) ? normalizeConditionnementFromText(variantText) : undefined)
+
+    const normalizedItem: Omit<CartItem, 'id'> = {
+      ...item,
+      diametre: derivedDiametre,
+      conditionnement: derivedConditionnement || item.conditionnement,
+    }
+
+    const id = `${normalizedItem.produit}-${Date.now()}-${Math.random()}`
     setCartItems(prev => {
-      const newItems = [...prev, { ...item, id, productId }]
+      const newItems = [...prev, { ...normalizedItem, id, productId }]
       return managePromoItems(newItems)
     })
   }

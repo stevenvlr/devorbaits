@@ -6,6 +6,8 @@ import { getPayPalClientId, isPayPalConfigured } from '@/lib/paypal'
 
 interface PayPalButtonProps {
   amount: number
+  itemTotal: number
+  shippingTotal: number
   reference: string
   onSuccess: (orderId: string, paymentId: string) => void
   onError: (error: string) => void
@@ -13,7 +15,16 @@ interface PayPalButtonProps {
   onBeforePayment?: () => void
 }
 
-export default function PayPalButton({ amount, reference, onSuccess, onError, disabled, onBeforePayment }: PayPalButtonProps) {
+export default function PayPalButton({
+  amount,
+  itemTotal,
+  shippingTotal,
+  reference,
+  onSuccess,
+  onError,
+  disabled,
+  onBeforePayment,
+}: PayPalButtonProps) {
   const [isProcessing, setIsProcessing] = useState(false)
 
   if (!isPayPalConfigured()) {
@@ -56,6 +67,8 @@ export default function PayPalButton({ amount, reference, onSuccess, onError, di
                 },
                 body: JSON.stringify({
                   amount,
+                  itemTotal,
+                  shippingTotal,
                   reference,
                   currency: 'EUR',
                 }),
@@ -88,6 +101,9 @@ export default function PayPalButton({ amount, reference, onSuccess, onError, di
                 },
                 body: JSON.stringify({
                   orderId: data.orderID,
+                  expectedTotal: amount,
+                  expectedItemTotal: itemTotal,
+                  expectedShippingTotal: shippingTotal,
                 }),
               })
 

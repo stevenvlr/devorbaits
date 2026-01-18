@@ -38,6 +38,7 @@ export default function CheckoutPage() {
   const { cartItems, total, clearCart } = useCart()
   const { promotion } = useGlobalPromotion()
   const { isAuthenticated, user } = useAuth()
+  const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
   
   // Fonction pour obtenir le prix avec promotion pour un item
   const getItemPrice = (item: typeof cartItems[0]) => {
@@ -92,6 +93,7 @@ export default function CheckoutPage() {
   const [shippingCost, setShippingCost] = useState<number>(0)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('paypal')
   const [orderReference, setOrderReference] = useState<string>('')
+  const [paypalReference] = useState<string>(() => generateOrderReference())
   const [cgvAccepted, setCgvAccepted] = useState(false)
   const [chronopostRelaisPoint, setChronopostRelaisPoint] = useState<ChronopostRelaisPoint | null>(null)
   const [boxtalParcelPoint, setBoxtalParcelPoint] = useState<BoxtalParcelPoint | null>(null)
@@ -423,8 +425,13 @@ export default function CheckoutPage() {
     ? (shippingCost > 0 ? shippingCost : 0) // Prix configuré (0 si pas encore calculé ou erreur)
     : 0 // Gratuit pour retrait
 
+  // Totaux PayPal (arrondis à 2 décimales) : total = item_total + shipping
+  const paypalItemTotal = round2(totalWithDiscount)
+  const paypalShippingTotal = round2(calculatedShippingCost)
+  const paypalTotal = round2(paypalItemTotal + paypalShippingTotal)
+
   // Total final avec expédition
-  const finalTotal = totalWithDiscount + calculatedShippingCost
+  const finalTotal = paypalTotal
 
   // Vérifier si le formulaire est valide pour le paiement
   const isFormValid = () => {
@@ -810,7 +817,10 @@ export default function CheckoutPage() {
                       <div className="flex-1">
                         <h3 className="text-lg font-bold mb-1">{item.produit}</h3>
                         <div className="text-sm text-gray-400 space-y-1">
-                          {item.diametre && <p>Diamètre: {item.diametre}</p>}
+                          {item.diametre && <p>Diamètre: {item.diametre}mm</p>}
+                          {(item.conditionnement || item.format) && (
+                            <p>Conditionnement: {item.conditionnement || item.format}</p>
+                          )}
                           {item.taille && <p>Taille: {item.taille}</p>}
                           {item.arome && <p>Arôme: {item.arome}</p>}
                           {item.couleur && <p>Couleur: {item.couleur}</p>}
@@ -1603,14 +1613,15 @@ export default function CheckoutPage() {
                 {paymentMethod === 'paypal' ? (
                   <div>
                     <PayPalButton
-                      amount={finalTotal}
-                      reference={orderReference || generateOrderReference()}
+                      amount={paypalTotal}
+                      itemTotal={paypalItemTotal}
+                      shippingTotal={paypalShippingTotal}
+                      reference={orderReference || paypalReference}
                       disabled={!isFormValid()}
                       onBeforePayment={() => {
                         // Générer la référence si pas encore fait
                         if (!orderReference) {
-                          const ref = generateOrderReference()
-                          setOrderReference(ref)
+                          setOrderReference(paypalReference)
                         }
                       }}
                       onSuccess={async (orderId, paymentId) => {
@@ -1629,7 +1640,7 @@ export default function CheckoutPage() {
                             produit: item.produit
                           }))
 
-                          const currentRef = orderReference || generateOrderReference()
+                          const currentRef = orderReference || paypalReference
                           const commentValue = orderComment.trim() || undefined
                           
                           // Appel conditionnel pour éviter les problèmes de typage TypeScript
