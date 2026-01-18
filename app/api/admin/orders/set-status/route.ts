@@ -137,6 +137,9 @@ async function buildInvoicePdfBytes(params: {
   invoiceDate: Date
   customerEmail: string
   lines: InvoiceLine[]
+  itemsSubtotal: number
+  shippingCost: number
+  discountAmount?: number
   total: number
   currency?: string
 }) {
@@ -227,8 +230,34 @@ async function buildInvoicePdfBytes(params: {
     thickness: 1,
     color: rgb(0.85, 0.85, 0.85),
   })
-  y -= 20
-  draw(`TOTAL: ${formatMoney(params.total, currency)}`, xLine - 40, 12, true)
+
+  // Bloc récapitulatif (sous-total / port / remise / total)
+  if (y < margin + 70) {
+    startNewPage(false)
+  }
+
+  y -= 18
+  const summaryLabelX = 300
+  const summaryValueX = xLine
+
+  draw('Sous-total articles:', summaryLabelX, 11, true)
+  draw(formatMoney(params.itemsSubtotal, currency), summaryValueX, 11)
+  y -= 16
+
+  draw('Frais de port:', summaryLabelX, 11, true)
+  draw(formatMoney(params.shippingCost, currency), summaryValueX, 11)
+  y -= 16
+
+  const discount = typeof params.discountAmount === 'number' ? params.discountAmount : 0
+  if (discount > 0.005) {
+    draw('Remise:', summaryLabelX, 11, true)
+    draw(`-${formatMoney(discount, currency)}`, summaryValueX, 11)
+    y -= 16
+  }
+
+  y -= 4
+  draw('TOTAL:', summaryLabelX, 12, true)
+  draw(formatMoney(params.total, currency), summaryValueX, 12, true)
 
   return await pdf.save()
 }
@@ -560,9 +589,11 @@ export async function POST(request: NextRequest) {
             }
 
             const lines = await getInvoiceLines({ supabase, orderId, order })
-            const computedTotal = lines.reduce((sum, l) => sum + (l.lineTotal || 0), 0)
+            const itemsSubtotal = lines.reduce((sum, l) => sum + (l.lineTotal || 0), 0)
+            const shippingCost = toNumber((order as any).shipping_cost) ?? 0
             const totalFromOrder = toNumber((order as any).total)
-            const total = totalFromOrder ?? computedTotal
+            const total = totalFromOrder ?? (itemsSubtotal + shippingCost)
+            const discountAmount = Math.max(0, itemsSubtotal + shippingCost - total)
 
             try {
               const pdfBytes = await buildInvoicePdfBytes({
@@ -570,6 +601,9 @@ export async function POST(request: NextRequest) {
                 invoiceDate: createdAt,
                 customerEmail,
                 lines,
+                itemsSubtotal,
+                shippingCost,
+                discountAmount,
                 total,
                 currency: 'EUR',
               })
