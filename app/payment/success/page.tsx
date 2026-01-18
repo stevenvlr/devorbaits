@@ -3,12 +3,13 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { CheckCircle2, Package, Home } from 'lucide-react'
+import { CheckCircle2, Package, Home, Info } from 'lucide-react'
 import { parseMoneticoReturn } from '@/lib/monetico'
 import { useCart } from '@/contexts/CartContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { createOrder, updateOrderStatus, getOrderByReference, type OrderItem } from '@/lib/revenue-supabase'
 import { loadProducts } from '@/lib/products-manager'
+import { getPromoCodeByCode, recordPromoCodeUsageAsync } from '@/lib/promo-codes-manager'
 
 function PaymentSuccessContent() {
   const router = useRouter()
@@ -20,6 +21,7 @@ function PaymentSuccessContent() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [orderComment, setOrderComment] = useState<string | null>(null)
 
   useEffect(() => {
     const processPayment = async () => {
@@ -77,6 +79,7 @@ function PaymentSuccessContent() {
               // Si toujours pas trouvée, utiliser les données du panier en attente
               if (createdOrder) {
                 setOrderItems(createdOrder.items)
+                setOrderComment(createdOrder.comment || null)
               } else if (pendingOrder.cartItems) {
                 const itemsFromCart = pendingOrder.cartItems.map((item: any, index: number) => ({
                   id: `temp-${index}`,
@@ -114,6 +117,7 @@ function PaymentSuccessContent() {
               
               if (createdOrder) {
                 setOrderItems(createdOrder.items)
+                setOrderComment(createdOrder.comment || null)
               }
               
               clearCart()
@@ -169,6 +173,26 @@ function PaymentSuccessContent() {
               'monetico',
               typeof pendingOrder?.shippingCost === 'number' ? pendingOrder.shippingCost : undefined
             )
+
+            // Enregistrer l'utilisation du code promo APRÈS création de la commande
+            if (order?.id && user?.id && pendingOrder?.promoCode && pendingOrder?.discount != null) {
+              const discountAmount =
+                typeof pendingOrder.discount === 'number'
+                  ? pendingOrder.discount
+                  : parseFloat(String(pendingOrder.discount))
+
+              if (Number.isFinite(discountAmount) && discountAmount > 0) {
+                const promoCodeObj = await getPromoCodeByCode(pendingOrder.promoCode)
+                if (promoCodeObj) {
+                  await recordPromoCodeUsageAsync(
+                    promoCodeObj.id,
+                    user.id,
+                    order.id,
+                    discountAmount
+                  )
+                }
+              }
+            }
             
             // Sauvegarder l'adresse de livraison si disponible
             if (order.id && pendingOrder.livraisonAddress && pendingOrder.retraitMode === 'livraison') {
@@ -335,6 +359,19 @@ function PaymentSuccessContent() {
                       )
                     })}
                   </ul>
+                </div>
+              )}
+
+              {/* Commentaire de commande */}
+              {orderComment && (
+                <div className="mt-4 pt-4 border-t border-noir-700">
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Info className="w-4 h-4 text-blue-400" />
+                      <p className="text-sm font-medium text-blue-400">Votre commentaire</p>
+                    </div>
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap">{orderComment}</p>
+                  </div>
                 </div>
               )}
             </div>

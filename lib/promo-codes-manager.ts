@@ -1,6 +1,11 @@
 // Gestion des codes promo avec restrictions par utilisateur, produit, catégorie, gamme d'appât et conditionnement
 import { loadPromoCodesFromSupabase, savePromoCodeToSupabase, deletePromoCodeFromSupabase } from './promo-codes-supabase'
 import { isSupabaseConfigured } from './supabase'
+import {
+  getPromoCodeUsageCountFromSupabase,
+  hasUserUsedPromoCodeInSupabase,
+  recordPromoCodeUsageToSupabase
+} from './promo-codes-supabase'
 
 export interface PromoCode {
   id: string
@@ -9,6 +14,7 @@ export interface PromoCode {
   discountValue: number
   minPurchase?: number
   maxUses?: number
+  usedCount?: number
   validFrom?: string
   validUntil?: string
   active: boolean
@@ -99,6 +105,58 @@ export async function addPromoCode(code: PromoCode): Promise<{ success: boolean;
   } catch (error) {
     console.error('❌ Erreur lors de l\'ajout dans Supabase:', error)
     return { success: false, message: 'Erreur lors de l\'ajout du code promo' }
+  }
+}
+
+export async function addPromoCodesBulk(
+  codes: PromoCode[]
+): Promise<{ success: boolean; created: number; failed: number; errors: string[] }> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      created: 0,
+      failed: codes.length,
+      errors: ['Supabase non configuré. Impossible de créer des codes en masse.']
+    }
+  }
+
+  const errors: string[] = []
+  let created = 0
+  let failed = 0
+
+  for (const c of codes) {
+    const toCreate: PromoCode = {
+      ...c,
+      id: c.id || '',
+      code: (c.code || '').trim().toUpperCase(),
+      createdAt: c.createdAt || Date.now(),
+      updatedAt: Date.now()
+    }
+
+    if (!toCreate.code) {
+      failed += 1
+      errors.push('Code vide ignoré')
+      continue
+    }
+
+    const res = await savePromoCodeToSupabase(toCreate)
+    if (res.success) {
+      created += 1
+    } else {
+      failed += 1
+      errors.push(`Échec création du code ${toCreate.code}`)
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('promo-codes-updated'))
+  }
+
+  return {
+    success: failed === 0,
+    created,
+    failed,
+    errors
   }
 }
 
@@ -207,6 +265,53 @@ export interface CartItemForPromo {
   quantite: number
 }
 
+export async function getPromoCodeUsageCountAsync(promoCodeId: string): Promise<number> {
+  if (isSupabaseConfigured()) {
+    return await getPromoCodeUsageCountFromSupabase(promoCodeId)
+  }
+  return getPromoCodeUsageCount(promoCodeId)
+}
+
+export async function hasUserUsedPromoCode(promoCodeId: string, userId: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    return await hasUserUsedPromoCodeInSupabase(promoCodeId, userId)
+  }
+  // Fallback localStorage
+  try {
+    const usage = JSON.parse(localStorage.getItem(USAGE_STORAGE_KEY) || '[]')
+    return usage.some((u: any) => u.promoCodeId === promoCodeId && u.userId === userId)
+  } catch {
+    return false
+  }
+}
+
+export async function recordPromoCodeUsageAsync(
+  promoCodeId: string,
+  userId: string,
+  orderId: string | null,
+  discountAmount: number
+): Promise<{ success: boolean; error?: string }> {
+  if (isSupabaseConfigured()) {
+    return await recordPromoCodeUsageToSupabase({ promoCodeId, userId, orderId, discountAmount })
+  }
+
+  // Fallback localStorage
+  try {
+    const usage = JSON.parse(localStorage.getItem(USAGE_STORAGE_KEY) || '[]')
+    usage.push({
+      promoCodeId,
+      userId,
+      orderId,
+      discountAmount,
+      usedAt: new Date().toISOString()
+    })
+    localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify(usage))
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Erreur localStorage' }
+  }
+}
+
 /**
  * Valide un code promo pour un utilisateur et un panier donné
  */
@@ -241,6 +346,17 @@ export async function validatePromoCode(
       return { valid: false, error: 'Ce code promo n\'est pas valable pour votre compte' }
     }
   }
+
+  // Important: pour appliquer "1 fois par compte", il faut être connecté
+  if (!userId) {
+    return { valid: false, error: 'Vous devez être connecté pour utiliser un code promo' }
+  }
+
+  // Vérifier "1 utilisation par compte"
+  const alreadyUsedByUser = await hasUserUsedPromoCode(promoCode.id, userId)
+  if (alreadyUsedByUser) {
+    return { valid: false, error: 'Vous avez déjà utilisé ce code promo avec votre compte' }
+  }
   
   // Vérifier le montant minimum
   if (promoCode.minPurchase && total < promoCode.minPurchase) {
@@ -249,7 +365,11 @@ export async function validatePromoCode(
   
   // Vérifier le nombre d'utilisations
   if (promoCode.maxUses) {
-    const usageCount = getPromoCodeUsageCount(promoCode.id)
+    // En mode Supabase, on s'appuie sur promo_codes.used_count (mis à jour via trigger)
+    // car la table promo_code_usage est protégée par RLS (un client ne peut pas compter tous les users).
+    const usageCount = isSupabaseConfigured()
+      ? (promoCode.usedCount || 0)
+      : await getPromoCodeUsageCountAsync(promoCode.id)
     if (usageCount >= promoCode.maxUses) {
       return { valid: false, error: 'Ce code promo a atteint sa limite d\'utilisations' }
     }

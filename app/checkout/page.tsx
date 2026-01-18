@@ -8,7 +8,9 @@ import { useCart } from '@/contexts/CartContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { TOUS_LES_PRODUITS } from '@/lib/amicale-blanc-config'
 import { getBouilletteId } from '@/lib/price-utils'
-import { validatePromoCode, recordPromoCodeUsage, getPromoCodeByCode, type PromoCodeValidation } from '@/lib/promo-codes-manager'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
+import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
+import { validatePromoCode, recordPromoCodeUsageAsync, getPromoCodeByCode, type PromoCodeValidation } from '@/lib/promo-codes-manager'
 import { getProductsByCategory, getProductById } from '@/lib/products-manager'
 import {
   getNextAvailableDates,
@@ -19,12 +21,12 @@ import {
   AVAILABLE_TIME_SLOTS,
   MAX_BOOKINGS_PER_SLOT
 } from '@/lib/appointments-manager'
-import { submitMoneticoPayment, generateOrderReference, startMoneticoPayment } from '@/lib/monetico'
+import { submitMoneticoPayment, generateOrderReference } from '@/lib/monetico'
 import { createOrder, updateOrderStatus } from '@/lib/revenue-supabase'
 import { getActiveShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
 import PayPalButton from '@/components/PayPalButton'
-import { calculateCartWeight } from '@/lib/product-weights'
+import { calculateCartWeightAsync } from '@/lib/product-weights'
 import BoxtalRelayMap, { type BoxtalParcelPoint } from '@/components/BoxtalRelayMap'
 import type { ChronopostRelaisPoint } from '@/components/ChronopostRelaisWidget'
 
@@ -34,7 +36,40 @@ type PaymentMethod = 'card' | 'paypal'
 export default function CheckoutPage() {
   const router = useRouter()
   const { cartItems, total, clearCart } = useCart()
+  const { promotion } = useGlobalPromotion()
   const { isAuthenticated, user } = useAuth()
+  
+  // Fonction pour obtenir le prix avec promotion pour un item
+  const getItemPrice = (item: typeof cartItems[0]) => {
+    if (item.isGratuit) return 0
+    
+    // Si on a une promotion active
+    if (promotion && promotion.active) {
+      // Si on a le prix original, l'utiliser (meilleur cas)
+      const prixBase = item.prixOriginal !== undefined ? item.prixOriginal : item.prix
+      
+      // Si la promotion s'applique à tout le site, l'appliquer même sans category/gamme
+      if (promotion.applyToAll) {
+        return applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+      }
+      
+      // Si on a category ou gamme, vérifier l'éligibilité
+      if (item.category || item.gamme) {
+        return applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+      }
+      
+      // Sinon, pas de promotion (pas de category/gamme et pas applyToAll)
+    }
+    
+    // Sinon, utiliser le prix stocké
+    return item.prix
+  }
+  
+  // Calculer le total avec promotion
+  const totalWithPromotion = cartItems.reduce((sum, item) => {
+    if (item.isGratuit) return sum
+    return sum + (getItemPrice(item) * item.quantite)
+  }, 0)
   
   // Mode test de paiement (pour tester les expéditions sans passer par Monetico)
   const TEST_PAYMENT_MODE = process.env.NEXT_PUBLIC_TEST_PAYMENT === 'true'
@@ -61,6 +96,7 @@ export default function CheckoutPage() {
   const [chronopostRelaisPoint, setChronopostRelaisPoint] = useState<ChronopostRelaisPoint | null>(null)
   const [boxtalParcelPoint, setBoxtalParcelPoint] = useState<BoxtalParcelPoint | null>(null)
   const [orderComment, setOrderComment] = useState('')
+  const [totalWeight, setTotalWeight] = useState<number>(0)
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -108,6 +144,32 @@ export default function CheckoutPage() {
     }
   }, [retraitMode, rdvDate])
 
+  // Calculer le poids total du panier depuis la base de données
+  useEffect(() => {
+    const calculateWeight = async () => {
+      console.log('🛒 Calcul du poids du panier - Articles:', cartItems.map(item => ({
+        produit: item.produit,
+        conditionnement: item.conditionnement,
+        quantite: item.quantite
+      })))
+      const weight = await calculateCartWeightAsync(cartItems)
+      console.log('🛒 Poids total du panier calculé:', weight.toFixed(2), 'kg')
+      setTotalWeight(weight)
+    }
+    calculateWeight()
+  }, [cartItems])
+
+  // Forcer Chronopost Relais si le poids est inférieur à 18 kg
+  useEffect(() => {
+    const WEIGHT_LIMIT = 18 // Limite en kg
+    
+    // Si le poids est inférieur à 18 kg et que le mode est 'livraison', forcer 'chronopost-relais'
+    if (totalWeight < WEIGHT_LIMIT && retraitMode === 'livraison') {
+      console.log(`⚠️ Poids ${totalWeight.toFixed(2)}kg < ${WEIGHT_LIMIT}kg - Forçage Chronopost Relais`)
+      setRetraitMode('chronopost-relais')
+    }
+  }, [totalWeight, retraitMode])
+
   // Calculer le prix d'expédition basé sur les tarifs configurés
   useEffect(() => {
     const calculateShippingCost = async () => {
@@ -116,17 +178,31 @@ export default function CheckoutPage() {
           livraisonAddress.codePostal && 
           livraisonAddress.ville) {
         
-        // Calculer le poids total basé sur les vrais poids des produits
-        const totalWeight = calculateCartWeight(cartItems)
+        // Utiliser le poids total calculé depuis la base de données
+        // (déjà calculé dans le useEffect précédent)
         
         // Log pour debug
         console.log('🛒 Calcul expédition - Articles:', cartItems.length, 
           'Quantité totale:', cartItems.reduce((sum, item) => sum + item.quantite, 0),
-          'Poids total RÉEL:', totalWeight.toFixed(2), 'kg')
+          'Poids total RÉEL (depuis DB):', totalWeight.toFixed(2), 'kg')
 
-        // Calculer la valeur totale
+        // Calculer la valeur totale avec promotion
         const totalValue = cartItems.reduce(
-          (sum, item) => sum + (item.prix * item.quantite),
+          (sum, item) => {
+            if (item.isGratuit) return sum
+            
+            let itemPrice = item.prix
+            if (promotion && promotion.active) {
+              const prixBase = item.prixOriginal !== undefined ? item.prixOriginal : item.prix
+              if (promotion.applyToAll) {
+                itemPrice = applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+              } else if (item.category || item.gamme) {
+                itemPrice = applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+              }
+            }
+            
+            return sum + (itemPrice * item.quantite)
+          },
           0
         )
 
@@ -138,37 +214,73 @@ export default function CheckoutPage() {
           const shippingPrice = await getActiveShippingPrice(shippingType)
           
           if (shippingPrice) {
-            // Calculer le prix selon le type de tarif
-            let basePrice = 0
+            console.log('📦 Tarif trouvé:', shippingPrice.name, 'Type:', shippingPrice.type)
             
-            if (shippingPrice.type === 'fixed' && shippingPrice.fixed_price) {
-              basePrice = shippingPrice.fixed_price
+            // Vérifier le prix minimum de commande
+            if (shippingPrice.min_order_value && totalValue < shippingPrice.min_order_value) {
+              console.log('⚠️ Commande inférieure au minimum requis:', shippingPrice.min_order_value, '€')
+              // Utiliser un prix par défaut si le minimum n'est pas atteint
+              const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+              setShippingCost(defaultPrice)
+              return
+            }
+            
+            // Vérifier les limites de poids
+            if (shippingPrice.min_weight && totalWeight < shippingPrice.min_weight) {
+              console.log('⚠️ Poids inférieur au minimum:', shippingPrice.min_weight, 'kg')
+              const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+              setShippingCost(defaultPrice)
+              return
+            }
+            if (shippingPrice.max_weight && totalWeight > shippingPrice.max_weight) {
+              console.log('⚠️ Poids supérieur au maximum:', shippingPrice.max_weight, 'kg')
+              const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+              setShippingCost(defaultPrice)
+              return
+            }
+            
+            // Calculer le prix selon le type de tarif
+            let finalPrice = 0
+            
+            if (shippingPrice.type === 'fixed' && shippingPrice.fixed_price !== undefined) {
+              finalPrice = shippingPrice.fixed_price
+              console.log('💰 Prix fixe:', finalPrice, '€')
             } else if (shippingPrice.type === 'weight_ranges' && shippingPrice.weight_ranges) {
               // Trouver la tranche de poids correspondante
+              let found = false
               for (const range of shippingPrice.weight_ranges) {
                 if (totalWeight >= range.min && (range.max === null || totalWeight <= range.max)) {
-                  basePrice = range.price
+                  finalPrice = range.price
+                  found = true
+                  console.log('📊 Tranche trouvée:', range.min, '-', range.max || '∞', 'kg →', finalPrice, '€')
                   break
                 }
               }
               // Si aucune tranche ne correspond, utiliser un prix par défaut
-              if (basePrice === 0) {
-                basePrice = 10 // Prix par défaut si aucune tranche ne correspond
+              if (!found) {
+                console.warn('⚠️ Aucune tranche de poids ne correspond, utilisation prix par défaut')
+                finalPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
               }
+            } else if (shippingPrice.type === 'margin_percent' && shippingPrice.margin_percent !== undefined) {
+              // Pour les marges en pourcentage, on a besoin d'un prix de base
+              // Utiliser un prix de base par défaut basé sur le poids
+              const basePrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+              finalPrice = basePrice * (1 + shippingPrice.margin_percent / 100)
+              console.log('📈 Marge %:', shippingPrice.margin_percent, '% sur', basePrice, '€ =', finalPrice, '€')
+            } else if (shippingPrice.type === 'margin_fixed' && shippingPrice.margin_fixed !== undefined) {
+              // Pour les marges fixes, on a besoin d'un prix de base
+              const basePrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+              finalPrice = basePrice + shippingPrice.margin_fixed
+              console.log('➕ Marge fixe:', shippingPrice.margin_fixed, '€ sur', basePrice, '€ =', finalPrice, '€')
             } else {
-              // Pour les autres types, utiliser un prix par défaut
-              basePrice = 10
-            }
-            
-            // Vérifier la livraison gratuite
-            if (shippingPrice.free_shipping_threshold && totalValue >= shippingPrice.free_shipping_threshold) {
-              setShippingCost(0)
-              return
+              // Type non reconnu, utiliser un prix par défaut
+              console.warn('⚠️ Type de tarif non reconnu:', shippingPrice.type)
+              finalPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
             }
             
             // Appliquer le prix calculé
-            setShippingCost(basePrice)
-            console.log('✅ Prix d\'expédition calculé:', basePrice, '€ (poids:', totalWeight.toFixed(2), 'kg)')
+            setShippingCost(finalPrice)
+            console.log('✅ Prix d\'expédition final:', finalPrice, '€ (poids:', totalWeight.toFixed(2), 'kg, valeur:', totalValue.toFixed(2), '€)')
           } else {
             // Pas de tarif configuré, utiliser un prix par défaut simple
             const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
@@ -178,7 +290,8 @@ export default function CheckoutPage() {
         } catch (error) {
           console.error('❌ Erreur lors du calcul du prix d\'expédition:', error)
           // En cas d'erreur, utiliser un prix par défaut
-          setShippingCost(10)
+          const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+          setShippingCost(defaultPrice)
         }
       } else {
         // Réinitialiser le prix si l'adresse n'est pas complète ou si ce n'est pas une livraison
@@ -278,7 +391,7 @@ export default function CheckoutPage() {
       promoCode.trim(),
       user?.id || null,
       cartItemsForPromo,
-      total
+      totalWithPromotion // Utiliser le total avec promotion pour la validation du code promo
     )
 
     if (validation.valid) {
@@ -290,10 +403,10 @@ export default function CheckoutPage() {
     }
   }
 
-  // Calculer le total avec réduction
+  // Calculer le total avec réduction (utiliser totalWithPromotion au lieu de total)
   const totalWithDiscount = promoValidation && promoValidation.discount
-    ? Math.max(0, total - promoValidation.discount)
-    : total
+    ? Math.max(0, totalWithPromotion - promoValidation.discount)
+    : totalWithPromotion
 
     // Calculer le prix d'expédition (gratuit pour retrait, prix configuré pour livraison)
   // shippingCost = -1 signifie erreur d'estimation
@@ -403,19 +516,6 @@ export default function CheckoutPage() {
     // Générer une référence de commande unique
     const orderReference = generateOrderReference()
 
-    // Enregistrer l'utilisation du code promo si valide
-    if (promoValidation && promoValidation.valid && promoCode) {
-      const promoCodeObj = await getPromoCodeByCode(promoCode)
-      if (promoCodeObj) {
-        recordPromoCodeUsage(
-          promoCodeObj.id,
-          user.id || null,
-          orderReference,
-          promoValidation.discount || 0
-        )
-      }
-    }
-
     // Préparer les données de commande
     const orderData = {
       montant: finalTotal, // Utiliser le total final avec expédition
@@ -488,6 +588,19 @@ export default function CheckoutPage() {
               'test',
               calculatedShippingCost
             )
+
+        // Enregistrer l'utilisation du code promo APRÈS création de la commande
+        if (promoValidation && promoValidation.valid && promoCode && order?.id && user?.id) {
+          const promoCodeObj = await getPromoCodeByCode(promoCode)
+          if (promoCodeObj) {
+            await recordPromoCodeUsageAsync(
+              promoCodeObj.id,
+              user.id,
+              order.id,
+              promoValidation.discount || 0
+            )
+          }
+        }
 
         // La commande est créée avec le statut 'pending' (en attente) par défaut
         // Le statut sera changé manuellement depuis l'admin
@@ -707,9 +820,30 @@ export default function CheckoutPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-bold text-yellow-500">
-                          {item.isGratuit ? 'GRATUIT' : `${(item.prix * item.quantite).toFixed(2)} €`}
-                        </p>
+                        {item.isGratuit ? (
+                          <p className="text-xl font-bold text-yellow-500">GRATUIT</p>
+                        ) : (
+                          <div>
+                            {(() => {
+                              const prixAvecPromo = getItemPrice(item)
+                              const prixOriginal = item.prixOriginal !== undefined ? item.prixOriginal : item.prix
+                              const hasPromotion = promotion && promotion.active && prixAvecPromo < prixOriginal
+                              
+                              return (
+                                <div>
+                                  {hasPromotion && (
+                                    <p className="text-sm text-gray-400 line-through mb-1">
+                                      {(prixOriginal * item.quantite).toFixed(2)} €
+                                    </p>
+                                  )}
+                                  <p className="text-xl font-bold text-yellow-500">
+                                    {(prixAvecPromo * item.quantite).toFixed(2)} €
+                                  </p>
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
@@ -720,29 +854,75 @@ export default function CheckoutPage() {
             {/* Choix du mode de retrait global */}
             <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6">
               <h2 className="text-2xl font-bold mb-6">Mode de retrait</h2>
+              
+              {/* Message informatif pour colis < 18kg */}
+              {(() => {
+                const WEIGHT_LIMIT = 18
+                if (totalWeight < WEIGHT_LIMIT) {
+                  return (
+                    <div className="mb-4 bg-blue-500/10 border border-blue-500/50 rounded-lg p-4">
+                      <div className="flex items-start gap-2">
+                        <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-blue-300">
+                          <p className="font-semibold mb-1">Colis de {totalWeight.toFixed(2)} kg</p>
+                          <p>Les colis pesant moins de {WEIGHT_LIMIT} kg doivent être envoyés par <strong>Chronopost Relais</strong>.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+              
               <div className="space-y-3">
                 {/* Option Livraison */}
-                <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
-                  style={{
-                    borderColor: retraitMode === 'livraison' ? '#EAB308' : '#374151',
-                    backgroundColor: retraitMode === 'livraison' ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
-                  }}>
-                  <input
-                    type="radio"
-                    name="retrait-mode"
-                    value="livraison"
-                    checked={retraitMode === 'livraison'}
-                    onChange={(e) => setRetraitMode(e.target.value as RetraitMode)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Truck className="w-5 h-5 text-yellow-500" />
-                      <span className="font-semibold text-lg">Livraison à domicile</span>
-                    </div>
-                    <p className="text-sm text-gray-400">Livraison de toute la commande à votre adresse</p>
-                  </div>
-                </label>
+                {(() => {
+                  const WEIGHT_LIMIT = 18
+                  const isDisabled = totalWeight < WEIGHT_LIMIT
+                  
+                  return (
+                    <label className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-all ${
+                      isDisabled 
+                        ? 'opacity-50 cursor-not-allowed' 
+                        : 'cursor-pointer hover:bg-noir-900/50'
+                    }`}
+                      style={{
+                        borderColor: retraitMode === 'livraison' && !isDisabled ? '#EAB308' : '#374151',
+                        backgroundColor: retraitMode === 'livraison' && !isDisabled ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
+                      }}>
+                      <input
+                        type="radio"
+                        name="retrait-mode"
+                        value="livraison"
+                        checked={retraitMode === 'livraison'}
+                        onChange={(e) => {
+                          if (!isDisabled) {
+                            setRetraitMode(e.target.value as RetraitMode)
+                          }
+                        }}
+                        disabled={isDisabled}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Truck className="w-5 h-5 text-yellow-500" />
+                          <span className="font-semibold text-lg">Livraison à domicile</span>
+                          {isDisabled && (
+                            <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded">
+                              Non disponible
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-400">
+                          {isDisabled 
+                            ? `Disponible uniquement pour les colis de ${WEIGHT_LIMIT} kg et plus`
+                            : 'Livraison de toute la commande à votre adresse'
+                          }
+                        </p>
+                      </div>
+                    </label>
+                  )
+                })()}
 
                 {/* Option Chronopost Relais */}
                 <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
@@ -878,7 +1058,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Sous-total:</span>
-                  <span className="text-white">{total.toFixed(2)} €</span>
+                  <span className="text-white">{totalWithPromotion.toFixed(2)} €</span>
                 </div>
                 {promoValidation && promoValidation.valid && promoValidation.discount && (
                   <div className="flex justify-between text-sm">
@@ -1000,7 +1180,8 @@ export default function CheckoutPage() {
                       placeholder="Adresse"
                       value={livraisonAddress.adresse}
                       onChange={(e) => setLivraisonAddress({ ...livraisonAddress, adresse: e.target.value })}
-                      className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-white text-sm focus:border-yellow-500 focus:outline-none"
+                      className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
                       required
                     />
                     <div className="grid grid-cols-2 gap-2">
@@ -1009,7 +1190,8 @@ export default function CheckoutPage() {
                         placeholder="Code postal"
                         value={livraisonAddress.codePostal}
                         onChange={(e) => setLivraisonAddress({ ...livraisonAddress, codePostal: e.target.value })}
-                        className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-white text-sm focus:border-yellow-500 focus:outline-none"
+                        className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                        style={{ color: '#000000', backgroundColor: '#ffffff' }}
                         required
                       />
                       <input
@@ -1017,7 +1199,8 @@ export default function CheckoutPage() {
                         placeholder="Ville"
                         value={livraisonAddress.ville}
                         onChange={(e) => setLivraisonAddress({ ...livraisonAddress, ville: e.target.value })}
-                        className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-white text-sm focus:border-yellow-500 focus:outline-none"
+                        className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                        style={{ color: '#000000', backgroundColor: '#ffffff' }}
                         required
                       />
                     </div>
@@ -1026,7 +1209,8 @@ export default function CheckoutPage() {
                       placeholder="Téléphone"
                       value={livraisonAddress.telephone}
                       onChange={(e) => setLivraisonAddress({ ...livraisonAddress, telephone: e.target.value })}
-                      className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-white text-sm focus:border-yellow-500 focus:outline-none"
+                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
                     />
                   </div>
                 </div>
@@ -1461,6 +1645,19 @@ export default function CheckoutPage() {
                               )
 
                           if (order.id) {
+                            // Enregistrer l'utilisation du code promo APRÈS création de la commande
+                            if (promoValidation && promoValidation.valid && promoCode && user?.id) {
+                              const promoCodeObj = await getPromoCodeByCode(promoCode)
+                              if (promoCodeObj) {
+                                await recordPromoCodeUsageAsync(
+                                  promoCodeObj.id,
+                                  user.id,
+                                  order.id,
+                                  promoValidation.discount || 0
+                                )
+                              }
+                            }
+
                             // La commande reste en "pending" (en attente) par défaut
                             // Le statut sera changé manuellement depuis l'admin
                             
@@ -1641,21 +1838,6 @@ export default function CheckoutPage() {
                   </div>
                 ) : (
                   <>
-                    {/* Bouton de test Monetico TEST */}
-                    <button
-                      onClick={() => {
-                        const finalTotal = (total + shippingCost - (promoValidation?.discount || 0)).toFixed(2)
-                        startMoneticoPayment({
-                          montant: `${finalTotal}EUR`,
-                          mail: user?.email || 'client@test.fr',
-                          texteLibre: `CMD-${orderReference || 'TEST'}`
-                        })
-                      }}
-                      className="w-full font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-base mb-2 bg-blue-500 text-white hover:bg-blue-400"
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      Payer (TEST Monetico)
-                    </button>
                     <button
                       onClick={handleSubmit}
                       disabled={!isFormValid()}

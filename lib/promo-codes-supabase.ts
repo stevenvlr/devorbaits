@@ -3,7 +3,7 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 import type { PromoCode } from './promo-codes-manager'
 
 const PROMO_CODES_SELECT =
-  'id,code,discount_type,discount_value,min_purchase,max_uses,valid_from,valid_until,active,allowed_user_ids,allowed_product_ids,allowed_categories,allowed_gammes,allowed_conditionnements,description,created_at,updated_at'
+  'id,code,discount_type,discount_value,min_purchase,max_uses,used_count,valid_from,valid_until,active,allowed_user_ids,allowed_product_ids,allowed_categories,allowed_gammes,allowed_conditionnements,description,created_at,updated_at'
 
 // Cache en mémoire (admin seulement, mais évite des rechargements inutiles)
 let promoCodesCache: PromoCode[] | null = null
@@ -51,6 +51,7 @@ export async function loadPromoCodesFromSupabase(): Promise<PromoCode[]> {
       discountValue: parseFloat(row.discount_value) || 0,
       minPurchase: row.min_purchase ? parseFloat(row.min_purchase) : undefined,
       maxUses: row.max_uses || undefined,
+      usedCount: typeof row.used_count === 'number' ? row.used_count : (row.used_count ? parseInt(row.used_count, 10) : 0),
       validFrom: row.valid_from || undefined,
       validUntil: row.valid_until || undefined,
       active: row.active !== false,
@@ -188,4 +189,73 @@ export async function deletePromoCodeFromSupabase(promoCodeId: string): Promise<
     console.error('Erreur lors de la suppression du code promo dans Supabase:', error)
     return false
   }
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
+export async function getPromoCodeUsageCountFromSupabase(promoCodeId: string): Promise<number> {
+  if (!isSupabaseConfigured()) return 0
+  const supabase = getSupabaseClient()
+  if (!supabase) return 0
+
+  const { count, error } = await supabase
+    .from('promo_code_usage')
+    .select('id', { count: 'exact', head: true })
+    .eq('promo_code_id', promoCodeId)
+
+  if (error) {
+    console.error('Erreur lors du comptage promo_code_usage:', error)
+    return 0
+  }
+
+  return count || 0
+}
+
+export async function hasUserUsedPromoCodeInSupabase(promoCodeId: string, userId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false
+  const supabase = getSupabaseClient()
+  if (!supabase) return false
+
+  const { data, error } = await supabase
+    .from('promo_code_usage')
+    .select('id')
+    .eq('promo_code_id', promoCodeId)
+    .eq('user_id', userId)
+    .limit(1)
+
+  if (error) {
+    console.error('Erreur lors de la vérification promo_code_usage:', error)
+    return false
+  }
+
+  return Array.isArray(data) && data.length > 0
+}
+
+export async function recordPromoCodeUsageToSupabase(params: {
+  promoCodeId: string
+  userId: string
+  orderId?: string | null
+  discountAmount: number
+}): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured()) return { success: false, error: 'Supabase non configuré' }
+  const supabase = getSupabaseClient()
+  if (!supabase) return { success: false, error: 'Client Supabase indisponible' }
+
+  const orderId =
+    typeof params.orderId === 'string' && isUuid(params.orderId) ? params.orderId : null
+
+  const { error } = await supabase.from('promo_code_usage').insert({
+    promo_code_id: params.promoCodeId,
+    user_id: params.userId,
+    order_id: orderId,
+    discount_amount: params.discountAmount
+  })
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  return { success: true }
 }

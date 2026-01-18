@@ -6,6 +6,7 @@ import {
   loadPromoCodes, 
   loadPromoCodesSync,
   addPromoCode, 
+  addPromoCodesBulk,
   updatePromoCode, 
   deletePromoCode, 
   onPromoCodesUpdate,
@@ -21,6 +22,20 @@ export default function PromoCodesAdminPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingCode, setEditingCode] = useState<PromoCode | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [showBulkGenerator, setShowBulkGenerator] = useState(false)
+  const [bulkGenerating, setBulkGenerating] = useState(false)
+  const [bulkForm, setBulkForm] = useState({
+    quantity: 20,
+    prefix: 'GAGNE-',
+    randomLength: 8,
+    discountType: 'percentage' as 'percentage' | 'fixed',
+    discountValue: 10,
+    minPurchase: '',
+    validFrom: '',
+    validUntil: '',
+    active: true,
+    description: 'Code à gagner (1 utilisation au total)'
+  })
 
   // États du formulaire
   const [formData, setFormData] = useState({
@@ -220,6 +235,75 @@ export default function PromoCodesAdminPage() {
     })
   }
 
+  const randomCode = (length: number) => {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // sans O/0/I/1
+    let out = ''
+    for (let i = 0; i < length; i++) {
+      out += alphabet[Math.floor(Math.random() * alphabet.length)]
+    }
+    return out
+  }
+
+  const handleGenerateWinningCodes = async () => {
+    if (bulkForm.quantity <= 0 || bulkForm.quantity > 500) {
+      setMessage({ type: 'error', text: 'Quantité invalide (1 à 500)' })
+      return
+    }
+    if (bulkForm.randomLength < 4 || bulkForm.randomLength > 20) {
+      setMessage({ type: 'error', text: 'Longueur invalide (4 à 20)' })
+      return
+    }
+    if (bulkForm.discountValue <= 0) {
+      setMessage({ type: 'error', text: 'La valeur de réduction doit être supérieure à 0' })
+      return
+    }
+
+    setBulkGenerating(true)
+    setMessage(null)
+
+    try {
+      const codes: PromoCode[] = []
+      const uniq = new Set<string>()
+
+      while (codes.length < bulkForm.quantity) {
+        const code = `${(bulkForm.prefix || '').toUpperCase()}${randomCode(bulkForm.randomLength)}`
+        if (uniq.has(code)) continue
+        uniq.add(code)
+
+        codes.push({
+          id: '',
+          code,
+          discountType: bulkForm.discountType,
+          discountValue: bulkForm.discountValue,
+          minPurchase: bulkForm.minPurchase ? parseFloat(bulkForm.minPurchase) : undefined,
+          maxUses: 1, // IMPORTANT: code à gagner = 1 utilisation au total
+          validFrom: bulkForm.validFrom || undefined,
+          validUntil: bulkForm.validUntil || undefined,
+          active: bulkForm.active,
+          description: bulkForm.description || undefined,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        })
+      }
+
+      const result = await addPromoCodesBulk(codes)
+      await loadPromoCodesData()
+
+      if (result.created > 0) {
+        setMessage({
+          type: result.failed === 0 ? 'success' : 'error',
+          text: `Codes créés : ${result.created} • Échecs : ${result.failed}`
+        })
+      } else {
+        setMessage({ type: 'error', text: 'Aucun code n’a pu être créé' })
+      }
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.message || 'Erreur lors de la génération' })
+    } finally {
+      setBulkGenerating(false)
+    }
+  }
+
   const createDefaultCodes = async () => {
     // Code 1: 50% sur tous les articles en 1kg
     const code1kg: PromoCode = {
@@ -277,6 +361,13 @@ export default function PromoCodesAdminPage() {
             >
               <Copy className="w-4 h-4" />
               Créer codes par défaut
+            </button>
+            <button
+              onClick={() => setShowBulkGenerator(true)}
+              className="btn btn-secondary btn-md"
+            >
+              <Tag className="w-4 h-4" />
+              Générer codes à gagner
             </button>
             <button
               onClick={() => {
@@ -656,6 +747,156 @@ export default function PromoCodesAdminPage() {
                   {editingCode ? 'Modifier' : 'Créer'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Générateur de codes à gagner */}
+        {showBulkGenerator && (
+          <div className="mb-8 bg-noir-800/50 border border-noir-700 rounded-xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold">Générer des codes à gagner</h2>
+              <button
+                onClick={() => {
+                  if (bulkGenerating) return
+                  setShowBulkGenerator(false)
+                }}
+                className="p-2 hover:bg-noir-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-400 mb-4">
+              Chaque code généré aura <span className="text-gray-200 font-semibold">maxUses = 1</span> (donc utilisable une seule fois au total),
+              et reste <span className="text-gray-200 font-semibold">1 fois par compte</span> aussi.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Quantité (1 à 500)</label>
+                <input
+                  type="number"
+                  value={bulkForm.quantity}
+                  onChange={(e) => setBulkForm({ ...bulkForm, quantity: parseInt(e.target.value || '0', 10) })}
+                  className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                  min="1"
+                  max="500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Préfixe</label>
+                <input
+                  type="text"
+                  value={bulkForm.prefix}
+                  onChange={(e) => setBulkForm({ ...bulkForm, prefix: e.target.value.toUpperCase() })}
+                  className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                  placeholder="Ex: GAGNE-"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Longueur aléatoire (4 à 20)</label>
+                <input
+                  type="number"
+                  value={bulkForm.randomLength}
+                  onChange={(e) => setBulkForm({ ...bulkForm, randomLength: parseInt(e.target.value || '0', 10) })}
+                  className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                  min="4"
+                  max="20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Type de réduction</label>
+                <select
+                  value={bulkForm.discountType}
+                  onChange={(e) => setBulkForm({ ...bulkForm, discountType: e.target.value as 'percentage' | 'fixed' })}
+                  className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                >
+                  <option value="percentage">Pourcentage (%)</option>
+                  <option value="fixed">Montant fixe (€)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Valeur ({bulkForm.discountType === 'percentage' ? '%' : '€'})
+                </label>
+                <input
+                  type="number"
+                  value={bulkForm.discountValue}
+                  onChange={(e) => setBulkForm({ ...bulkForm, discountValue: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                  min="0"
+                  step={bulkForm.discountType === 'percentage' ? '1' : '0.01'}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Montant minimum (€)</label>
+                <input
+                  type="number"
+                  value={bulkForm.minPurchase}
+                  onChange={(e) => setBulkForm({ ...bulkForm, minPurchase: e.target.value })}
+                  className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Valide du</label>
+                <input
+                  type="date"
+                  value={bulkForm.validFrom}
+                  onChange={(e) => setBulkForm({ ...bulkForm, validFrom: e.target.value })}
+                  className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Valide jusqu’au</label>
+                <input
+                  type="date"
+                  value={bulkForm.validUntil}
+                  onChange={(e) => setBulkForm({ ...bulkForm, validUntil: e.target.value })}
+                  className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium mb-2">Description (optionnel)</label>
+              <input
+                type="text"
+                value={bulkForm.description}
+                onChange={(e) => setBulkForm({ ...bulkForm, description: e.target.value })}
+                className="w-full px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+              />
+            </div>
+
+            <div className="mt-4 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="bulk-active"
+                checked={bulkForm.active}
+                onChange={(e) => setBulkForm({ ...bulkForm, active: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <label htmlFor="bulk-active" className="text-sm">Codes actifs</label>
+            </div>
+
+            <div className="mt-6 flex gap-2 justify-end">
+              <button
+                onClick={() => setShowBulkGenerator(false)}
+                className="btn btn-secondary btn-md"
+                disabled={bulkGenerating}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleGenerateWinningCodes}
+                className="btn btn-primary btn-md"
+                disabled={bulkGenerating}
+              >
+                <Check className="w-4 h-4" />
+                {bulkGenerating ? 'Génération…' : 'Générer'}
+              </button>
             </div>
           </div>
         )}
