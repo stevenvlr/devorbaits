@@ -164,13 +164,23 @@ export default function GammePageClient() {
       //   return
       // }
       
+      // Important: inclure les infos de variante (sinon le checkout n'affiche pas le conditionnement/diamètre
+      // et le calcul du poids tombe sur 1kg par défaut).
       await addToCart({
         produit: product.name,
         arome: product.gamme || '',
         quantite: quantity,
         prix: variant.price,
         productId: product.id,
-        variantId: variant.id
+        variantId: variant.id,
+        category: product.category,
+        gamme: product.gamme,
+        // Infos variantes (selon produit)
+        diametre: variant.diametre,
+        conditionnement: variant.conditionnement || variant.format,
+        taille: variant.taille,
+        couleur: variant.couleur,
+        format: variant.format
       })
       return
     }

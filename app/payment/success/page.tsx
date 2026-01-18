@@ -194,7 +194,13 @@ function PaymentSuccessContent() {
               }
             }
             
-            // Sauvegarder l'adresse de livraison si disponible
+            const phoneFromPending =
+              (pendingOrder?.customerPhone ||
+                pendingOrder?.livraisonAddress?.telephone ||
+                user?.telephone ||
+                '') as string
+
+            // Sauvegarder l'adresse / infos de retrait dans la commande (selon le mode)
             if (order.id && pendingOrder.livraisonAddress && pendingOrder.retraitMode === 'livraison') {
               try {
                 const { getSupabaseClient } = await import('@/lib/supabase')
@@ -207,7 +213,7 @@ function PaymentSuccessContent() {
                         adresse: pendingOrder.livraisonAddress.adresse,
                         codePostal: pendingOrder.livraisonAddress.codePostal,
                         ville: pendingOrder.livraisonAddress.ville,
-                        telephone: pendingOrder.livraisonAddress.telephone
+                        telephone: phoneFromPending?.trim() || pendingOrder.livraisonAddress.telephone
                       }
                     })
                     .eq('id', order.id)
@@ -215,6 +221,114 @@ function PaymentSuccessContent() {
                 }
               } catch (addressError) {
                 console.warn('⚠️ Erreur lors de la sauvegarde de l\'adresse dans la commande:', addressError)
+              }
+            }
+
+            // Point relais (Chronopost / Boxtal) - Monetico
+            if (order.id && pendingOrder.retraitMode === 'chronopost-relais') {
+              try {
+                const { getSupabaseClient } = await import('@/lib/supabase')
+                const supabase = getSupabaseClient()
+                if (supabase) {
+                  if (pendingOrder.boxtalParcelPoint) {
+                    const p = pendingOrder.boxtalParcelPoint
+                    const pointAddress = p.address || {}
+                    const rawData = (p as any).rawData || p
+
+                    const postalCode =
+                      pointAddress.postalCode ||
+                      pointAddress.postal_code ||
+                      pointAddress.zipCode ||
+                      rawData.address?.postalCode ||
+                      rawData.postalCode ||
+                      ''
+
+                    const city =
+                      pointAddress.city ||
+                      pointAddress.ville ||
+                      rawData.address?.city ||
+                      rawData.city ||
+                      ''
+
+                    const street =
+                      pointAddress.street ||
+                      pointAddress.address ||
+                      rawData.address?.street ||
+                      rawData.street ||
+                      ''
+
+                    const fullAddress = [street, postalCode, city].filter(Boolean).join(', ')
+
+                    await supabase
+                      .from('orders')
+                      .update({
+                        shipping_address: {
+                          type: 'boxtal-relais',
+                          identifiant: p.code || '',
+                          nom: p.name || '',
+                          adresseComplete: fullAddress,
+                          adresse: street,
+                          codePostal: postalCode,
+                          ville: city,
+                          pays: pointAddress.country || pointAddress.countryCode || 'FR',
+                          coordonnees: p.coordinates || {},
+                          network: p.network || '',
+                          telephone: phoneFromPending?.trim() || undefined,
+                          pointRelais: p
+                        }
+                      })
+                      .eq('id', order.id)
+                    console.log('✅ Point relais Boxtal sauvegardé dans la commande (Monetico)')
+                  } else if (pendingOrder.chronopostRelaisPoint) {
+                    const p = pendingOrder.chronopostRelaisPoint
+                    await supabase
+                      .from('orders')
+                      .update({
+                        shipping_address: {
+                          type: 'chronopost-relais',
+                          identifiant: p.identifiant,
+                          nom: p.nom,
+                          adresse: p.adresse,
+                          codePostal: p.codePostal,
+                          ville: p.ville,
+                          horaires: p.horaires,
+                          coordonnees: p.coordonnees,
+                          telephone: phoneFromPending?.trim() || undefined,
+                        }
+                      })
+                      .eq('id', order.id)
+                    console.log('✅ Point relais Chronopost sauvegardé dans la commande (Monetico)')
+                  }
+                }
+              } catch (relaisError) {
+                console.warn('⚠️ Erreur lors de la sauvegarde du point relais (Monetico):', relaisError)
+              }
+            }
+
+            // Wavignies RDV - Monetico
+            if (order.id && pendingOrder.retraitMode === 'wavignies-rdv' && pendingOrder.rdvDate && pendingOrder.rdvTimeSlot) {
+              try {
+                const { getSupabaseClient } = await import('@/lib/supabase')
+                const supabase = getSupabaseClient()
+                if (supabase) {
+                  await supabase
+                    .from('orders')
+                    .update({
+                      shipping_address: {
+                        type: 'wavignies-rdv',
+                        rdvDate: pendingOrder.rdvDate,
+                        rdvTimeSlot: pendingOrder.rdvTimeSlot,
+                        adresse: 'Retrait sur rendez-vous à Wavignies (60130)',
+                        ville: 'Wavignies',
+                        codePostal: '60130',
+                        telephone: phoneFromPending?.trim() || undefined,
+                      }
+                    })
+                    .eq('id', order.id)
+                  console.log('✅ Informations de retrait Wavignies sauvegardées dans la commande (Monetico)')
+                }
+              } catch (wavigniesError) {
+                console.warn('⚠️ Erreur lors de la sauvegarde du retrait Wavignies (Monetico):', wavigniesError)
               }
             }
             

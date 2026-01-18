@@ -560,6 +560,8 @@ export default function CheckoutPage() {
       rdvTimeSlot: retraitMode === 'wavignies-rdv' ? rdvTimeSlot : null,
       livraisonAddress: retraitMode === 'livraison' ? livraisonAddress : null,
       chronopostRelaisPoint: retraitMode === 'chronopost-relais' ? chronopostRelaisPoint : null,
+      boxtalParcelPoint: retraitMode === 'chronopost-relais' ? boxtalParcelPoint : null,
+      customerPhone: (livraisonAddress.telephone || user.telephone || '').trim() || null,
       createdAt: new Date().toISOString(),
     }
     localStorage.setItem(`pending-order-${orderReference}`, JSON.stringify(pendingOrder))
@@ -709,6 +711,7 @@ export default function CheckoutPage() {
                       pays: pointAddress.country || pointAddress.countryCode || 'FR',
                       coordonnees: boxtalParcelPoint.coordinates || {},
                       network: boxtalParcelPoint.network || '',
+                      telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
                       codePostalRecherche: livraisonAddress.codePostal || '',
                       villeRecherche: livraisonAddress.ville || '',
                       pointRelais: boxtalParcelPoint
@@ -728,7 +731,8 @@ export default function CheckoutPage() {
                       codePostal: chronopostRelaisPoint.codePostal,
                       ville: chronopostRelaisPoint.ville,
                       horaires: chronopostRelaisPoint.horaires,
-                      coordonnees: chronopostRelaisPoint.coordonnees
+                      coordonnees: chronopostRelaisPoint.coordonnees,
+                      telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
                     }
                   })
                   .eq('id', order.id)
@@ -737,6 +741,33 @@ export default function CheckoutPage() {
             }
           } catch (relaisError) {
             console.warn('⚠️ Erreur lors de la sauvegarde du point relais:', relaisError)
+          }
+        }
+
+        // Sauvegarder les informations de retrait à Wavignies (incl. téléphone)
+        if (retraitMode === 'wavignies-rdv' && order.id && rdvDate && rdvTimeSlot) {
+          try {
+            const { getSupabaseClient } = await import('@/lib/supabase')
+            const supabase = getSupabaseClient()
+            if (supabase) {
+              await supabase
+                .from('orders')
+                .update({
+                  shipping_address: {
+                    type: 'wavignies-rdv',
+                    rdvDate: rdvDate,
+                    rdvTimeSlot: rdvTimeSlot,
+                    adresse: 'Retrait sur rendez-vous à Wavignies (60130)',
+                    ville: 'Wavignies',
+                    codePostal: '60130',
+                    telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
+                  }
+                })
+                .eq('id', order.id)
+              console.log('✅ Informations de retrait Wavignies sauvegardées dans la commande')
+            }
+          } catch (wavigniesError) {
+            console.warn('⚠️ Erreur lors de la sauvegarde du retrait Wavignies:', wavigniesError)
           }
         }
 
@@ -1080,7 +1111,9 @@ export default function CheckoutPage() {
                 </div>
                 {promoValidation && promoValidation.valid && promoValidation.discount && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Réduction:</span>
+                    <span className="text-gray-400">
+                      Réduction{promoCode.trim() ? ` (${promoCode.trim()})` : ''}:
+                    </span>
                     <span className="text-green-400">-{promoValidation.discount.toFixed(2)} €</span>
                   </div>
                 )}
@@ -1776,6 +1809,7 @@ export default function CheckoutPage() {
                                           pays: pointAddress.country || pointAddress.countryCode || 'FR',
                                           coordonnees: boxtalParcelPoint.coordinates || {},
                                           network: boxtalParcelPoint.network || '',
+                                          telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
                                           codePostalRecherche: livraisonAddress.codePostal || '',
                                           villeRecherche: livraisonAddress.ville || '',
                                           pointRelais: boxtalParcelPoint
@@ -1795,7 +1829,8 @@ export default function CheckoutPage() {
                                           codePostal: chronopostRelaisPoint.codePostal,
                                           ville: chronopostRelaisPoint.ville,
                                           horaires: chronopostRelaisPoint.horaires,
-                                          coordonnees: chronopostRelaisPoint.coordonnees
+                                          coordonnees: chronopostRelaisPoint.coordonnees,
+                                          telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
                                         }
                                       })
                                       .eq('id', order.id)
@@ -1822,7 +1857,8 @@ export default function CheckoutPage() {
                                         rdvTimeSlot: rdvTimeSlot,
                                         adresse: 'Retrait sur rendez-vous à Wavignies (60130)',
                                         ville: 'Wavignies',
-                                        codePostal: '60130'
+                                        codePostal: '60130',
+                                        telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
                                       }
                                     })
                                     .eq('id', order.id)

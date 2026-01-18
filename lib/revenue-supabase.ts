@@ -497,11 +497,12 @@ export async function getAllOrders(): Promise<(Order & { items: OrderItem[]; use
         // Récupérer le profil utilisateur si user_id existe
         let user_email: string | undefined
         let user_name: string | undefined
+        let user_phone: string | undefined
 
         if (order.user_id) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('email, nom, prenom')
+            .select('email, nom, prenom, telephone')
             .eq('id', order.user_id)
             .single()
 
@@ -510,6 +511,7 @@ export async function getAllOrders(): Promise<(Order & { items: OrderItem[]; use
             user_name = profile.nom || profile.prenom 
               ? `${profile.nom || ''} ${profile.prenom || ''}`.trim() 
               : undefined
+            user_phone = profile.telephone || undefined
           }
         }
 
@@ -518,6 +520,7 @@ export async function getAllOrders(): Promise<(Order & { items: OrderItem[]; use
           items: items || [],
           user_email,
           user_name,
+          user_phone,
           shipping_tracking_number: order.shipping_tracking_number,
           shipping_label_url: order.shipping_label_url,
           shipping_cost: order.shipping_cost ? parseFloat(order.shipping_cost.toString()) : undefined,

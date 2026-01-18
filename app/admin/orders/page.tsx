@@ -11,6 +11,7 @@ interface OrderWithDetails extends Order {
   items: OrderItem[]
   user_email?: string
   user_name?: string
+  user_phone?: string
   shipping_tracking_number?: string
   shipping_label_url?: string
   shipping_cost?: number
@@ -460,6 +461,9 @@ export default function OrdersAdminPage() {
                         {order.user_email && (
                           <p>Client : {order.user_name || order.user_email} ({order.user_email})</p>
                         )}
+                        {order.user_phone && (
+                          <p>Téléphone (compte) : {order.user_phone}</p>
+                        )}
                         {order.payment_method && (
                           <p>Paiement : {order.payment_method}</p>
                         )}
@@ -542,6 +546,9 @@ export default function OrdersAdminPage() {
                                 {order.shipping_address.codePostal} {order.shipping_address.ville}
                               </p>
                             )}
+                            {order.shipping_address.telephone && (
+                              <p><span className="text-gray-400">Téléphone :</span> {order.shipping_address.telephone}</p>
+                            )}
                             {(order.shipping_address as any).horaires && (
                               <p className="mt-2">
                                 <span className="text-gray-400">Horaires :</span>{' '}
@@ -609,6 +616,9 @@ export default function OrdersAdminPage() {
                                 </span>
                               </p>
                             )}
+                            {order.shipping_address.telephone && (
+                              <p><span className="text-gray-400">Téléphone :</span> {order.shipping_address.telephone}</p>
+                            )}
                           </div>
                         </div>
                       ) : (order.shipping_address as any).type === 'boxtal-relais' ? (
@@ -631,6 +641,12 @@ export default function OrdersAdminPage() {
                               <p>
                                 <span className="text-gray-400">Code point relais :</span>{' '}
                                 <span className="font-mono text-yellow-400">{(order.shipping_address as any).identifiant}</span>
+                              </p>
+                            )}
+                            {order.shipping_address.telephone && (
+                              <p>
+                                <span className="text-gray-400">Téléphone :</span>{' '}
+                                <span className="text-white">{order.shipping_address.telephone}</span>
                               </p>
                             )}
                             
