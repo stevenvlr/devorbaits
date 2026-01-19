@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Package, CheckCircle, XCircle, Clock, Truck, Search, Filter, Download, Edit2, Save, X, MapPin, Info, Calendar } from 'lucide-react'
 import { getAllOrders, updateOrderStatus, updateOrderTrackingNumber, type Order, type OrderItem } from '@/lib/revenue-supabase'
 import { getProductById } from '@/lib/products-manager'
+import { getSupabaseClient } from '@/lib/supabase'
 
 type OrderStatus = Order['status']
 
@@ -71,6 +72,51 @@ export default function OrdersAdminPage() {
   const [editingTrackingNumber, setEditingTrackingNumber] = useState<string | null>(null)
   const [trackingNumberValue, setTrackingNumberValue] = useState<string>('')
   const [savingTracking, setSavingTracking] = useState<string | null>(null)
+  const [downloadingInvoiceFor, setDownloadingInvoiceFor] = useState<string | null>(null)
+
+  const downloadInvoice = async (order: OrderWithDetails) => {
+    // Si on a déjà une URL, on tente d'abord (ça peut être une signed URL expirée)
+    if (order.invoice_url) {
+      window.open(order.invoice_url, '_blank', 'noopener,noreferrer')
+      return
+    }
+
+    setDownloadingInvoiceFor(order.id)
+    try {
+      const supabase = getSupabaseClient()
+      const { data: sessionData } = supabase
+        ? await supabase.auth.getSession()
+        : { data: { session: null as any } }
+      const token = sessionData?.session?.access_token || null
+
+      const res = await fetch('/api/admin/orders/invoice-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ orderId: order.id }),
+      })
+
+      const j: any = await res.json().catch(() => null)
+      if (!res.ok || !j?.ok) {
+        throw new Error(j?.error || `Erreur téléchargement facture (${res.status})`)
+      }
+
+      const url = j?.url
+      if (typeof url !== 'string' || url.trim() === '') {
+        throw new Error('URL de facture manquante')
+      }
+
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (e: any) {
+      console.error('Erreur téléchargement facture:', e)
+      setMessage({ type: 'error', text: e?.message || 'Erreur lors du téléchargement de la facture' })
+      setTimeout(() => setMessage(null), 5000)
+    } finally {
+      setDownloadingInvoiceFor(null)
+    }
+  }
 
   const loadOrders = async () => {
     setLoading(true)
@@ -471,6 +517,21 @@ export default function OrdersAdminPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-bold text-yellow-500 mb-2">{order.total.toFixed(2)}€</p>
+                      <div className="mt-2 flex flex-col items-end gap-2">
+                        {(order.invoice_url || order.invoice_number) ? (
+                          <button
+                            onClick={() => downloadInvoice(order)}
+                            disabled={downloadingInvoiceFor === order.id}
+                            className="inline-flex items-center gap-2 text-yellow-500 hover:text-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                            title={order.invoice_number ? `Facture ${order.invoice_number}` : 'Télécharger la facture'}
+                          >
+                            <Download className="w-4 h-4" />
+                            {downloadingInvoiceFor === order.id ? 'Téléchargement...' : 'Télécharger la facture'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-500">Facture non générée</span>
+                        )}
+                      </div>
                       <select
                         value={order.status}
                         onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}

@@ -12,6 +12,9 @@ export interface Order {
   shipping_tracking_number?: string
   shipping_label_url?: string
   shipping_cost?: number
+  invoice_url?: string
+  invoice_number?: string
+  billing_address?: any
   items?: OrderItem[] // Les items sont maintenant stockés directement dans orders
   comment?: string // Commentaire de commande (optionnel, max 500 caractères)
 }
