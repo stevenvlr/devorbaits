@@ -65,7 +65,9 @@ export default function ProductCard({
   const isEquilibrees = (product.category.toLowerCase() === 'équilibrées' || product.category.toLowerCase() === 'équilibrés') && hasVariants
   const [selectedTaille, setSelectedTaille] = useState<string>('')
   
-  // Trouver la variante sélectionnée (temporairement : ne pas filtrer par available pour test)
+  const isProductAvailable = product.available === true
+
+  // Trouver la variante sélectionnée
   const selectedVariant: ProductVariant | undefined = hasVariants ? (() => {
     if (isBouillettes && selectedDiametre && selectedConditionnement) {
       return product.variants?.find(v => 
@@ -88,10 +90,9 @@ export default function ProductCard({
     ? `${product.id}-${selectedVariant.id}`
     : `${product.id}-${product.gamme || ''}`
   const quantity = quantities[productKey] || 1
-  // Temporairement : considérer tous les produits comme disponibles pour test
-  const isAvailable = (!hasVariants || selectedVariant !== undefined)
+  const isSelectionReady = !hasVariants || Boolean(selectedVariant)
   
-  // Extraire les options uniques pour les bouillettes (temporairement : ne pas filtrer par available pour test)
+  // Extraire les options uniques pour les bouillettes
   const diametres = isBouillettes ? Array.from(new Set(product.variants?.map(v => v.diametre).filter(Boolean))) : []
   const conditionnements = isBouillettes ? Array.from(new Set(product.variants?.map(v => v.conditionnement).filter(Boolean))) : []
   const tailles = isEquilibrees ? Array.from(new Set(product.variants?.map(v => v.taille).filter(Boolean))) : []
@@ -99,6 +100,17 @@ export default function ProductCard({
   const availableStock = hasVariants && selectedVariant
     ? getAvailableStockSync(product.id, selectedVariant.id)
     : getAvailableStockSync(product.id)
+
+  const selectedVariantAvailable = !hasVariants || (selectedVariant?.available === true)
+  // Règle métier:
+  // - stock === 0 => commandable (afficher délai), donc NE PAS bloquer sélection/achat
+  // - stock > 0 => limiter la quantité à ce stock
+  // - stock === -1 => stock non défini => illimité
+  const isBackorder = availableStock === 0
+  const isStockLimited = availableStock > 0
+  const isStockEnough = !isStockLimited || availableStock >= quantity
+  const canChangeQuantity = isProductAvailable && isSelectionReady && selectedVariantAvailable
+  const canAddToCart = isProductAvailable && isSelectionReady && selectedVariantAvailable && isStockEnough
 
   const basePrice = hasVariants && selectedVariant ? (selectedVariant.price || 0) : (product.price || 0)
   const priceWithPromotion = getPriceWithPromotion(basePrice)
@@ -138,9 +150,11 @@ export default function ProductCard({
   }
 
   const setQuantity = (value: number) => {
-    // Temporairement : ne pas vérifier available pour test
-    // if (product.available !== true) return
-    if (availableStock >= 0 && value > availableStock) return
+    if (!isProductAvailable) return
+    if (hasVariants && !selectedVariant) return
+    if (hasVariants && selectedVariant?.available !== true) return
+    // Stock limité uniquement si > 0. Si stock=0 => sur commande (délai), donc on ne limite pas.
+    if (availableStock > 0 && value > availableStock) return
     setQuantities(prev => ({ ...prev, [productKey]: Math.max(1, value) }))
   }
 
@@ -265,10 +279,11 @@ export default function ProductCard({
                     : product.variants?.find(v => v.conditionnement === conditionnement)
                   
                   const variantStock = variant ? getAvailableStockSync(product.id, variant.id) : -1
-                  // Temporairement : ne pas désactiver à cause du stock pour test
-                  const isOutOfStock = false // variantStock === 0
                   const isSelected = selectedConditionnement === conditionnement
-                  const isDisabled = Boolean(selectedDiametre && !variant) // Désactiver si diamètre sélectionné mais pas de variante correspondante
+                  const isMissingVariantForSelection = Boolean(selectedDiametre && !variant) // Diamètre sélectionné mais pas de variante correspondante
+                  // IMPORTANT: stock=0 reste commandable (délai). On désactive UNIQUEMENT si indisponible.
+                  const isVariantUnavailable = !variant || variant.available !== true || !isProductAvailable
+                  const isDisabled = isMissingVariantForSelection || isVariantUnavailable
                   
                   return (
                     <button
@@ -289,7 +304,17 @@ export default function ProductCard({
                           ? 'bg-yellow-500 text-noir-950 shadow-md shadow-yellow-500/30 scale-105'
                           : 'bg-noir-700/80 text-gray-300 hover:bg-noir-600 hover:scale-[1.02] border border-noir-600'
                       }`}
-                      title={variant ? `${getPriceWithPromotion(variant.price).toFixed(2)} €` : 'Sélectionnez d\'abord un diamètre'}
+                      title={
+                        isMissingVariantForSelection
+                          ? 'Sélectionnez d\'abord un diamètre'
+                          : !variant
+                          ? 'Indisponible'
+                          : variant.available !== true
+                          ? 'Indisponible'
+                          : variantStock === 0
+                          ? 'Sur commande (délai)'
+                          : `${getPriceWithPromotion(variant.price).toFixed(2)} €`
+                      }
                     >
                       {conditionnement}
                     </button>
@@ -311,28 +336,37 @@ export default function ProductCard({
                   v.taille === taille
                 )
                 const variantStock = variant ? getAvailableStockSync(product.id, variant.id) : -1
-                // Temporairement : ne pas désactiver à cause du stock pour test
-                const isOutOfStock = false // variantStock === 0
                 const isSelected = selectedTaille === taille
+                const isDisabled = !variant || variant.available !== true || !isProductAvailable
                 
                 return (
                   <button
                     key={taille}
                     type="button"
                     onClick={() => {
-                      if (variant) {
+                      if (variant && !isDisabled) {
                         setSelectedTaille(taille)
                         setSelectedVariantId(variant.id)
                         setQuantities(prev => ({ ...prev, [`${product.id}-${variant.id}`]: 1 }))
                       }
                     }}
-                    disabled={false}
+                    disabled={isDisabled}
                     className={`w-full px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                      isSelected
+                      isDisabled
+                        ? 'bg-noir-800/50 text-gray-600 cursor-not-allowed opacity-40 border border-noir-700'
+                        : isSelected
                         ? 'bg-yellow-500 text-noir-950 shadow-md shadow-yellow-500/30 scale-105'
                         : 'bg-noir-700/80 text-gray-300 hover:bg-noir-600 hover:scale-102 border border-noir-600'
                     }`}
-                    title={`${getPriceWithPromotion(variant?.price || 0).toFixed(2)} €`}
+                    title={
+                      !variant
+                        ? 'Indisponible'
+                        : variant.available !== true
+                        ? 'Indisponible'
+                        : variantStock === 0
+                        ? 'Sur commande (délai)'
+                        : `${getPriceWithPromotion(variant?.price || 0).toFixed(2)} €`
+                    }
                   >
                     {taille}
                   </button>
@@ -351,22 +385,35 @@ export default function ProductCard({
             <div className="grid grid-cols-2 gap-2.5">
               {product.variants?.map(variant => {
                 const variantStock = getAvailableStockSync(product.id, variant.id)
-                // Temporairement : ne pas désactiver à cause du stock pour test
-                const isVariantOutOfStock = false // variantStock === 0
                 const isSelected = selectedVariantId === variant.id
+                const isVariantDisabled = variant.available !== true || !isProductAvailable
                 return (
                   <button
                     key={variant.id}
                     type="button"
                     onClick={() => {
-                      setSelectedVariantId(variant.id)
-                      setQuantities(prev => ({ ...prev, [`${product.id}-${variant.id}`]: 1 }))
+                      if (!isVariantDisabled) {
+                        setSelectedVariantId(variant.id)
+                        setQuantities(prev => ({ ...prev, [`${product.id}-${variant.id}`]: 1 }))
+                      }
                     }}
+                    disabled={isVariantDisabled}
                     className={`w-full px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                      isSelected
+                      isVariantDisabled
+                        ? 'bg-noir-800/50 text-gray-600 cursor-not-allowed opacity-40 border border-noir-700'
+                        : isSelected
                         ? 'bg-yellow-500 text-noir-950 shadow-md shadow-yellow-500/30 scale-105'
                         : 'bg-noir-700/80 text-gray-300 hover:bg-noir-600 hover:scale-102 border border-noir-600'
                     }`}
+                    title={
+                      !isProductAvailable
+                        ? 'Indisponible'
+                        : variant.available !== true
+                        ? 'Indisponible'
+                        : variantStock === 0
+                        ? 'Sur commande (délai)'
+                        : `${getPriceWithPromotion(variant.price).toFixed(2)} €`
+                    }
                   >
                     {variant.label} - {getPriceWithPromotion(variant.price).toFixed(2)} €
                   </button>
@@ -412,8 +459,8 @@ export default function ProductCard({
             <span className="w-10 text-center font-semibold text-white">{quantity}</span>
             <button
               onClick={() => setQuantity(quantity + 1)}
-              disabled={false}
-              className="px-3 py-1.5 bg-noir-800 rounded-lg text-sm font-semibold hover:bg-noir-600 transition-all duration-200 text-white"
+              disabled={!canChangeQuantity || (availableStock > 0 && quantity >= availableStock)}
+              className="px-3 py-1.5 bg-noir-800 rounded-lg text-sm font-semibold hover:bg-noir-600 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-white"
             >
               +
             </button>
@@ -425,24 +472,20 @@ export default function ProductCard({
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              if (isAvailable) {
+              if (canAddToCart) {
                 handleAddToCartClick()
               }
             }}
-            disabled={
-              (hasVariants && !selectedVariant)
-              // Temporairement : ne pas vérifier le stock pour test
-              // || availableStock === 0 || 
-              // (availableStock > 0 && availableStock < quantity)
-            }
+            disabled={!canAddToCart}
             className="w-full min-h-[52px] bg-yellow-500 hover:bg-yellow-400 text-noir-950 font-bold py-3 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-yellow-500 mt-auto flex items-center justify-center gap-2 shadow-lg shadow-yellow-500/20 hover:shadow-yellow-500/30 hover:scale-[1.02] active:scale-[0.98]"
-            aria-disabled={!isAvailable}
           >
             <ShoppingCart className="w-5 h-5" />
             <span>
               {(() => {
-                // Temporairement : ne pas afficher les messages d'indisponibilité pour test
+                if (!isProductAvailable) return 'Indisponible'
                 if (hasVariants && !selectedVariant) return 'Sélectionner une variante'
+                if (availableStock === 0) return 'Sur commande (délai)'
+                if (availableStock > 0 && availableStock < quantity) return 'Stock insuffisant'
                 return 'Ajouter au panier'
               })()}
             </span>

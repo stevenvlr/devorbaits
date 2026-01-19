@@ -27,6 +27,8 @@ export default function ProductDetailModal({
   const [selectedVariantId, setSelectedVariantId] = useState<string>('')
   const [quantity, setQuantity] = useState(1)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [productAvailableStock, setProductAvailableStock] = useState<number>(-1)
+  const [variantStocks, setVariantStocks] = useState<Record<string, number>>({})
 
   // Fonction pour obtenir le prix avec promotion
   const getPriceWithPromotion = (price: number) => {
@@ -56,8 +58,50 @@ export default function ProductDetailModal({
       setSelectedTaille('')
       setQuantity(1)
       setCurrentImageIndex(0)
+      setVariantStocks({})
+      setProductAvailableStock(-1)
     }
   }, [isOpen, product])
+
+  const variantIdsKey = useMemo(() => {
+    return product?.variants?.map(v => v.id).join('|') || ''
+  }, [product])
+
+  // Charger le stock (produit + variantes) quand la modal s'ouvre
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadStocks() {
+      if (!isOpen || !product) return
+
+      try {
+        const variants = product.variants || []
+        const [pStock, ...vStocks] = await Promise.all([
+          getAvailableStock(product.id),
+          ...variants.map(v => getAvailableStock(product.id, v.id))
+        ])
+
+        if (cancelled) return
+
+        setProductAvailableStock(pStock)
+        const map: Record<string, number> = {}
+        variants.forEach((v, idx) => {
+          map[v.id] = vStocks[idx] ?? -1
+        })
+        setVariantStocks(map)
+      } catch (e) {
+        // En cas d'erreur, on garde -1 (stock illimité/non défini) pour éviter de bloquer l'achat à tort
+        if (cancelled) return
+        setProductAvailableStock(-1)
+        setVariantStocks({})
+      }
+    }
+
+    loadStocks()
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, product?.id, variantIdsKey])
 
   // Fermer avec Escape
   useEffect(() => {
@@ -74,7 +118,9 @@ export default function ProductDetailModal({
 
   const hasVariants = product.variants && product.variants.length > 0
   
-  // Trouver la variante sélectionnée (temporairement : ne pas filtrer par available pour test)
+  const isProductAvailable = product.available === true
+
+  // Trouver la variante sélectionnée
   const selectedVariant: ProductVariant | undefined = hasVariants ? (() => {
     if (isBouillettes && selectedDiametre && selectedConditionnement) {
       return product.variants?.find(v => 
@@ -98,9 +144,9 @@ export default function ProductDetailModal({
   const conditionnements = isBouillettes ? Array.from(new Set(product.variants?.map(v => v.conditionnement).filter(Boolean))) : []
   const tailles = isEquilibrees ? Array.from(new Set(product.variants?.map(v => v.taille).filter(Boolean))) : []
 
-  const availableStock = hasVariants && selectedVariant
-    ? getAvailableStock(product.id, selectedVariant.id)
-    : getAvailableStock(product.id)
+  const selectedAvailableStock = hasVariants
+    ? (selectedVariant ? (variantStocks[selectedVariant.id] ?? -1) : -1)
+    : productAvailableStock
 
   const basePrice = hasVariants && selectedVariant
     ? (selectedVariant.price || 0)
@@ -110,6 +156,7 @@ export default function ProductDetailModal({
   const showPromotion = Boolean(promotion?.active && price < basePrice)
 
   const handleAddToCartClick = async () => {
+    if (!canAddToCart) return
     if (onAddToCart) {
       onAddToCart(product, selectedVariant, quantity)
     } else {
@@ -149,8 +196,26 @@ export default function ProductDetailModal({
     }
   }
 
-  // Temporairement : ne pas vérifier la disponibilité pour test
-  const canAddToCart = (!hasVariants || selectedVariant !== undefined)
+  const isSelectionReady = !hasVariants || Boolean(selectedVariant)
+  const selectedVariantAvailable = !hasVariants || (selectedVariant?.available === true)
+  // Règle métier:
+  // - stock === 0 => commandable (délai), donc NE PAS bloquer sélection/achat
+  // - stock > 0 => limiter la quantité à ce stock
+  // - stock === -1 => stock non défini => illimité
+  const isBackorder = selectedAvailableStock === 0
+  const isStockLimited = selectedAvailableStock > 0
+  const isStockEnough = !isStockLimited || selectedAvailableStock >= quantity
+  const canAddToCart =
+    isProductAvailable &&
+    isSelectionReady &&
+    selectedVariantAvailable &&
+    isStockEnough
+
+  const canIncrement =
+    isProductAvailable &&
+    isSelectionReady &&
+    selectedVariantAvailable &&
+    (!isStockLimited || quantity < selectedAvailableStock)
 
   return (
     <div 
@@ -342,23 +407,37 @@ export default function ProductDetailModal({
                             v.conditionnement === conditionnement
                           )
                           const isSelected = selectedConditionnement === conditionnement
+                          const vStock = variant ? (variantStocks[variant.id] ?? -1) : -1
+                          const isDisabled = !variant || variant.available !== true || !isProductAvailable
                           
                           return (
                             <button
                               key={conditionnement}
                               type="button"
                               onClick={() => {
-                                setSelectedConditionnement(conditionnement)
-                                if (variant) {
+                                if (!isDisabled && variant) {
+                                  setSelectedConditionnement(conditionnement)
                                   setSelectedVariantId(variant.id)
+                                  setQuantity(1)
                                 }
                               }}
+                              disabled={isDisabled}
                               className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                isSelected
+                                isDisabled
+                                  ? 'bg-noir-800/50 text-gray-600 cursor-not-allowed opacity-40 border border-noir-700'
+                                  : isSelected
                                   ? 'bg-yellow-500 text-noir-950'
                                   : 'bg-noir-800 border border-noir-700 text-gray-300 hover:bg-noir-700'
                               }`}
-                              title={`${getPriceWithPromotion(variant?.price || 0).toFixed(2)} €`}
+                              title={
+                                !variant
+                                  ? 'Indisponible'
+                                  : variant.available !== true
+                                  ? 'Indisponible'
+                                  : vStock === 0
+                                  ? 'Sur commande (délai)'
+                                  : `${getPriceWithPromotion(variant?.price || 0).toFixed(2)} €`
+                              }
                             >
                               {conditionnement}
                             </button>
@@ -381,23 +460,37 @@ export default function ProductDetailModal({
                         v.taille === taille
                       )
                       const isSelected = selectedTaille === taille
+                      const vStock = variant ? (variantStocks[variant.id] ?? -1) : -1
+                      const isDisabled = !variant || variant.available !== true || !isProductAvailable
                       
                       return (
                         <button
                           key={taille}
                           type="button"
                           onClick={() => {
-                            if (variant) {
+                            if (variant && !isDisabled) {
                               setSelectedTaille(taille)
                               setSelectedVariantId(variant.id)
+                              setQuantity(1)
                             }
                           }}
+                          disabled={isDisabled}
                           className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            isSelected
+                            isDisabled
+                              ? 'bg-noir-800/50 text-gray-600 cursor-not-allowed opacity-40 border border-noir-700'
+                              : isSelected
                               ? 'bg-yellow-500 text-noir-950'
                               : 'bg-noir-800 border border-noir-700 text-gray-300 hover:bg-noir-700'
                           }`}
-                          title={`${variant?.price.toFixed(2)} €`}
+                          title={
+                            !variant
+                              ? 'Indisponible'
+                              : variant.available !== true
+                              ? 'Indisponible'
+                              : vStock === 0
+                              ? 'Sur commande (délai)'
+                              : `${variant?.price.toFixed(2)} €`
+                          }
                         >
                           {taille}
                         </button>
@@ -416,19 +509,35 @@ export default function ProductDetailModal({
                   <div className="grid grid-cols-2 gap-2">
                     {product.variants?.map(variant => {
                       const isSelected = selectedVariantId === variant.id
+                      const vStock = variantStocks[variant.id] ?? -1
+                      const isDisabled = variant.available !== true || !isProductAvailable
                       return (
                         <button
                           key={variant.id}
                           type="button"
                           onClick={() => {
-                            setSelectedVariantId(variant.id)
-                            setQuantity(1)
+                            if (!isDisabled) {
+                              setSelectedVariantId(variant.id)
+                              setQuantity(1)
+                            }
                           }}
+                          disabled={isDisabled}
                           className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            isSelected
+                            isDisabled
+                              ? 'bg-noir-800/50 text-gray-600 cursor-not-allowed opacity-40 border border-noir-700'
+                              : isSelected
                               ? 'bg-yellow-500 text-noir-950'
                               : 'bg-noir-800 border border-noir-700 text-gray-300 hover:bg-noir-700'
                           }`}
+                          title={
+                            !isProductAvailable
+                              ? 'Indisponible'
+                              : variant.available !== true
+                              ? 'Indisponible'
+                              : vStock === 0
+                              ? 'Sur commande (délai)'
+                              : `${getPriceWithPromotion(variant.price || 0).toFixed(2)} €`
+                          }
                         >
                           {variant.label} - {getPriceWithPromotion(variant.price || 0).toFixed(2)} €
                         </button>
@@ -456,18 +565,21 @@ export default function ProductDetailModal({
                     value={quantity}
                     onChange={(e) => {
                       const newQty = Math.max(1, parseInt(e.target.value) || 1)
-                      // Temporairement : ne pas vérifier le stock pour test
-                      setQuantity(newQty)
+                      let clamped = newQty
+                      // On limite uniquement si stock > 0. Si stock=0 => sur commande (délai), donc on ne limite pas.
+                      if (selectedAvailableStock > 0) {
+                        clamped = Math.min(clamped, selectedAvailableStock)
+                      }
+                      setQuantity(clamped)
                     }}
                     className="w-20 text-center bg-noir-800 border border-noir-700 rounded-lg py-2"
                     min="1"
                   />
                   <button
                     onClick={() => {
-                      // Temporairement : ne pas vérifier le stock pour test
-                      setQuantity(quantity + 1)
+                      if (canIncrement) setQuantity(quantity + 1)
                     }}
-                    disabled={false}
+                    disabled={!canIncrement}
                     className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     +
@@ -507,8 +619,10 @@ export default function ProductDetailModal({
               >
                 <ShoppingCart className="w-5 h-5" />
                 {(() => {
-                  // Temporairement : ne pas afficher les messages d'indisponibilité pour test
+                  if (!isProductAvailable) return 'Indisponible'
                   if (hasVariants && !selectedVariant) return 'Sélectionner une variante'
+                  if (selectedAvailableStock === 0) return 'Sur commande (délai)'
+                  if (selectedAvailableStock > 0 && selectedAvailableStock < quantity) return 'Stock insuffisant'
                   return 'Ajouter au panier'
                 })()}
               </button>
