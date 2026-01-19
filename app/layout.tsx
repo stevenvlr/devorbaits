@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
+import AccountMigrationBanner from '@/components/AccountMigrationBanner'
 import { CartProvider } from '@/contexts/CartContext'
 import { AuthProvider } from '@/contexts/AuthContext'
 import AnalyticsTracker from '@/components/AnalyticsTracker'
@@ -20,6 +21,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const SHOW_ACCOUNT_MIGRATION_BANNER = true
+
   return (
     <html lang="fr">
       <body className={inter.className}>
@@ -29,6 +32,7 @@ export default function RootLayout({
               <AnalyticsTracker />
             </Suspense>
             <Header />
+            <AccountMigrationBanner enabled={SHOW_ACCOUNT_MIGRATION_BANNER} />
             <main className="min-h-screen">
               {children}
             </main>
