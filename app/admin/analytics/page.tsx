@@ -93,7 +93,9 @@ export default function AnalyticsPage() {
 
   // Filtrer les commandes selon les critères de date
   const getFilteredOrders = () => {
-    let filtered = orders.filter(order => order.status === 'completed') // Seulement les commandes terminées
+    // Inclure les commandes dès qu'elles existent (pending inclus).
+    // On exclut uniquement les commandes annulées.
+    let filtered = orders.filter((order) => order.status !== 'cancelled')
 
     if (dateFilterType === 'day') {
       const dayStart = new Date(selectedDay)
@@ -436,7 +438,7 @@ export default function AnalyticsPage() {
               <ShoppingCart className="w-5 h-5 text-yellow-500" />
             </div>
             <p className="text-3xl font-bold text-white">{stats.totalOrders}</p>
-            <p className="text-xs text-gray-500 mt-1">Commandes terminées</p>
+            <p className="text-xs text-gray-500 mt-1">Hors commandes annulées</p>
           </div>
 
           <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6">
