@@ -53,6 +53,47 @@ type InvoiceLine = {
   lineTotal: number
 }
 
+type BillingAddress = {
+  nom?: string
+  prenom?: string
+  adresse?: string
+  codePostal?: string
+  ville?: string
+  pays?: string
+  telephone?: string
+}
+
+const INVOICE_LOGO_URL =
+  'https://nbnvcsuzhuwhvvbgxbhe.supabase.co/storage/v1/object/public/site-assets/logodevorbaits.png'
+
+const SELLER_INFO = {
+  brand: 'Devorbaits',
+  addressLine: '240 rue Douce, 60130 Wavignies',
+  phone: '07 61 28 85 12',
+  email: 'devorbaits.contact@gmail.com',
+  siret: '848 555 686 00015',
+  rcs: '848 555 686 R.C.S Beauvais',
+  legalForm: 'Auto-entrepreneur',
+  vat: 'TVA non applicable, art. 293 B du CGI',
+}
+
+function getDeliveryModeLabel(shippingAddress: any): string {
+  const type = typeof shippingAddress?.type === 'string' ? shippingAddress.type : null
+  switch (type) {
+    case 'chronopost-relais':
+      return 'Point relais Chronopost'
+    case 'boxtal-relais':
+      return 'Point relais Boxtal'
+    case 'wavignies-rdv':
+      return 'Retrait Wavignies (RDV)'
+    case 'livraison':
+      return 'Livraison à domicile'
+    default:
+      // Si pas de type, on considère "livraison" (ancien format) ou un fallback générique.
+      return 'Livraison à domicile'
+  }
+}
+
 function generateInvoiceNumber(now = new Date()) {
   const year = now.getFullYear()
   const suffix = Math.floor(Math.random() * 100000)
@@ -96,6 +137,8 @@ async function buildInvoicePdfBytes(params: {
   invoiceNumber: string
   invoiceDate: Date
   customerEmail: string
+  billingAddress?: BillingAddress | null
+  deliveryModeLabel?: string | null
   lines: InvoiceLine[]
   itemsSubtotal: number
   shippingCost: number
@@ -110,114 +153,298 @@ async function buildInvoicePdfBytes(params: {
   const font = await pdf.embedFont(StandardFonts.Helvetica)
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold)
 
-  const margin = 48
-  let page = pdf.addPage(pageSize)
-  let { width, height } = page.getSize()
-  let y = height - margin
+  const COLOR = {
+    black: rgb(0, 0, 0),
+    white: rgb(1, 1, 1),
+    gold: rgb(1, 0.843, 0),
+    grayText: rgb(0.35, 0.35, 0.35),
+    lightBorder: rgb(0.85, 0.85, 0.85),
+    darkPanel: rgb(0.07, 0.07, 0.07), // ~ #111
+  }
 
-  const draw = (text: string, x: number, size = 11, bold = false) => {
+  const margin = 48
+  const headerHeight = 92
+  const footerHeight = 46
+
+  const safeText = (v: unknown) =>
+    typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim()
+
+  const formatDate = (d: Date) => {
+    try {
+      return d.toLocaleDateString('fr-FR')
+    } catch {
+      return d.toISOString().slice(0, 10)
+    }
+  }
+
+  const measure = (text: string, size: number, useBold = false) =>
+    (useBold ? fontBold : font).widthOfTextAtSize(text, size)
+
+  const wrapText = (text: string, maxWidth: number, size: number, useBold = false) => {
+    const t = safeText(text)
+    if (!t) return ['']
+    const words = t.split(/\s+/g)
+    const lines: string[] = []
+    let current = ''
+    for (const w of words) {
+      const next = current ? `${current} ${w}` : w
+      if (measure(next, size, useBold) <= maxWidth) {
+        current = next
+      } else {
+        if (current) lines.push(current)
+        current = w
+      }
+    }
+    if (current) lines.push(current)
+    return lines.length > 0 ? lines : ['']
+  }
+
+  const drawText = (page: any, text: string, x: number, y: number, size: number, options?: { bold?: boolean; color?: any }) => {
     page.drawText(text, {
       x,
       y,
       size,
-      font: bold ? fontBold : font,
-      color: rgb(0, 0, 0),
+      font: options?.bold ? fontBold : font,
+      color: options?.color ?? COLOR.black,
     })
   }
 
-  const xName = margin
-  const xQty = 340
-  const xUnit = 400
-  const xLine = 480
-
-  const drawHeader = () => {
-    draw('FACTURE', margin, 18, true)
-    y -= 26
-    draw(`N°: ${params.invoiceNumber}`, margin, 11, true)
-    y -= 16
-    draw(`Date: ${params.invoiceDate.toLocaleDateString('fr-FR')}`, margin, 11)
-    y -= 16
-    draw(`Email client: ${params.customerEmail}`, margin, 11)
-    y -= 28
+  const drawBox = (page: any, x: number, y: number, w: number, h: number, options?: { fill?: any; border?: any; borderWidth?: number }) => {
+    page.drawRectangle({
+      x,
+      y,
+      width: w,
+      height: h,
+      color: options?.fill,
+      borderColor: options?.border,
+      borderWidth: options?.borderWidth,
+    })
   }
 
-  const drawTableHeader = () => {
+  const drawDivider = (page: any, x1: number, x2: number, y: number, color: any, thickness = 1) => {
     page.drawLine({
-      start: { x: margin, y: y + 12 },
-      end: { x: width - margin, y: y + 12 },
-      thickness: 1,
-      color: rgb(0.85, 0.85, 0.85),
+      start: { x: x1, y },
+      end: { x: x2, y },
+      color,
+      thickness,
     })
-    draw('Article', xName, 11, true)
-    draw('Qté', xQty, 11, true)
-    draw('PU', xUnit, 11, true)
-    draw('Total', xLine, 11, true)
-    y -= 18
   }
 
-  const startNewPage = (withHeader: boolean) => {
-    page = pdf.addPage(pageSize)
-    ;({ width, height } = page.getSize())
-    y = height - margin
-    if (withHeader) {
-      drawHeader()
+  async function tryEmbedLogo() {
+    try {
+      const res = await fetch(INVOICE_LOGO_URL)
+      if (!res.ok) return null
+      const ab = await res.arrayBuffer()
+      const bytes = new Uint8Array(ab)
+      return await pdf.embedPng(bytes)
+    } catch {
+      return null
     }
-    drawTableHeader()
   }
 
-  // Première page
-  drawHeader()
-  drawTableHeader()
+  const logoImg = await tryEmbedLogo()
 
-  const lineHeight = 16
-  for (const line of params.lines) {
-    if (y < margin + 80) {
-      startNewPage(false)
+  const makePage = () => {
+    const page = pdf.addPage(pageSize)
+    const { width, height } = page.getSize()
+
+    // Header bar
+    drawBox(page, 0, height - headerHeight, width, headerHeight, { fill: COLOR.black })
+    drawDivider(page, 0, width, height - headerHeight, COLOR.gold, 2)
+
+    // Logo centered
+    if (logoImg) {
+      const targetW = 140
+      const scale = targetW / logoImg.width
+      const targetH = logoImg.height * scale
+      const x = (width - targetW) / 2
+      const y = height - headerHeight + (headerHeight - targetH) / 2
+      page.drawImage(logoImg, { x, y, width: targetW, height: targetH })
+    } else {
+      // Fallback text
+      drawText(page, SELLER_INFO.brand, width / 2 - measure(SELLER_INFO.brand, 18, true) / 2, height - headerHeight / 2 - 8, 18, {
+        bold: true,
+        color: COLOR.gold,
+      })
     }
 
-    const safeName = (line.name || 'Article').slice(0, 60)
-    draw(safeName, xName, 10)
-    draw(String(line.qty), xQty, 10)
-    draw(formatMoney(line.unitPrice, currency), xUnit, 10)
-    draw(formatMoney(line.lineTotal, currency), xLine, 10)
-    y -= lineHeight
+    // Footer
+    drawDivider(page, margin, width - margin, footerHeight, COLOR.lightBorder, 1)
+    const footerLeft = `${SELLER_INFO.brand} — SIRET ${SELLER_INFO.siret} — ${SELLER_INFO.rcs}`
+    const footerRight = SELLER_INFO.vat
+    drawText(page, footerLeft, margin, 30, 9, { color: COLOR.grayText })
+    drawText(page, footerRight, width - margin - measure(footerRight, 9), 30, 9, { color: COLOR.grayText })
+
+    return { page, width, height }
+  }
+
+  const xLeft = margin
+  const contentWidth = pageSize[0] - margin * 2
+
+  let { page, width, height } = makePage()
+  let y = height - headerHeight - 26
+
+  const ensureSpace = (needed: number) => {
+    const minY = footerHeight + 18
+    if (y - needed < minY) {
+      ;({ page, width, height } = makePage())
+      y = height - headerHeight - 26
+    }
+  }
+
+  // Title
+  drawText(page, 'FACTURE', xLeft, y, 20, { bold: true, color: COLOR.black })
+  const titleLineY = y - 8
+  drawDivider(page, xLeft, xLeft + 120, titleLineY, COLOR.gold, 3)
+
+  // Invoice meta box (right)
+  const metaBoxW = 220
+  const metaBoxH = 58
+  const metaX = width - margin - metaBoxW
+  const metaY = y - 40
+  drawBox(page, metaX, metaY, metaBoxW, metaBoxH, { fill: COLOR.darkPanel, border: COLOR.gold, borderWidth: 1 })
+  drawText(page, `Facture N° ${params.invoiceNumber}`, metaX + 12, metaY + 36, 11, { bold: true, color: COLOR.white })
+  drawText(page, `Date : ${formatDate(params.invoiceDate)}`, metaX + 12, metaY + 18, 10, { color: COLOR.white })
+
+  y = metaY - 18
+
+  // Seller block (left)
+  const sellerW = contentWidth - metaBoxW - 18
+  const sellerX = xLeft
+  const sellerY = metaY
+  drawBox(page, sellerX, sellerY, sellerW, metaBoxH, { fill: rgb(0.96, 0.96, 0.96), border: COLOR.lightBorder, borderWidth: 1 })
+  drawText(page, SELLER_INFO.brand, sellerX + 12, sellerY + 36, 12, { bold: true, color: COLOR.black })
+  drawText(page, SELLER_INFO.addressLine, sellerX + 12, sellerY + 22, 10, { color: COLOR.black })
+  drawText(page, `${SELLER_INFO.phone} — ${SELLER_INFO.email}`, sellerX + 12, sellerY + 10, 10, { color: COLOR.black })
+
+  // Legal lines under blocks
+  y = sellerY - 18
+  ensureSpace(60)
+  drawText(page, `SIRET : ${SELLER_INFO.siret}`, xLeft, y, 10, { color: COLOR.grayText })
+  y -= 14
+  drawText(page, `R.C.S : ${SELLER_INFO.rcs}`, xLeft, y, 10, { color: COLOR.grayText })
+  y -= 14
+  drawText(page, `Statut : ${SELLER_INFO.legalForm}`, xLeft, y, 10, { color: COLOR.grayText })
+  y -= 14
+  drawText(page, SELLER_INFO.vat, xLeft, y, 10, { color: COLOR.grayText })
+  y -= 20
+
+  // Billing address block
+  ensureSpace(110)
+  const billing = (params.billingAddress || {}) as BillingAddress
+  const billingTitle = 'Adresse de facturation'
+  drawText(page, billingTitle, xLeft, y, 12, { bold: true, color: COLOR.black })
+  y -= 10
+  drawDivider(page, xLeft, xLeft + 180, y, COLOR.gold, 2)
+  y -= 12
+
+  const billingLines: string[] = []
+  const fullName = [safeText(billing.prenom), safeText(billing.nom)].filter(Boolean).join(' ').trim()
+  if (fullName) billingLines.push(fullName)
+  const addr = safeText(billing.adresse)
+  if (addr) billingLines.push(addr)
+  const cityLine = [safeText(billing.codePostal), safeText(billing.ville)].filter(Boolean).join(' ').trim()
+  if (cityLine) billingLines.push(cityLine)
+  const country = safeText(billing.pays) || 'FR'
+  if (country) billingLines.push(country)
+  const tel = safeText(billing.telephone)
+  if (tel) billingLines.push(`Téléphone : ${tel}`)
+  billingLines.push(`Email : ${params.customerEmail}`)
+
+  for (const line of billingLines) {
+    const wrapped = wrapText(line, contentWidth, 10, false)
+    for (const w of wrapped) {
+      ensureSpace(14)
+      drawText(page, w, xLeft, y, 10, { color: COLOR.black })
+      y -= 14
+    }
   }
 
   y -= 10
-  page.drawLine({
-    start: { x: margin, y: y + 12 },
-    end: { x: width - margin, y: y + 12 },
-    thickness: 1,
-    color: rgb(0.85, 0.85, 0.85),
+
+  // Delivery mode
+  ensureSpace(30)
+  const deliveryLabel = safeText(params.deliveryModeLabel) || '—'
+  drawText(page, `Mode de livraison : ${deliveryLabel}`, xLeft, y, 10, { color: COLOR.grayText })
+  y -= 18
+
+  // Items table
+  const tableX = xLeft
+  const tableW = contentWidth
+  const colNameX = tableX + 10
+  const colQtyX = tableX + 310
+  const colUnitX = tableX + 370
+  const colTotalX = tableX + 460
+  const rowH = 18
+
+  ensureSpace(60)
+  // Table header background
+  drawBox(page, tableX, y - rowH + 4, tableW, rowH, { fill: COLOR.black })
+  drawText(page, 'Article', colNameX, y - 10, 10, { bold: true, color: COLOR.gold })
+  drawText(page, 'Qté', colQtyX, y - 10, 10, { bold: true, color: COLOR.gold })
+  drawText(page, 'PU', colUnitX, y - 10, 10, { bold: true, color: COLOR.gold })
+  drawText(page, 'Total', colTotalX, y - 10, 10, { bold: true, color: COLOR.gold })
+  y -= rowH + 6
+
+  for (const line of params.lines) {
+    // Wrap product name to 2 lines max
+    const nameWrapped = wrapText((line.name || 'Article').slice(0, 140), colQtyX - colNameX - 10, 10)
+    const nameLines = nameWrapped.slice(0, 2)
+    const needed = rowH + (nameLines.length - 1) * 12
+    ensureSpace(needed + 10)
+
+    // Row separator
+    drawDivider(page, tableX, tableX + tableW, y + 6, COLOR.lightBorder, 1)
+
+    drawText(page, nameLines[0] || '', colNameX, y - 8, 10, { color: COLOR.black })
+    if (nameLines.length > 1) {
+      drawText(page, nameLines[1] || '', colNameX, y - 20, 10, { color: COLOR.black })
+    }
+
+    drawText(page, String(line.qty), colQtyX, y - 8, 10, { color: COLOR.black })
+    drawText(page, formatMoney(line.unitPrice, currency), colUnitX, y - 8, 10, { color: COLOR.black })
+    drawText(page, formatMoney(line.lineTotal, currency), colTotalX, y - 8, 10, { color: COLOR.black })
+
+    y -= needed
+  }
+
+  // Closing line under table
+  ensureSpace(40)
+  drawDivider(page, tableX, tableX + tableW, y + 6, COLOR.lightBorder, 1)
+  y -= 22
+
+  // Summary box (right)
+  const summaryW = 220
+  const summaryX = width - margin - summaryW
+  const summaryH = 86 + (typeof params.discountAmount === 'number' && params.discountAmount > 0.005 ? 16 : 0)
+  ensureSpace(summaryH + 20)
+
+  drawBox(page, summaryX, y - summaryH, summaryW, summaryH, {
+    fill: rgb(0.98, 0.98, 0.98),
+    border: COLOR.gold,
+    borderWidth: 1,
   })
 
-  // Bloc récapitulatif (sous-total / port / remise / total)
-  if (y < margin + 70) {
-    startNewPage(false)
+  let sy = y - 22
+  const lx = summaryX + 12
+  const vx = summaryX + summaryW - 12
+  const drawSummaryLine = (label: string, value: string, bold = false) => {
+    drawText(page, label, lx, sy, 10, { bold, color: COLOR.black })
+    drawText(page, value, vx - measure(value, bold ? 11 : 10, bold), sy, bold ? 11 : 10, {
+      bold,
+      color: COLOR.black,
+    })
+    sy -= 16
   }
 
-  y -= 18
-  const summaryLabelX = 300
-  const summaryValueX = xLine
-
-  draw('Sous-total articles:', summaryLabelX, 11, true)
-  draw(formatMoney(params.itemsSubtotal, currency), summaryValueX, 11)
-  y -= 16
-
-  draw('Frais de port:', summaryLabelX, 11, true)
-  draw(formatMoney(params.shippingCost, currency), summaryValueX, 11)
-  y -= 16
-
+  drawSummaryLine('Sous-total', formatMoney(params.itemsSubtotal, currency))
+  drawSummaryLine('Frais de port', formatMoney(params.shippingCost, currency))
   const discount = typeof params.discountAmount === 'number' ? params.discountAmount : 0
   if (discount > 0.005) {
-    draw('Remise:', summaryLabelX, 11, true)
-    draw(`-${formatMoney(discount, currency)}`, summaryValueX, 11)
-    y -= 16
+    drawSummaryLine('Remise', `-${formatMoney(discount, currency)}`)
   }
-
-  y -= 4
-  draw('TOTAL:', summaryLabelX, 12, true)
-  draw(formatMoney(params.total, currency), summaryValueX, 12, true)
+  sy -= 4
+  drawSummaryLine('TOTAL', formatMoney(params.total, currency), true)
 
   return await pdf.save()
 }
@@ -599,6 +826,8 @@ export async function POST(request: NextRequest) {
                 invoiceNumber,
                 invoiceDate: createdAt,
                 customerEmail,
+                billingAddress: ((order as any).billing_address || null) as any,
+                deliveryModeLabel: getDeliveryModeLabel((order as any).shipping_address),
                 lines,
                 itemsSubtotal,
                 shippingCost,
