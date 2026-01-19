@@ -30,6 +30,10 @@ export function generateStaticParams() {
   return defaultGammes
 }
 
-export default function GammePage({ params }: { params: { gamme: string } }) {
+// Next.js 15 (App Router) typpe parfois `params` comme une Promise.
+export default async function GammePage({ params }: { params: Promise<{ gamme: string }> }) {
+  // On n'utilise pas directement `gamme` ici (c'est géré côté client),
+  // mais on attend la Promise pour satisfaire les types de Next.js.
+  await params
   return <GammePageClient />
 }
