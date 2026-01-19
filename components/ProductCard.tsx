@@ -93,8 +93,26 @@ export default function ProductCard({
   const isSelectionReady = !hasVariants || Boolean(selectedVariant)
   
   // Extraire les options uniques pour les bouillettes
-  const diametres = isBouillettes ? Array.from(new Set(product.variants?.map(v => v.diametre).filter(Boolean))) : []
-  const conditionnements = isBouillettes ? Array.from(new Set(product.variants?.map(v => v.conditionnement).filter(Boolean))) : []
+  // IMPORTANT: pour pouvoir rendre un diamètre "indisponible", on masque le diamètre
+  // si AUCUNE variante disponible (available=true) n'existe pour ce diamètre.
+  const bouilletteVariants = isBouillettes
+    ? (product.variants || []).filter(v => Boolean(v.diametre) && Boolean(v.conditionnement))
+    : []
+
+  const diametres = isBouillettes
+    ? Array.from(
+        new Set(
+          bouilletteVariants
+            .filter(v => v.available === true)
+            .map(v => v.diametre)
+            .filter(Boolean)
+        )
+      )
+    : []
+
+  const conditionnements = isBouillettes
+    ? Array.from(new Set(bouilletteVariants.map(v => v.conditionnement).filter(Boolean)))
+    : []
   const tailles = isEquilibrees ? Array.from(new Set(product.variants?.map(v => v.taille).filter(Boolean))) : []
 
   const availableStock = hasVariants && selectedVariant
