@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
+  // ✅ Important sur Windows / workspaces :
+  // Si Next détecte un autre lockfile en dehors du projet, il peut choisir le mauvais "workspace root"
+  // et casser le build (webpack/minifier).
+  // On force donc la racine de tracing au dossier du projet.
+  outputFileTracingRoot: __dirname,
   // IMPORTANT (Vercel) :
   // Ne pas activer `output: 'export'` en production, sinon Next passe en export statique
   // et les routes API (app/api/*) + fonctionnalités serveur ne fonctionnent plus.
