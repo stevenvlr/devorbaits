@@ -77,23 +77,6 @@ const SELLER_INFO = {
   vat: 'TVA non applicable, art. 293 B du CGI',
 }
 
-function getDeliveryModeLabel(shippingAddress: any): string {
-  const type = typeof shippingAddress?.type === 'string' ? shippingAddress.type : null
-  switch (type) {
-    case 'chronopost-relais':
-      return 'Point relais Chronopost'
-    case 'boxtal-relais':
-      return 'Point relais Boxtal'
-    case 'wavignies-rdv':
-      return 'Retrait Wavignies (RDV)'
-    case 'livraison':
-      return 'Livraison à domicile'
-    default:
-      // Si pas de type, on considère "livraison" (ancien format) ou un fallback générique.
-      return 'Livraison à domicile'
-  }
-}
-
 function generateInvoiceNumber(now = new Date()) {
   const year = now.getFullYear()
   const suffix = Math.floor(Math.random() * 100000)
@@ -138,7 +121,6 @@ async function buildInvoicePdfBytes(params: {
   invoiceDate: Date
   customerEmail: string
   billingAddress?: BillingAddress | null
-  deliveryModeLabel?: string | null
   lines: InvoiceLine[]
   itemsSubtotal: number
   shippingCost: number
@@ -361,12 +343,6 @@ async function buildInvoicePdfBytes(params: {
   }
 
   y -= 10
-
-  // Delivery mode
-  ensureSpace(30)
-  const deliveryLabel = safeText(params.deliveryModeLabel) || '—'
-  drawText(page, `Mode de livraison : ${deliveryLabel}`, xLeft, y, 10, { color: COLOR.grayText })
-  y -= 18
 
   // Items table
   const tableX = xLeft
@@ -827,7 +803,6 @@ export async function POST(request: NextRequest) {
                 invoiceDate: createdAt,
                 customerEmail,
                 billingAddress: ((order as any).billing_address || null) as any,
-                deliveryModeLabel: getDeliveryModeLabel((order as any).shipping_address),
                 lines,
                 itemsSubtotal,
                 shippingCost,
