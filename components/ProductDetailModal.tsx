@@ -174,32 +174,60 @@ export default function ProductDetailModal({
   const showPromotion = Boolean(promotion?.active && price < basePrice)
 
   const handleAddToCartClick = async () => {
-    if (!canAddToCart) return
-    if (onAddToCart) {
-      onAddToCart(product, selectedVariant, quantity)
-    } else {
-      // Fallback vers le système de panier
-      const prixOriginal = basePrice
-      
-      await addToCart({
-        produit: product.name,
-        arome: product.gamme || selectedVariant?.arome || '',
-        quantite: quantity,
-        prix: price,
-        prixOriginal: prixOriginal, // Stocker le prix original pour recalculer si promotion activée après
-        category: product.category, // Stocker la catégorie pour appliquer la promotion
-        gamme: product.gamme, // Stocker la gamme pour appliquer la promotion
-        productId: product.id,
-        variantId: selectedVariant?.id,
-        // Inclure les informations de variante pour les bouillettes et autres produits
-        diametre: selectedVariant?.diametre,
-        conditionnement: selectedVariant?.conditionnement,
-        taille: selectedVariant?.taille,
-        couleur: selectedVariant?.couleur
-      })
+    console.log('[ProductDetailModal] handleAddToCartClick appelé', {
+      canAddToCart,
+      product: product?.name,
+      selectedVariant: selectedVariant?.label,
+      quantity,
+      hasOnAddToCart: !!onAddToCart
+    })
+    
+    if (!canAddToCart) {
+      console.log('[ProductDetailModal] Ajout au panier impossible - canAddToCart est false')
+      return
     }
-    alert(`${product.name}${selectedVariant ? ` - ${selectedVariant.label}` : ''} ajouté au panier !`)
-    onClose()
+    
+    try {
+      if (onAddToCart) {
+        console.log('[ProductDetailModal] Appel de onAddToCart externe')
+        onAddToCart(product, selectedVariant, quantity)
+      } else {
+        // Fallback vers le système de panier
+        const prixOriginal = basePrice
+        
+        console.log('[ProductDetailModal] Appel de addToCart du contexte', {
+          produit: product.name,
+          prix: price,
+          prixOriginal,
+          productId: product.id,
+          variantId: selectedVariant?.id
+        })
+        
+        await addToCart({
+          produit: product.name,
+          arome: product.gamme || selectedVariant?.arome || '',
+          quantite: quantity,
+          prix: price,
+          prixOriginal: prixOriginal, // Stocker le prix original pour recalculer si promotion activée après
+          category: product.category, // Stocker la catégorie pour appliquer la promotion
+          gamme: product.gamme, // Stocker la gamme pour appliquer la promotion
+          productId: product.id,
+          variantId: selectedVariant?.id,
+          // Inclure les informations de variante pour les bouillettes et autres produits
+          diametre: selectedVariant?.diametre,
+          conditionnement: selectedVariant?.conditionnement,
+          taille: selectedVariant?.taille,
+          couleur: selectedVariant?.couleur
+        })
+      }
+      
+      console.log('[ProductDetailModal] Ajout au panier réussi')
+      alert(`${product.name}${selectedVariant ? ` - ${selectedVariant.label}` : ''} ajouté au panier !`)
+      onClose()
+    } catch (error) {
+      console.error('[ProductDetailModal] Erreur lors de l\'ajout au panier:', error)
+      alert(`Erreur lors de l'ajout au panier. Veuillez réessayer.`)
+    }
   }
 
   const nextImage = () => {

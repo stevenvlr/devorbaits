@@ -208,53 +208,81 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addToCart = async (item: Omit<CartItem, 'id'>) => {
     // Ne pas permettre l'ajout d'articles gratuits directement
     if (item.isGratuit) {
+      console.log('[CartContext] Tentative d\'ajout d\'article gratuit directement - ignoré')
       return
     }
+    
+    console.log('[CartContext] addToCart appelé avec:', {
+      produit: item.produit,
+      quantite: item.quantite,
+      prix: item.prix,
+      productId: item.productId,
+      variantId: item.variantId,
+      pointRetrait: item.pointRetrait
+    })
+    
     // Générer un productId pour les produits amicale-blanc
     let productId = item.productId
     if (!productId && item.pointRetrait === 'amicale-blanc' && item.arome && item.diametre && item.conditionnement) {
       productId = getBouilletteId(item.arome, item.diametre, item.conditionnement)
+      console.log('[CartContext] ProductId généré pour amicale-blanc:', productId)
     }
     
     // Si c'est un produit amicale-blanc, réserver le stock (système amicale-blanc)
     if (productId && item.pointRetrait === 'amicale-blanc') {
       const stockReserved = reserveStockAmicale(productId, item.quantite)
       if (!stockReserved) {
+        console.error('[CartContext] Stock insuffisant pour amicale-blanc:', item.produit)
         alert(`Stock insuffisant pour ${item.produit}. Stock disponible insuffisant.`)
         return
       }
+      console.log('[CartContext] Stock réservé pour amicale-blanc:', productId)
     }
     
     // Si c'est un produit avec productId (livraison), vérifier le stock (système général)
     if (productId && !item.pointRetrait) {
-      // Vérifier le stock disponible (version asynchrone)
-      const availableStock = await getAvailableStock(productId, item.variantId)
-      
-      // Si le stock est défini (>= 0) et insuffisant (mais pas à zéro)
-      if (availableStock > 0 && availableStock < item.quantite) {
-        alert(`Stock insuffisant pour ${item.produit}. Stock disponible : ${availableStock}`)
-        return
-      }
-      
-      // Si le stock est à zéro, afficher un message sur le délai de livraison mais permettre l'ajout
-      if (availableStock === 0) {
-        const confirmed = confirm(
-          `⚠️ Stock épuisé pour ${item.produit}\n\n` +
-          `Le délai de livraison sera de 8 à 10 jours ouvrés.\n\n` +
-          `Souhaitez-vous quand même ajouter ce produit au panier ?`
-        )
-        if (!confirmed) {
+      try {
+        // Vérifier le stock disponible (version asynchrone)
+        const availableStock = await getAvailableStock(productId, item.variantId)
+        console.log('[CartContext] Stock disponible pour', productId, ':', availableStock)
+        
+        // Si le stock est défini (>= 0) et insuffisant (mais pas à zéro)
+        if (availableStock > 0 && availableStock < item.quantite) {
+          console.error('[CartContext] Stock insuffisant:', availableStock, '<', item.quantite)
+          alert(`Stock insuffisant pour ${item.produit}. Stock disponible : ${availableStock}`)
           return
         }
-      } else if (availableStock > 0) {
-        // Si le stock est disponible, réserver normalement
-        const stockReserved = await reserveStock(productId, item.quantite, item.variantId)
-        if (!stockReserved) {
-          alert(`Erreur lors de la réservation du stock pour ${item.produit}.`)
-          return
+        
+        // Si le stock est à zéro, afficher un message sur le délai de livraison mais permettre l'ajout
+        if (availableStock === 0) {
+          const confirmed = confirm(
+            `⚠️ Stock épuisé pour ${item.produit}\n\n` +
+            `Le délai de livraison sera de 8 à 10 jours ouvrés.\n\n` +
+            `Souhaitez-vous quand même ajouter ce produit au panier ?`
+          )
+          if (!confirmed) {
+            console.log('[CartContext] Utilisateur a annulé l\'ajout du produit en rupture')
+            return
+          }
+          console.log('[CartContext] Utilisateur a confirmé l\'ajout du produit en rupture')
+        } else if (availableStock > 0) {
+          // Si le stock est disponible, réserver normalement
+          const stockReserved = await reserveStock(productId, item.quantite, item.variantId)
+          if (!stockReserved) {
+            console.error('[CartContext] Échec de la réservation du stock pour:', item.produit)
+            alert(`Erreur lors de la réservation du stock pour ${item.produit}.`)
+            return
+          }
+          console.log('[CartContext] Stock réservé avec succès:', item.quantite, 'unités')
+        } else {
+          // availableStock < 0 (illimité) - on continue sans réserver
+          console.log('[CartContext] Stock illimité, pas de réservation nécessaire')
         }
+      } catch (error) {
+        console.error('[CartContext] Erreur lors de la vérification du stock:', error)
+        // En cas d'erreur, on permet l'ajout au panier pour ne pas bloquer l'utilisateur
+        console.log('[CartContext] Ajout au panier malgré l\'erreur de vérification du stock')
       }
-      // Si availableStock < 0 (illimité), on continue sans réserver
     }
     
     // Normaliser certains champs variants (diamètre / conditionnement) pour le checkout + calcul poids
@@ -272,8 +300,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     const id = `${normalizedItem.produit}-${Date.now()}-${Math.random()}`
+    console.log('[CartContext] Article ajouté au panier:', {
+      id,
+      produit: normalizedItem.produit,
+      quantite: normalizedItem.quantite,
+      prix: normalizedItem.prix,
+      productId,
+      variantId: normalizedItem.variantId
+    })
+    
     setCartItems(prev => {
       const newItems = [...prev, { ...normalizedItem, id, productId }]
+      console.log('[CartContext] Nouveau nombre d\'articles dans le panier:', newItems.length)
       return managePromoItems(newItems)
     })
   }

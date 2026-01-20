@@ -510,46 +510,66 @@ export default function PopupsPage() {
   }
 
   const handleAddToCart = async () => {
+    console.log('[PopupsPage] handleAddToCart appelé', {
+      selectedSaveur,
+      selectedForme,
+      quantity,
+      popupDuoProduct: popupDuoProduct?.name,
+      popupDuoVariant: popupDuoVariant?.label
+    })
+    
     // Vérifier que le produit et la variante sont disponibles
     if (!popupDuoProduct) {
-      alert(`❌ Produit "Pop-up Duo ${selectedSaveur}" non trouvé.`)
+      console.error('[PopupsPage] Produit Pop-up Duo non trouvé pour saveur:', selectedSaveur)
+      alert(`❌ Produit "Pop-up Duo ${selectedSaveur}" non trouvé.\n\n💡 Vérifiez que le produit existe dans Admin → Produits.`)
       return
     }
     
     if (!popupDuoVariant) {
-      alert(`❌ Variante "${selectedForme}" non trouvée pour "Pop-up Duo ${selectedSaveur}".`)
+      console.error('[PopupsPage] Variante non trouvée pour forme:', selectedForme)
+      alert(`❌ Variante "${selectedForme}" non trouvée pour "Pop-up Duo ${selectedSaveur}".\n\n💡 Vérifiez que la variante existe dans Admin → Produits.`)
       return
     }
     
-    const availableStock = await getAvailableStock(popupDuoProduct.id, popupDuoVariant.id)
-    
-    // Vérifier le stock si défini (mais permettre l'ajout même avec stock à zéro)
-    if (availableStock >= 0) {
-      // Si le stock est insuffisant mais pas à zéro, bloquer
-      if (availableStock > 0 && availableStock < quantity) {
-        alert(`Stock insuffisant. Stock disponible : ${availableStock}`)
-        return
+    try {
+      const availableStock = await getAvailableStock(popupDuoProduct.id, popupDuoVariant.id)
+      console.log('[PopupsPage] Stock disponible:', availableStock)
+      
+      // Vérifier le stock si défini (mais permettre l'ajout même avec stock à zéro)
+      if (availableStock >= 0) {
+        // Si le stock est insuffisant mais pas à zéro, bloquer
+        if (availableStock > 0 && availableStock < quantity) {
+          alert(`Stock insuffisant. Stock disponible : ${availableStock}`)
+          return
+        }
+        // Si le stock est à zéro, le message sera affiché dans addToCart
       }
-      // Si le stock est à zéro, le message sera affiché dans addToCart
+      
+      await addToCart({
+        produit: popupDuoProduct.name,
+        arome: selectedSaveur,
+        taille: selectedForme,
+        quantite: quantity,
+        prix: popupDuoVariant.price || getPrice(),
+        productId: popupDuoProduct.id,
+        variantId: popupDuoVariant.id,
+        category: 'pop-up duo',
+        gamme: selectedSaveur
+      })
+      
+      console.log('[PopupsPage] Ajout au panier réussi')
+      
+      // Le modal s'ouvrira automatiquement via le useEffect si nécessaire
+      // On affiche un message seulement si le modal ne va pas s'ouvrir
+      setTimeout(() => {
+        if (!shouldShowPromoModal('Pop-up Duo')) {
+          alert('Pop-up Duo ajouté au panier !')
+        }
+      }, 100)
+    } catch (error) {
+      console.error('[PopupsPage] Erreur lors de l\'ajout au panier:', error)
+      alert(`Erreur lors de l'ajout au panier. Veuillez réessayer.`)
     }
-    
-    await addToCart({
-      produit: popupDuoProduct.name,
-      arome: selectedSaveur,
-      taille: selectedForme,
-      quantite: quantity,
-      prix: popupDuoVariant.price || getPrice(),
-      productId: popupDuoProduct.id,
-      variantId: popupDuoVariant.id
-    })
-    
-    // Le modal s'ouvrira automatiquement via le useEffect si nécessaire
-    // On affiche un message seulement si le modal ne va pas s'ouvrir
-    setTimeout(() => {
-      if (!shouldShowPromoModal('Pop-up Duo')) {
-        alert('Pop-up Duo ajouté au panier !')
-      }
-    }, 100)
   }
 
   const handlePromoConfirm = (characteristics: PromoCharacteristics) => {

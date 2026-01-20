@@ -141,30 +141,53 @@ export default function ProductCard({
   }, [product.id, product.images, product.image, product.gamme])
 
   const handleAddToCartClick = async () => {
-    if (onAddToCart) {
-      onAddToCart(product, selectedVariant, quantity)
-    } else {
-      const prixOriginal = basePrice
-      const prixAvecPromotion = priceWithPromotion
+    console.log('[ProductCard] handleAddToCartClick appelé', {
+      product: product?.name,
+      selectedVariant: selectedVariant?.label,
+      quantity,
+      hasOnAddToCart: !!onAddToCart
+    })
+    
+    try {
+      if (onAddToCart) {
+        console.log('[ProductCard] Appel de onAddToCart externe')
+        onAddToCart(product, selectedVariant, quantity)
+      } else {
+        const prixOriginal = basePrice
+        const prixAvecPromotion = priceWithPromotion
+        
+        console.log('[ProductCard] Appel de addToCart du contexte', {
+          produit: product.name,
+          prix: prixAvecPromotion,
+          prixOriginal,
+          productId: product.id,
+          variantId: selectedVariant?.id
+        })
+        
+        await addToCart({
+          produit: product.name,
+          arome: product.gamme || '',
+          quantite: quantity,
+          prix: prixAvecPromotion,
+          prixOriginal: prixOriginal, // Stocker le prix original pour recalculer si promotion activée après
+          category: product.category, // Stocker la catégorie pour appliquer la promotion
+          gamme: product.gamme, // Stocker la gamme pour appliquer la promotion
+          productId: product.id,
+          variantId: selectedVariant?.id,
+          // Inclure les propriétés de la variante pour le calcul du poids
+          conditionnement: selectedVariant?.conditionnement,
+          diametre: selectedVariant?.diametre,
+          taille: selectedVariant?.taille,
+          couleur: selectedVariant?.couleur
+        })
+      }
       
-      await addToCart({
-        produit: product.name,
-        arome: product.gamme || '',
-        quantite: quantity,
-        prix: prixAvecPromotion,
-        prixOriginal: prixOriginal, // Stocker le prix original pour recalculer si promotion activée après
-        category: product.category, // Stocker la catégorie pour appliquer la promotion
-        gamme: product.gamme, // Stocker la gamme pour appliquer la promotion
-        productId: product.id,
-        variantId: selectedVariant?.id,
-        // Inclure les propriétés de la variante pour le calcul du poids
-        conditionnement: selectedVariant?.conditionnement,
-        diametre: selectedVariant?.diametre,
-        taille: selectedVariant?.taille,
-        couleur: selectedVariant?.couleur
-      })
+      console.log('[ProductCard] Ajout au panier réussi')
+      alert(`${product.name}${selectedVariant ? ` - ${selectedVariant.label}` : ''} ajouté au panier !`)
+    } catch (error) {
+      console.error('[ProductCard] Erreur lors de l\'ajout au panier:', error)
+      alert(`Erreur lors de l'ajout au panier. Veuillez réessayer.`)
     }
-    alert(`${product.name}${selectedVariant ? ` - ${selectedVariant.label}` : ''} ajouté au panier !`)
   }
 
   const setQuantity = (value: number) => {
