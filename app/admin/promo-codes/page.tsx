@@ -47,6 +47,7 @@ export default function PromoCodesAdminPage() {
     validFrom: '',
     validUntil: '',
     active: true,
+    unlimitedPerUser: false,
     allowedUserIds: [] as string[],
     allowedProductIds: [] as string[],
     allowedCategories: [] as string[],
@@ -115,6 +116,7 @@ export default function PromoCodesAdminPage() {
       validFrom: formData.validFrom || undefined,
       validUntil: formData.validUntil || undefined,
       active: formData.active,
+      unlimitedPerUser: formData.unlimitedPerUser,
       allowedUserIds: formData.allowedUserIds.length > 0 ? formData.allowedUserIds : undefined,
       allowedProductIds: formData.allowedProductIds.length > 0 ? formData.allowedProductIds : undefined,
       allowedCategories: formData.allowedCategories.length > 0 ? formData.allowedCategories : undefined,
@@ -156,6 +158,7 @@ export default function PromoCodesAdminPage() {
       validFrom: formData.validFrom || undefined,
       validUntil: formData.validUntil || undefined,
       active: formData.active,
+      unlimitedPerUser: formData.unlimitedPerUser,
       allowedUserIds: formData.allowedUserIds.length > 0 ? formData.allowedUserIds : undefined,
       allowedProductIds: formData.allowedProductIds.length > 0 ? formData.allowedProductIds : undefined,
       allowedCategories: formData.allowedCategories.length > 0 ? formData.allowedCategories : undefined,
@@ -206,6 +209,7 @@ export default function PromoCodesAdminPage() {
       validFrom: code.validFrom || '',
       validUntil: code.validUntil || '',
       active: code.active,
+      unlimitedPerUser: code.unlimitedPerUser || false,
       allowedUserIds: code.allowedUserIds || [],
       allowedProductIds: code.allowedProductIds || [],
       allowedCategories: code.allowedCategories || [],
@@ -226,6 +230,7 @@ export default function PromoCodesAdminPage() {
       validFrom: '',
       validUntil: '',
       active: true,
+      unlimitedPerUser: false,
       allowedUserIds: [],
       allowedProductIds: [],
       allowedCategories: [],
@@ -726,6 +731,29 @@ export default function PromoCodesAdminPage() {
                 <label htmlFor="active" className="text-sm">Code promo actif</label>
               </div>
 
+              {/* Utilisation illimitée par compte (pour sponsors) */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="unlimitedPerUser"
+                  checked={formData.unlimitedPerUser}
+                  onChange={(e) => setFormData({ ...formData, unlimitedPerUser: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="unlimitedPerUser" className="text-sm">
+                  Utilisation illimitée par compte
+                  <span className="text-gray-400 ml-1">(pour clients sponsorisés)</span>
+                </label>
+              </div>
+              {formData.unlimitedPerUser && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                  <p className="text-sm text-yellow-400">
+                    Ce code pourra être utilisé plusieurs fois par le même utilisateur (à chaque commande).
+                    Idéal pour les partenaires et clients sponsorisés.
+                  </p>
+                </div>
+              )}
+
               {/* Boutons */}
               <div className="flex gap-2 justify-end">
                 <button
@@ -930,6 +958,11 @@ export default function PromoCodesAdminPage() {
                           }`}>
                             {code.active ? 'Actif' : 'Inactif'}
                           </span>
+                          {code.unlimitedPerUser && (
+                            <span className="px-2 py-1 rounded text-xs bg-yellow-500/20 text-yellow-400">
+                              Illimité / compte
+                            </span>
+                          )}
                           {code.maxUses && (
                             <span className="text-xs text-gray-400">
                               {usageCount} / {code.maxUses} utilisations

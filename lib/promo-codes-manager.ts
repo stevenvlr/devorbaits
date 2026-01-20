@@ -23,6 +23,7 @@ export interface PromoCode {
   allowedCategories?: string[] // Catégories autorisées (null = toutes)
   allowedGammes?: string[] // Gammes autorisées (null = toutes)
   allowedConditionnements?: string[] // Conditionnements autorisés (ex: ['1kg'])
+  unlimitedPerUser?: boolean // Si true, le code peut être utilisé plusieurs fois par le même utilisateur (pour les sponsors)
   description?: string
   createdAt: number
   updatedAt: number
@@ -352,10 +353,12 @@ export async function validatePromoCode(
     return { valid: false, error: 'Vous devez être connecté pour utiliser un code promo' }
   }
 
-  // Vérifier "1 utilisation par compte"
-  const alreadyUsedByUser = await hasUserUsedPromoCode(promoCode.id, userId)
-  if (alreadyUsedByUser) {
-    return { valid: false, error: 'Vous avez déjà utilisé ce code promo avec votre compte' }
+  // Vérifier "1 utilisation par compte" (sauf si unlimitedPerUser est activé pour les sponsors)
+  if (!promoCode.unlimitedPerUser) {
+    const alreadyUsedByUser = await hasUserUsedPromoCode(promoCode.id, userId)
+    if (alreadyUsedByUser) {
+      return { valid: false, error: 'Vous avez déjà utilisé ce code promo avec votre compte' }
+    }
   }
   
   // Vérifier le montant minimum

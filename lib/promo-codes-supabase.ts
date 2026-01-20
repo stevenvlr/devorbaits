@@ -3,7 +3,7 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 import type { PromoCode } from './promo-codes-manager'
 
 const PROMO_CODES_SELECT =
-  'id,code,discount_type,discount_value,min_purchase,max_uses,used_count,valid_from,valid_until,active,allowed_user_ids,allowed_product_ids,allowed_categories,allowed_gammes,allowed_conditionnements,description,created_at,updated_at'
+  'id,code,discount_type,discount_value,min_purchase,max_uses,used_count,valid_from,valid_until,active,allowed_user_ids,allowed_product_ids,allowed_categories,allowed_gammes,allowed_conditionnements,unlimited_per_user,description,created_at,updated_at'
 
 // Cache en mémoire (admin seulement, mais évite des rechargements inutiles)
 let promoCodesCache: PromoCode[] | null = null
@@ -60,6 +60,7 @@ export async function loadPromoCodesFromSupabase(): Promise<PromoCode[]> {
       allowedCategories: row.allowed_categories && Array.isArray(row.allowed_categories) ? row.allowed_categories : undefined,
       allowedGammes: row.allowed_gammes && Array.isArray(row.allowed_gammes) ? row.allowed_gammes : undefined,
       allowedConditionnements: row.allowed_conditionnements && Array.isArray(row.allowed_conditionnements) ? row.allowed_conditionnements : undefined,
+      unlimitedPerUser: row.unlimited_per_user === true,
       description: row.description || undefined,
       createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
       updatedAt: row.created_at ? new Date(row.created_at).getTime() : Date.now()
@@ -114,6 +115,7 @@ export async function savePromoCodeToSupabase(promoCode: PromoCode): Promise<{ s
       allowed_categories: promoCode.allowedCategories && promoCode.allowedCategories.length > 0 ? promoCode.allowedCategories : null,
       allowed_gammes: promoCode.allowedGammes && promoCode.allowedGammes.length > 0 ? promoCode.allowedGammes : null,
       allowed_conditionnements: promoCode.allowedConditionnements && promoCode.allowedConditionnements.length > 0 ? promoCode.allowedConditionnements : null,
+      unlimited_per_user: promoCode.unlimitedPerUser === true,
       description: promoCode.description || null
     }
 
