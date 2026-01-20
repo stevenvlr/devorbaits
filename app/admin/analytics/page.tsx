@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { BarChart3, TrendingUp, ShoppingCart, Package, DollarSign, Filter } from 'lucide-react'
 import { getAllOrders, type Order } from '@/lib/revenue-supabase'
-import { getPageViewsCount } from '@/lib/analytics-supabase'
+import { getPageViewsCount, getUniqueVisitsCount } from '@/lib/analytics-supabase'
 
 type DateFilterType = 'all' | 'day' | 'month' | 'year' | 'custom'
 
@@ -22,7 +22,8 @@ type RevenueLine = {
 export default function AnalyticsPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [visitsCount, setVisitsCount] = useState<number>(0)
+  const [uniqueVisitsCount, setUniqueVisitsCount] = useState<number>(0)
+  const [pageViewsCount, setPageViewsCount] = useState<number>(0)
   const [dateFilterType, setDateFilterType] = useState<DateFilterType>('all')
   const [selectedDay, setSelectedDay] = useState(new Date().toISOString().slice(0, 10)) // Format YYYY-MM-DD
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
@@ -81,15 +82,42 @@ export default function AnalyticsPage() {
   useEffect(() => {
     const loadViews = async () => {
       const range = getDateRangeForViews()
-      const count = await getPageViewsCount({
-        startDate: range.startIso,
-        endDate: range.endIso
-      })
-      setVisitsCount(count)
+      const [uniqueCount, viewsCount] = await Promise.all([
+        getUniqueVisitsCount({
+          startDate: range.startIso,
+          endDate: range.endIso
+        }),
+        getPageViewsCount({
+          startDate: range.startIso,
+          endDate: range.endIso
+        })
+      ])
+      setUniqueVisitsCount(uniqueCount)
+      setPageViewsCount(viewsCount)
     }
     loadViews()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFilterType, selectedDay, selectedMonth, selectedYear, startDate, endDate])
+
+  /*
+   * Ancien code (pages vues = "visites") :
+   * On garde maintenant deux métriques séparées :
+   * - Visites = sessions uniques
+   * - Pages vues = total des enregistrements
+   */
+  /*
+  useEffect(() => {
+    const loadViews = async () => {
+      const range = getDateRangeForViews()
+      const count = await getPageViewsCount({
+        startDate: range.startIso,
+        endDate: range.endIso
+      })
+    }
+    loadViews()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFilterType, selectedDay, selectedMonth, selectedYear, startDate, endDate])
+  */
 
   // Filtrer les commandes selon les critères de date
   const getFilteredOrders = () => {
@@ -446,8 +474,10 @@ export default function AnalyticsPage() {
               <h3 className="text-sm font-medium text-gray-400">Visites</h3>
               <BarChart3 className="w-5 h-5 text-yellow-500" />
             </div>
-            <p className="text-3xl font-bold text-white">{visitsCount}</p>
-            <p className="text-xs text-gray-500 mt-1">Pages vues (période)</p>
+            <p className="text-3xl font-bold text-white">{uniqueVisitsCount}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Sessions uniques (période) — Pages vues : {pageViewsCount}
+            </p>
           </div>
 
           <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6">
