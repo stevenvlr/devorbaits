@@ -1,14 +1,41 @@
 // Analytics (page views) avec Supabase
 import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 
+// Durée d'inactivité après laquelle on considère une nouvelle visite (30 minutes)
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000
+
+/**
+ * Génère ou récupère un session_id.
+ * Un nouveau session_id est créé si :
+ * - C'est la première visite (pas de session_id en sessionStorage)
+ * - La dernière activité date de plus de 30 minutes (timeout)
+ * 
+ * Utilise sessionStorage pour que chaque onglet/fenêtre ait sa propre session,
+ * et localStorage pour gérer le timeout entre les visites.
+ */
 export function getOrCreateSessionId(): string {
   if (typeof window === 'undefined') return 'server'
-  const key = 'analytics_session_id'
-  let sessionId = localStorage.getItem(key)
-  if (!sessionId) {
-    sessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-    localStorage.setItem(key, sessionId)
+  
+  const sessionKey = 'analytics_session_id'
+  const lastActivityKey = 'analytics_last_activity'
+  
+  const now = Date.now()
+  const lastActivity = parseInt(localStorage.getItem(lastActivityKey) || '0', 10)
+  let sessionId = sessionStorage.getItem(sessionKey)
+  
+  // Créer une nouvelle session si :
+  // - Pas de session_id actuel (nouveau onglet/navigateur)
+  // - Ou timeout dépassé (plus de 30 min d'inactivité)
+  const isTimeout = lastActivity > 0 && (now - lastActivity) > SESSION_TIMEOUT_MS
+  
+  if (!sessionId || isTimeout) {
+    sessionId = `sess_${now}_${Math.random().toString(36).slice(2, 10)}`
+    sessionStorage.setItem(sessionKey, sessionId)
   }
+  
+  // Mettre à jour le timestamp de dernière activité
+  localStorage.setItem(lastActivityKey, now.toString())
+  
   return sessionId
 }
 
