@@ -246,13 +246,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const availableStock = await getAvailableStock(productId, item.variantId)
         console.log('[CartContext] Stock disponible pour', productId, ':', availableStock)
         
-        // Si le stock est défini (>= 0) et insuffisant (mais pas à zéro)
-        if (availableStock > 0 && availableStock < item.quantite) {
-          console.error('[CartContext] Stock insuffisant:', availableStock, '<', item.quantite)
-          alert(`Stock insuffisant pour ${item.produit}. Stock disponible : ${availableStock}`)
-          return
-        }
-        
         // Si le stock est à zéro, afficher un message sur le délai de livraison mais permettre l'ajout
         if (availableStock === 0) {
           const confirmed = confirm(
@@ -265,8 +258,31 @@ export function CartProvider({ children }: { children: ReactNode }) {
             return
           }
           console.log('[CartContext] Utilisateur a confirmé l\'ajout du produit en rupture')
+        } else if (availableStock > 0 && availableStock < item.quantite) {
+          // Stock insuffisant pour la quantité demandée - permettre la pré-commande
+          const quantiteEnStock = availableStock
+          const quantiteEnPrecommande = item.quantite - availableStock
+          const confirmed = confirm(
+            `⚠️ Stock limité pour ${item.produit}\n\n` +
+            `📦 ${quantiteEnStock} unité(s) disponible(s) immédiatement\n` +
+            `⏳ ${quantiteEnPrecommande} unité(s) en pré-commande (délai de 8 à 10 jours ouvrés)\n\n` +
+            `Souhaitez-vous quand même ajouter ${item.quantite} unité(s) au panier ?`
+          )
+          if (!confirmed) {
+            console.log('[CartContext] Utilisateur a annulé l\'ajout avec stock partiel')
+            return
+          }
+          console.log('[CartContext] Utilisateur a confirmé l\'ajout avec stock partiel:', quantiteEnStock, 'immédiat +', quantiteEnPrecommande, 'en pré-commande')
+          // Réserver uniquement le stock disponible
+          const stockReserved = await reserveStock(productId, quantiteEnStock, item.variantId)
+          if (!stockReserved) {
+            console.error('[CartContext] Échec de la réservation du stock partiel pour:', item.produit)
+            // On continue quand même car l'utilisateur a accepté le délai
+          } else {
+            console.log('[CartContext] Stock partiel réservé avec succès:', quantiteEnStock, 'unités')
+          }
         } else if (availableStock > 0) {
-          // Si le stock est disponible, réserver normalement
+          // Si le stock est suffisant, réserver normalement
           const stockReserved = await reserveStock(productId, item.quantite, item.variantId)
           if (!stockReserved) {
             console.error('[CartContext] Échec de la réservation du stock pour:', item.produit)

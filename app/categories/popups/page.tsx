@@ -535,15 +535,8 @@ export default function PopupsPage() {
       const availableStock = await getAvailableStock(popupDuoProduct.id, popupDuoVariant.id)
       console.log('[PopupsPage] Stock disponible:', availableStock)
       
-      // Vérifier le stock si défini (mais permettre l'ajout même avec stock à zéro)
-      if (availableStock >= 0) {
-        // Si le stock est insuffisant mais pas à zéro, bloquer
-        if (availableStock > 0 && availableStock < quantity) {
-          alert(`Stock insuffisant. Stock disponible : ${availableStock}`)
-          return
-        }
-        // Si le stock est à zéro, le message sera affiché dans addToCart
-      }
+      // Vérifier le stock si défini (mais permettre l'ajout même avec stock insuffisant)
+      // Le message de pré-commande sera affiché dans addToCart si nécessaire
       
       await addToCart({
         produit: popupDuoProduct.name,
@@ -612,17 +605,7 @@ export default function PopupsPage() {
       return
     }
     
-    const availableStock = getFlashBoostStock()
-    
-    // Vérifier le stock si défini (mais permettre l'ajout même avec stock à zéro)
-    if (availableStock >= 0) {
-      // Si le stock est insuffisant mais pas à zéro, bloquer
-      if (availableStock > 0 && availableStock < flashBoostQuantity) {
-        alert(`Stock insuffisant. Stock disponible : ${availableStock}`)
-        return
-      }
-      // Si le stock est à zéro, le message sera affiché dans addToCart
-    }
+    // Le stock sera vérifié dans addToCart avec message de pré-commande si nécessaire
     
     await addToCart({
       produit: flashBoostProduct.name,
@@ -669,17 +652,7 @@ export default function PopupsPage() {
       return
     }
     
-    const availableStock = getSprayPlusStock()
-    
-    // Vérifier le stock si défini (mais permettre l'ajout même avec stock à zéro)
-    if (availableStock >= 0) {
-      // Si le stock est insuffisant mais pas à zéro, bloquer
-      if (availableStock > 0 && availableStock < sprayPlusQuantity) {
-        alert(`Stock insuffisant. Stock disponible : ${availableStock}`)
-        return
-      }
-      // Si le stock est à zéro, le message sera affiché dans addToCart
-    }
+    // Le stock sera vérifié dans addToCart avec message de pré-commande si nécessaire
     
     await addToCart({
       produit: sprayPlusProduct.name,

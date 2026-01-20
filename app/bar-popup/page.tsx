@@ -218,15 +218,7 @@ export default function BarPopupPage() {
       return
     }
     
-    const availableStock = await getAvailableStock(barPopupProduct.id, barPopupVariant.id)
-    
-    // Vérifier le stock si défini
-    if (availableStock >= 0) {
-      if (availableStock > 0 && availableStock < quantity) {
-        alert(`Stock insuffisant. Stock disponible : ${availableStock}`)
-        return
-      }
-    }
+    // Le stock sera vérifié dans addToCart avec message de pré-commande si nécessaire
     
     const prixOriginal = barPopupVariant.price || 6.99
     const prixAvecPromotion = getPrice()

@@ -271,20 +271,7 @@ export default function GammePageClient() {
   }
 
   const handleAddBouillette = async () => {
-    // Vérifier le stock disponible
-    const availableStock = getBouilletteStock()
-    
-    // Si le stock est à 0 (défini), le produit est indisponible
-    if (availableStock === 0) {
-      alert(`Stock épuisé pour cette bouillette (${bouilletteDiametre}mm - ${bouilletteConditionnement})`)
-      return
-    }
-    
-    // Si le stock est insuffisant (mais > 0)
-    if (availableStock > 0 && availableStock < bouilletteQuantity) {
-      alert(`Stock insuffisant. Stock disponible : ${availableStock}`)
-      return
-    }
+    // Le stock sera vérifié dans addToCart avec message de pré-commande si nécessaire
     
     // Vérifier si le produit existe dans le système centralisé avec variantes
     const bouillettesProducts = getProductsByCategorySync('bouillettes', true)
