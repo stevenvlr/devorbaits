@@ -507,6 +507,15 @@ export default function PromoCodesAdminPage() {
                 </div>
               </div>
 
+              {/* Info sur la logique des filtres */}
+              {formData.allowedConditionnements.length > 0 && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <p className="text-sm text-blue-400">
+                    <strong>Restriction conditionnement :</strong> La restriction de conditionnement s'applique <strong>uniquement aux bouillettes</strong>. Les autres produits (huiles, popups, farines, etc.) seront éligibles sans restriction de conditionnement.
+                  </p>
+                </div>
+              )}
+
               {/* Catégories autorisées */}
               <div>
                 <label className="block text-sm font-medium mb-2">Catégories autorisées (laisser vide = toutes)</label>
@@ -559,7 +568,13 @@ export default function PromoCodesAdminPage() {
 
               {/* Conditionnements autorisés */}
               <div>
-                <label className="block text-sm font-medium mb-2">Conditionnements autorisés (laisser vide = tous)</label>
+                <label className="block text-sm font-medium mb-2">Restriction conditionnement pour bouillettes</label>
+                <p className="text-xs text-gray-400 mb-2">
+                  <strong>Important :</strong> Cette restriction s'applique <strong>uniquement aux bouillettes</strong>. 
+                  Les autres produits (huiles, popups, farines, etc.) restent éligibles sans restriction.
+                  <br />
+                  Exemple : si vous sélectionnez "1kg", les bouillettes 2.5kg/5kg/10kg seront exclues, mais les huiles et popups resteront éligibles.
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {['1kg', '2.5kg', '5kg', '10kg'].map(cond => (
                     <button

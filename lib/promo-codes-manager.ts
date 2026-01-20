@@ -379,39 +379,61 @@ export async function validatePromoCode(
   }
   
   // Filtrer les articles éligibles
+  // LOGIQUE SPÉCIALE POUR LES CONDITIONNEMENTS :
+  // - Les conditionnements (1kg, 2.5kg, etc.) s'appliquent UNIQUEMENT aux bouillettes
+  // - Les autres produits (huiles, popups, farines, etc.) ne sont PAS affectés par la restriction de conditionnement
+  // - Si un conditionnement est sélectionné : 
+  //   → Bouillettes : doivent avoir ce conditionnement
+  //   → Autres produits : sont éligibles sans restriction
+  
+  const hasProductFilter = promoCode.allowedProductIds && promoCode.allowedProductIds.length > 0
+  const hasCategoryFilter = promoCode.allowedCategories && promoCode.allowedCategories.length > 0
+  const hasGammeFilter = promoCode.allowedGammes && promoCode.allowedGammes.length > 0
+  const hasConditionnementFilter = promoCode.allowedConditionnements && promoCode.allowedConditionnements.length > 0
+  
+  // Fonction pour vérifier si un produit est une bouillette
+  const isBouillette = (item: CartItemForPromo): boolean => {
+    const category = item.category?.toLowerCase() || ''
+    return category.includes('bouillette') || category.includes('boilies')
+  }
+  
   const eligibleItems = cartItems.filter(item => {
-    // Vérifier par ID produit
-    if (promoCode.allowedProductIds && promoCode.allowedProductIds.length > 0) {
-      if (!item.productId || !promoCode.allowedProductIds.includes(item.productId)) {
+    // 1. Vérifier par ID produit (prioritaire - si défini, seuls ces produits sont éligibles)
+    if (hasProductFilter) {
+      if (!item.productId || !promoCode.allowedProductIds!.includes(item.productId)) {
         return false
       }
     }
     
-    // Vérifier par catégorie
-    if (promoCode.allowedCategories && promoCode.allowedCategories.length > 0) {
-      if (!item.category || !promoCode.allowedCategories.some(cat => 
+    // 2. Vérifier par catégorie (si défini)
+    if (hasCategoryFilter) {
+      if (!item.category || !promoCode.allowedCategories!.some(cat => 
         item.category?.toLowerCase() === cat.toLowerCase()
       )) {
         return false
       }
     }
     
-    // Vérifier par gamme
-    if (promoCode.allowedGammes && promoCode.allowedGammes.length > 0) {
-      if (!item.gamme || !promoCode.allowedGammes.some(gamme => 
+    // 3. Vérifier par gamme (si défini)
+    if (hasGammeFilter) {
+      if (!item.gamme || !promoCode.allowedGammes!.some(gamme => 
         item.gamme?.toLowerCase() === gamme.toLowerCase()
       )) {
         return false
       }
     }
     
-    // Vérifier par conditionnement
-    if (promoCode.allowedConditionnements && promoCode.allowedConditionnements.length > 0) {
-      if (!item.conditionnement || !promoCode.allowedConditionnements.some(cond => 
-        item.conditionnement?.toLowerCase() === cond.toLowerCase()
-      )) {
-        return false
+    // 4. Vérifier par conditionnement (UNIQUEMENT pour les bouillettes)
+    if (hasConditionnementFilter) {
+      // Si c'est une bouillette, elle doit avoir le bon conditionnement
+      if (isBouillette(item)) {
+        if (!item.conditionnement || !promoCode.allowedConditionnements!.some(cond => 
+          item.conditionnement?.toLowerCase() === cond.toLowerCase()
+        )) {
+          return false // Bouillette avec mauvais conditionnement → exclue
+        }
       }
+      // Si ce n'est PAS une bouillette, le conditionnement ne s'applique pas → éligible
     }
     
     return true
