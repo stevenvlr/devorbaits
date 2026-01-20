@@ -179,106 +179,93 @@ export async function loginUser(email: string, password: string): Promise<{ succ
  * Inscription avec Supabase ou localStorage
  */
 export async function registerUser(userData: Omit<User, 'id' | 'dateCreation'> & { password: string }): Promise<{ success: boolean; user?: User; error?: string }> {
+  console.log('[registerUser] Début inscription pour:', userData.email)
+  console.log('[registerUser] Supabase configuré?', isSupabaseConfigured())
+  
   if (isSupabaseConfigured()) {
     const supabase = getSupabaseClient()
     if (!supabase) {
+      console.error('[registerUser] Supabase client est null')
       return { success: false, error: 'Supabase non configuré' }
     }
 
+    console.log('[registerUser] Appel signUp Supabase...')
+    
     // Créer le compte auth
     // Note: Si Supabase nécessite une confirmation d'email, l'utilisateur devra confirmer avant de pouvoir se connecter
- 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: userData.email,
-      password: userData.password,
-      options: {
-        emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/account/login` : undefined,
-        data: {
-          nom: userData.nom,
-          prenom: userData.prenom,
-          telephone: userData.telephone || null,
-          adresse: userData.adresse || null,
-          code_postal: userData.codePostal || null,
-          ville: userData.ville || null
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+        options: {
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/account/login` : undefined,
+          data: {
+            nom: userData.nom,
+            prenom: userData.prenom,
+            telephone: userData.telephone || null,
+            adresse: userData.adresse || null,
+            code_postal: userData.codePostal || null,
+            ville: userData.ville || null
+          }
         }
-      }
-    })
- 
+      })
 
-    if (authError) {
-      console.error('❌ Erreur Supabase Auth:', authError)
-      // Messages d'erreur plus clairs
-      if (authError.message.includes('API key') || authError.message.includes('apikey') || authError.message.includes('No API key')) {
-        return { success: false, error: 'Erreur de configuration Supabase. Vérifiez votre fichier .env.local avec NEXT_PUBLIC_SUPABASE_ANON_KEY et redémarrez le serveur.' }
+      console.log('[registerUser] Réponse Supabase:', {
+        hasUser: !!authData?.user,
+        hasSession: !!authData?.session,
+        userId: authData?.user?.id,
+        identitiesCount: authData?.user?.identities?.length,
+        error: authError?.message
+      })
+
+      if (authError) {
+        console.error('❌ Erreur Supabase Auth:', authError)
+        // Messages d'erreur plus clairs
+        if (authError.message.includes('API key') || authError.message.includes('apikey') || authError.message.includes('No API key')) {
+          return { success: false, error: 'Erreur de configuration Supabase. Vérifiez votre fichier .env.local avec NEXT_PUBLIC_SUPABASE_ANON_KEY et redémarrez le serveur.' }
+        }
+        if (authError.message.includes('already registered') || authError.message.includes('already exists') || authError.message.includes('User already registered')) {
+          return { success: false, error: 'Cet email est déjà utilisé. Essayez de vous connecter.' }
+        }
+        if (authError.message.includes('rate limit') || authError.message.includes('too many')) {
+          return { success: false, error: 'Trop de tentatives. Veuillez réessayer dans quelques minutes.' }
+        }
+        if (authError.message.includes('email') && authError.message.includes('invalid')) {
+          return { success: false, error: 'Adresse email invalide.' }
+        }
+        return { success: false, error: authError.message || 'Erreur lors de la création du compte' }
       }
-      if (authError.message.includes('already registered') || authError.message.includes('already exists') || authError.message.includes('User already registered')) {
-        return { success: false, error: 'Cet email est déjà utilisé. Essayez de vous connecter.' }
+
+      if (!authData.user) {
+        console.error('[registerUser] Pas de user dans la réponse')
+        return { success: false, error: 'Erreur : compte non créé. Vérifiez votre email (peut-être un email de confirmation requis).' }
       }
-      return { success: false, error: authError.message || 'Erreur lors de la création du compte' }
+
+      // IMPORTANT: Supabase peut retourner un user avec identities vide si l'email existe déjà
+      // C'est un comportement de sécurité pour ne pas révéler si un email est déjà enregistré
+      if (authData.user.identities && authData.user.identities.length === 0) {
+        console.warn('[registerUser] Identities vide - email probablement déjà utilisé')
+        return { success: false, error: 'Cet email est déjà utilisé. Essayez de vous connecter ou utilisez "Mot de passe oublié".' }
+      }
+
+      // Le trigger Supabase crée automatiquement le profil avec les métadonnées
+      // Les données sont passées via options.data et le trigger les récupère via raw_user_meta_data
+      console.log('✅ Inscription réussie - le trigger créera automatiquement le profil avec les infos')
+
+      const user = supabaseUserToUser(authData.user, {
+        nom: userData.nom,
+        prenom: userData.prenom,
+        telephone: userData.telephone,
+        adresse: userData.adresse,
+        code_postal: userData.codePostal,
+        ville: userData.ville
+      })
+
+      return { success: true, user }
+    } catch (error: any) {
+      console.error('[registerUser] Exception:', error)
+      return { success: false, error: error.message || 'Erreur inattendue lors de l\'inscription' }
     }
-
-    if (!authData.user) {
-      return { success: false, error: 'Erreur : compte non créé. Vérifiez votre email (peut-être un email de confirmation requis).' }
-    }
-
-    // Le trigger Supabase crée automatiquement le profil de base
-    // On attend un peu puis on met à jour avec les infos supplémentaires (nom, prénom, etc.)
-    console.log('[registerUser] Attente du trigger pour créer le profil de base...')
-    
-    // Attendre que le trigger crée le profil (jusqu'à 3 secondes)
-    let profileExists = false
-    for (let i = 0; i < 6; i++) {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', authData.user.id)
-        .single()
-      
-      if (existingProfile) {
-        profileExists = true
-        console.log('✅ Profil créé par le trigger')
-        break
-      }
-      console.log(`⏳ Attente du trigger... (${i + 1}/6)`)
-    }
-    
-    // Mettre à jour le profil avec les infos supplémentaires (nom, prénom, etc.)
-    if (profileExists) {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          nom: userData.nom,
-          prenom: userData.prenom,
-          telephone: userData.telephone || null,
-          adresse: userData.adresse || null,
-          code_postal: userData.codePostal || null,
-          ville: userData.ville || null
-        })
-        .eq('id', authData.user.id)
-      
-      if (updateError) {
-        console.warn('⚠️ Erreur mise à jour profil (non bloquante):', updateError.message)
-      } else {
-        console.log('✅ Profil mis à jour avec les infos complètes')
-      }
-    } else {
-      console.warn('⚠️ Le profil n\'a pas été créé par le trigger, l\'utilisateur devra compléter ses infos plus tard')
-    }
-    
-    console.log('✅ Inscription réussie')
-
-    const user = supabaseUserToUser(authData.user, {
-      nom: userData.nom,
-      prenom: userData.prenom,
-      telephone: userData.telephone,
-      adresse: userData.adresse,
-      code_postal: userData.codePostal,
-      ville: userData.ville
-    })
-
-    return { success: true, user }
   }
 
   // Plus de fallback localStorage - Supabase uniquement
