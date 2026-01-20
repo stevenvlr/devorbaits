@@ -1868,6 +1868,23 @@ export default function CheckoutPage() {
                                 console.warn('⚠️ Erreur lors de la sauvegarde du retrait Wavignies:', wavigniesError)
                               }
                             }
+
+                            // Générer automatiquement la facture et envoyer l'email (PayPal)
+                            try {
+                              const invoiceResponse = await fetch('/api/auto-invoice', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ orderId: order.id }),
+                              })
+                              const invoiceResult = await invoiceResponse.json()
+                              if (invoiceResult.ok) {
+                                console.log('✅ Facture générée et email envoyé automatiquement (PayPal)')
+                              } else {
+                                console.warn('⚠️ Erreur génération facture automatique:', invoiceResult.error)
+                              }
+                            } catch (invoiceError) {
+                              console.warn('⚠️ Erreur appel API auto-invoice (PayPal):', invoiceError)
+                            }
                           }
 
                           clearCart()

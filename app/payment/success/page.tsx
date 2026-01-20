@@ -335,6 +335,25 @@ function PaymentSuccessContent() {
             // La commande est créée avec le statut 'pending' (en attente) par défaut
             // Le statut sera changé manuellement depuis l'admin
             
+            // Générer automatiquement la facture et envoyer l'email
+            if (order?.id) {
+              try {
+                const invoiceResponse = await fetch('/api/auto-invoice', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ orderId: order.id }),
+                })
+                const invoiceResult = await invoiceResponse.json()
+                if (invoiceResult.ok) {
+                  console.log('✅ Facture générée et email envoyé automatiquement (Monetico)')
+                } else {
+                  console.warn('⚠️ Erreur génération facture automatique:', invoiceResult.error)
+                }
+              } catch (invoiceError) {
+                console.warn('⚠️ Erreur appel API auto-invoice (Monetico):', invoiceError)
+              }
+            }
+            
             // Charger les produits pour obtenir les noms
             const allProducts = await loadProducts()
             setProducts(allProducts)
