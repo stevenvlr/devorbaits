@@ -92,9 +92,18 @@ export default function BoxtalRelayMap({
   const autoSearchDoneRef = useRef(false)
 
   // États - optimisés avec valeurs initiales depuis cache
+  // IMPORTANT: Vérifier que l'objet BoxtalParcelPointMap existe réellement, pas juste le flag
   const [scriptSrc, setScriptSrc] = useState<string>(() => getCachedScriptUrl() || DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
   const [scriptUrlReady, setScriptUrlReady] = useState(() => !!getCachedScriptUrl())
-  const [scriptLoaded, setScriptLoaded] = useState(() => !!window?.__boxtalScriptLoaded)
+  const [scriptLoaded, setScriptLoaded] = useState(() => {
+    // Le script est vraiment chargé uniquement si l'objet global existe
+    const isReallyLoaded = !!(window?.__boxtalScriptLoaded && window?.BoxtalParcelPointMap?.BoxtalParcelPointMap)
+    // Réinitialiser le flag si le script n'est plus disponible
+    if (window?.__boxtalScriptLoaded && !window?.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
+      window.__boxtalScriptLoaded = false
+    }
+    return isReallyLoaded
+  })
   const [scriptError, setScriptError] = useState<string | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const [token, setToken] = useState<string | null>(() => window?.__boxtalToken || null)
@@ -459,20 +468,26 @@ export default function BoxtalRelayMap({
         src={scriptSrc}
         strategy="afterInteractive"
         onLoad={() => {
-          if (window.__boxtalScriptLoaded) {
-            setScriptLoaded(true)
-            return
-          }
-          window.__boxtalScriptLoaded = true
-          
-          // Réduit de 500ms à 100ms
-          setTimeout(() => {
-            if (!window.BoxtalParcelPointMap || !window.BoxtalParcelPointMap.BoxtalParcelPointMap) {
-              setScriptError('API Boxtal non disponible')
+          // Vérifier que l'objet global existe réellement avant de considérer le script comme chargé
+          const checkAndSetLoaded = () => {
+            if (window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
+              window.__boxtalScriptLoaded = true
+              setScriptLoaded(true)
+            } else {
+              // Réessayer après un court délai
+              setTimeout(() => {
+                if (window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
+                  window.__boxtalScriptLoaded = true
+                  setScriptLoaded(true)
+                } else {
+                  setScriptError('API Boxtal non disponible')
+                }
+              }, 200)
             }
-          }, 100)
+          }
           
-          setScriptLoaded(true)
+          // Petit délai pour laisser le script s'initialiser
+          setTimeout(checkAndSetLoaded, 50)
         }}
         onError={() => {
           setScriptError('Impossible de charger le script Boxtal')
