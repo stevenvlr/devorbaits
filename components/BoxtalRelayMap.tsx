@@ -266,7 +266,14 @@ export default function BoxtalRelayMap({
     `
     mapContainer.className = 'w-full border border-gray-300 rounded-md'
 
-    hostRef.current.innerHTML = ''
+    // Vider le conteneur de manière sûre (sans conflit avec React)
+    try {
+      while (hostRef.current.firstChild) {
+        hostRef.current.removeChild(hostRef.current.firstChild)
+      }
+    } catch {
+      // Ignorer les erreurs de suppression
+    }
     hostRef.current.appendChild(mapContainer)
     mapContainerElementRef.current = mapContainer
 
@@ -336,12 +343,10 @@ export default function BoxtalRelayMap({
 
     return () => {
       // Cleanup quand le composant se démonte ou active devient false
-      if (hostRef.current) {
-        hostRef.current.innerHTML = ''
-      }
+      // Ne PAS manipuler le DOM ici car React le fait automatiquement
+      // Juste nettoyer les refs
       mapContainerElementRef.current = null
       mapInstanceRef.current = null
-      setMapReady(false)
     }
   }, [active, scriptLoaded, token, mapId, onSelect])
 
