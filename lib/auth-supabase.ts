@@ -11,12 +11,13 @@ export interface User {
   adresse?: string
   codePostal?: string
   ville?: string
-  role?: 'user' | 'admin'  // ← AJOUTEZ CETTE LIGNE
+  role?: 'user' | 'admin'
+  isSponsored?: boolean
   dateCreation: string
 }
 
 const PROFILE_SELECT =
-  'id,email,nom,prenom,telephone,adresse,code_postal,ville,role,created_at,updated_at'
+  'id,email,nom,prenom,telephone,adresse,code_postal,ville,role,is_sponsored,created_at,updated_at'
 
 /**
  * Charge tous les utilisateurs (pour l'admin)
@@ -52,6 +53,7 @@ export async function getAllUsers(): Promise<User[]> {
         codePostal: profile.code_postal,
         ville: profile.ville,
         role: profile.role || 'user',
+        isSponsored: profile.is_sponsored || false,
         dateCreation: profile.created_at || new Date().toISOString()
       }))
 
@@ -81,6 +83,7 @@ function supabaseUserToUser(supabaseUser: SupabaseUser, profile?: any): User {
     codePostal: profile?.code_postal,
     ville: profile?.ville,
     role: profile?.role || 'user',
+    isSponsored: profile?.is_sponsored || false,
     dateCreation: supabaseUser.created_at || new Date().toISOString()
   }
 }

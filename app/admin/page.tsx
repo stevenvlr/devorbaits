@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Factory, MapPin, Plus, Calendar, Tag, ImageIcon, BarChart3, Package, Ticket, ShoppingCart, AlertCircle, Zap, Truck, Scale, Ban, Percent, Users } from 'lucide-react'
+import { Factory, MapPin, Plus, Calendar, Tag, ImageIcon, BarChart3, Package, Ticket, ShoppingCart, AlertCircle, Zap, Truck, Scale, Ban, Percent, Users, Star } from 'lucide-react'
 
 export default function AdminPage() {
   return (
@@ -278,6 +278,24 @@ export default function AdminPage() {
             </div>
             <p className="text-gray-300">
               Configurez les poids des produits (bouillettes, sprays, etc.) pour calculer précisément les frais d'expédition.
+            </p>
+          </Link>
+
+          <Link
+            href="/admin/sponsors"
+            className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 bg-yellow-500/10 rounded-lg flex items-center justify-center group-hover:bg-yellow-500/20 transition-colors">
+                <Star className="w-8 h-8 text-yellow-500" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Membres Sponsors</h2>
+                <p className="text-sm text-gray-400">Tarifs d'expédition préférentiels</p>
+              </div>
+            </div>
+            <p className="text-gray-300">
+              Gérez les membres sponsorisés avec leurs tarifs d'expédition fixes selon le poids.
             </p>
           </Link>
 

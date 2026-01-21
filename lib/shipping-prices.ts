@@ -474,5 +474,106 @@ export async function deleteShippingPrice(id: string): Promise<boolean> {
   }
 }
 
+// ============================================
+// TARIFS SPONSORS GLOBAUX
+// ============================================
 
+export interface SponsorShippingRate {
+  id: string
+  min_weight: number
+  max_weight: number | null
+  price: number
+}
 
+/**
+ * Récupère les tarifs sponsors globaux
+ */
+export async function getSponsorShippingRates(): Promise<SponsorShippingRate[]> {
+  if (!isSupabaseConfigured()) {
+    return []
+  }
+
+  const supabase = getSupabaseClient()
+  if (!supabase) return []
+
+  try {
+    const { data, error } = await supabase
+      .from('sponsor_shipping_rates')
+      .select('*')
+      .order('min_weight', { ascending: true })
+
+    if (error) {
+      console.error('Erreur récupération tarifs sponsors:', error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.error('Erreur récupération tarifs sponsors:', error)
+    return []
+  }
+}
+
+/**
+ * Calcule le prix d'expédition pour un sponsor selon le poids
+ */
+export async function getSponsorShippingPrice(weight: number): Promise<number | null> {
+  const rates = await getSponsorShippingRates()
+  
+  if (rates.length === 0) {
+    return null
+  }
+
+  for (const rate of rates) {
+    if (weight >= rate.min_weight && (rate.max_weight === null || weight <= rate.max_weight)) {
+      return rate.price
+    }
+  }
+
+  return null
+}
+
+/**
+ * Sauvegarde les tarifs sponsors (remplace tous les tarifs existants)
+ */
+export async function saveSponsorShippingRates(rates: Array<{ min_weight: number; max_weight: number | null; price: number }>): Promise<boolean> {
+  if (!isSupabaseConfigured()) {
+    return false
+  }
+
+  const supabase = getSupabaseClient()
+  if (!supabase) return false
+
+  try {
+    // Supprimer tous les tarifs existants
+    const { error: deleteError } = await supabase
+      .from('sponsor_shipping_rates')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000') // Trick pour supprimer tout
+
+    if (deleteError) {
+      console.error('Erreur suppression tarifs sponsors:', deleteError)
+    }
+
+    // Insérer les nouveaux tarifs
+    if (rates.length > 0) {
+      const { error: insertError } = await supabase
+        .from('sponsor_shipping_rates')
+        .insert(rates.map(r => ({
+          min_weight: r.min_weight,
+          max_weight: r.max_weight,
+          price: r.price
+        })))
+
+      if (insertError) {
+        console.error('Erreur insertion tarifs sponsors:', insertError)
+        return false
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error('Erreur sauvegarde tarifs sponsors:', error)
+    return false
+  }
+}

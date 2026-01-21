@@ -23,7 +23,7 @@ import {
 } from '@/lib/appointments-manager'
 import { submitMoneticoPayment, generateOrderReference } from '@/lib/monetico'
 import { createOrder, updateOrderStatus } from '@/lib/revenue-supabase'
-import { getActiveShippingPrice } from '@/lib/shipping-prices'
+import { getActiveShippingPrice, getSponsorShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
 import PayPalButton from '@/components/PayPalButton'
 import { calculateCartWeightAsync } from '@/lib/product-weights'
@@ -91,6 +91,7 @@ export default function CheckoutPage() {
   const [promoValidation, setPromoValidation] = useState<PromoCodeValidation | null>(null)
   const [promoError, setPromoError] = useState<string | null>(null)
   const [shippingCost, setShippingCost] = useState<number>(0)
+  const [sponsorShippingDiscount, setSponsorShippingDiscount] = useState<number>(0)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('paypal')
   const [orderReference, setOrderReference] = useState<string>('')
   const [paypalReference] = useState<string>(() => generateOrderReference())
@@ -288,9 +289,26 @@ export default function CheckoutPage() {
             }
             
             // Appliquer le prix calculé
-            const rounded = Math.round(finalPrice * 100) / 100
+            let rounded = Math.round(finalPrice * 100) / 100
+            
+            // Appliquer le tarif sponsor si applicable (remplace le tarif normal)
+            if (user?.isSponsored) {
+              const sponsorPrice = await getSponsorShippingPrice(totalWeight)
+              if (sponsorPrice !== null) {
+                const normalPrice = rounded
+                rounded = sponsorPrice
+                const discount = Math.max(0, normalPrice - rounded)
+                console.log(`🎁 Tarif sponsor: ${rounded}€ (économie: ${discount.toFixed(2)}€)`)
+                setSponsorShippingDiscount(discount)
+              } else {
+                setSponsorShippingDiscount(0)
+              }
+            } else {
+              setSponsorShippingDiscount(0)
+            }
+            
             setShippingCost(rounded)
-            console.log('✅ Prix d\'expédition final:', finalPrice, '€ (poids:', totalWeight.toFixed(2), 'kg, valeur:', totalValue.toFixed(2), '€)')
+            console.log('✅ Prix d\'expédition final:', rounded, '€ (poids:', totalWeight.toFixed(2), 'kg, valeur:', totalValue.toFixed(2), '€)')
           } else {
             // Pas de tarif configuré, utiliser un prix par défaut simple
             const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
@@ -310,7 +328,7 @@ export default function CheckoutPage() {
     }
 
     calculateShippingCost()
-  }, [retraitMode, livraisonAddress, cartItems, totalWeight, promotion])
+  }, [retraitMode, livraisonAddress, cartItems, totalWeight, promotion, user])
 
   // Vérifier si un produit est disponible à l'amicale
   const isAvailableAtAmicale = (item: typeof cartItems[0]): boolean => {
@@ -1138,6 +1156,16 @@ export default function CheckoutPage() {
                     )}
                   </span>
                 </div>
+                {/* Affichage réduction sponsor sur l'expédition */}
+                {sponsorShippingDiscount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-400 flex items-center gap-1">
+                      <Ticket className="w-3 h-3" />
+                      Tarif sponsor:
+                    </span>
+                    <span className="text-green-400">-{sponsorShippingDiscount.toFixed(2)} €</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-lg pt-2 border-t border-noir-700">
                   <span className="text-gray-400 font-semibold">Total:</span>
                   <span className="text-yellow-500 font-bold">{finalTotal.toFixed(2)} €</span>
