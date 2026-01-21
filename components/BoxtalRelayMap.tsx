@@ -1,12 +1,17 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import Script from 'next/script'
 import { getBoxtalToken } from '@/src/lib/getBoxtalToken'
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase'
 
 // URL par défaut (fallback si non trouvée dans Supabase)
 const DEFAULT_BOXTAL_MAP_SCRIPT_SRC = process.env.NEXT_PUBLIC_BOXTAL_MAP_SCRIPT_SRC || 'https://unpkg.com/@boxtal/parcel-point-map@0.0.7/dist/index.umd.js'
+
+// Clés de cache localStorage
+const CACHE_SCRIPT_URL_KEY = 'boxtal_script_url'
+const CACHE_SCRIPT_URL_EXPIRY_KEY = 'boxtal_script_url_expiry'
+const CACHE_DURATION_MS = 24 * 60 * 60 * 1000 // 24 heures
 
 export interface BoxtalParcelPoint {
   code: string
@@ -39,6 +44,32 @@ declare global {
       searchParcelPoints?: (params: any, callback: (points: any[]) => void) => void
     }
     __boxtalScriptLoaded?: boolean
+    __boxtalToken?: string | null
+  }
+}
+
+// Fonction utilitaire pour récupérer l'URL depuis le cache
+function getCachedScriptUrl(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const expiry = localStorage.getItem(CACHE_SCRIPT_URL_EXPIRY_KEY)
+    if (expiry && Date.now() < parseInt(expiry, 10)) {
+      return localStorage.getItem(CACHE_SCRIPT_URL_KEY)
+    }
+  } catch {
+    // Ignorer les erreurs localStorage
+  }
+  return null
+}
+
+// Fonction utilitaire pour mettre en cache l'URL
+function setCachedScriptUrl(url: string) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(CACHE_SCRIPT_URL_KEY, url)
+    localStorage.setItem(CACHE_SCRIPT_URL_EXPIRY_KEY, String(Date.now() + CACHE_DURATION_MS))
+  } catch {
+    // Ignorer les erreurs localStorage
   }
 }
 
@@ -53,19 +84,20 @@ export default function BoxtalRelayMap({
   const mapId = mapIdRef.current
 
   // Refs
-  const hostRef = useRef<HTMLDivElement>(null) // Conteneur React (host)
-  const mapContainerElementRef = useRef<HTMLDivElement | null>(null) // Div interne créé via DOM
+  const hostRef = useRef<HTMLDivElement>(null)
+  const mapContainerElementRef = useRef<HTMLDivElement | null>(null)
   const mapInstanceRef = useRef<any>(null)
   const isInitializedRef = useRef(false)
-  const prevActiveRef = useRef(active) // Pour détecter quand active passe de true à false
+  const prevActiveRef = useRef(active)
+  const autoSearchDoneRef = useRef(false)
 
-  // États
-  const [scriptSrc, setScriptSrc] = useState<string>(DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
-  const [scriptUrlReady, setScriptUrlReady] = useState(false)
-  const [scriptLoaded, setScriptLoaded] = useState(false)
+  // États - optimisés avec valeurs initiales depuis cache
+  const [scriptSrc, setScriptSrc] = useState<string>(() => getCachedScriptUrl() || DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
+  const [scriptUrlReady, setScriptUrlReady] = useState(() => !!getCachedScriptUrl())
+  const [scriptLoaded, setScriptLoaded] = useState(() => !!window?.__boxtalScriptLoaded)
   const [scriptError, setScriptError] = useState<string | null>(null)
   const [mapReady, setMapReady] = useState(false)
-  const [token, setToken] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(() => window?.__boxtalToken || null)
   const [tokenError, setTokenError] = useState<string | null>(null)
   const [searchCity, setSearchCity] = useState(initialCity)
   const [searchPostalCode, setSearchPostalCode] = useState(initialPostalCode)
@@ -73,95 +105,97 @@ export default function BoxtalRelayMap({
   const [searching, setSearching] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
 
-  // Récupérer l'URL du script depuis Supabase (table boxtal_config)
+  // Charger URL script et token EN PARALLÈLE dès le montage
   useEffect(() => {
-    const fetchScriptUrl = async () => {
-      if (!isSupabaseConfigured()) {
-        console.warn('⚠️ Supabase non configuré, utilisation de l\'URL par défaut')
+    let isMounted = true
+
+    const loadResources = async () => {
+      // Lancer les deux requêtes en parallèle
+      const [scriptUrlResult, tokenResult] = await Promise.allSettled([
+        // 1. Récupérer l'URL du script (si pas en cache)
+        (async () => {
+          if (getCachedScriptUrl()) {
+            return getCachedScriptUrl()
+          }
+          
+          if (!isSupabaseConfigured()) {
+            return DEFAULT_BOXTAL_MAP_SCRIPT_SRC
+          }
+
+          const supabase = getSupabaseClient()
+          if (!supabase) {
+            return DEFAULT_BOXTAL_MAP_SCRIPT_SRC
+          }
+
+          try {
+            const { data, error } = await supabase
+              .from('boxtal_config')
+              .select('map_script_url')
+              .limit(1)
+              .single()
+
+            if (error || !data?.map_script_url) {
+              return DEFAULT_BOXTAL_MAP_SCRIPT_SRC
+            }
+
+            // Mettre en cache
+            setCachedScriptUrl(data.map_script_url)
+            return data.map_script_url
+          } catch {
+            return DEFAULT_BOXTAL_MAP_SCRIPT_SRC
+          }
+        })(),
+
+        // 2. Récupérer le token (si pas déjà en mémoire)
+        (async () => {
+          if (window.__boxtalToken) {
+            return window.__boxtalToken
+          }
+          
+          const accessToken = await getBoxtalToken()
+          window.__boxtalToken = accessToken
+          return accessToken
+        })()
+      ])
+
+      if (!isMounted) return
+
+      // Traiter les résultats
+      if (scriptUrlResult.status === 'fulfilled' && scriptUrlResult.value) {
+        setScriptSrc(scriptUrlResult.value)
         setScriptUrlReady(true)
-        return
+      } else {
+        setScriptUrlReady(true) // Utiliser l'URL par défaut
       }
 
-      const supabase = getSupabaseClient()
-      if (!supabase) {
-        setScriptUrlReady(true)
-        return
-      }
-
-      try {
-        // Récupérer la configuration Boxtal depuis Supabase
-        const { data, error } = await supabase
-          .from('boxtal_config')
-          .select('map_script_url')
-          .limit(1)
-          .single()
-
-        if (error) {
-          console.warn('⚠️ Erreur récupération config Boxtal depuis Supabase:', error.message)
-          console.log('📝 Utilisation de l\'URL par défaut:', DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
-          setScriptUrlReady(true)
-          return
-        }
-
-        // Utiliser map_script_url si disponible
-        const urlFromSupabase = data?.map_script_url
-        if (urlFromSupabase) {
-          console.log('✅ URL script Boxtal récupérée depuis Supabase:', urlFromSupabase)
-          setScriptSrc(urlFromSupabase)
-        } else {
-          console.log('📝 Aucune URL trouvée dans boxtal_config, utilisation de l\'URL par défaut')
-        }
-        setScriptUrlReady(true)
-      } catch (error) {
-        console.warn('⚠️ Erreur lors de la récupération de l\'URL du script:', error)
-        setScriptUrlReady(true)
+      if (tokenResult.status === 'fulfilled' && tokenResult.value) {
+        setToken(tokenResult.value)
+      } else if (tokenResult.status === 'rejected') {
+        setTokenError(tokenResult.reason?.message || 'Erreur token')
       }
     }
 
-    fetchScriptUrl()
+    loadResources()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
-  // Récupérer le token Boxtal (une seule fois)
+  // Créer le div interne et initialiser la carte
   useEffect(() => {
-    if (!scriptSrc || scriptSrc === 'A_REMPLACER' || token !== null) {
-      return
-    }
-
-    const fetchToken = async () => {
-      try {
-        console.log('🔑 Récupération du token Boxtal...')
-        const accessToken = await getBoxtalToken()
-        setToken(accessToken)
-        setTokenError(null)
-        console.log('✅ Token obtenu avec succès')
-      } catch (error: any) {
-        const errorMessage = error.message || 'Erreur lors de la récupération du token'
-        setTokenError(errorMessage)
-        console.error("❌ Erreur token:", errorMessage)
-      }
-    }
-
-    fetchToken()
-  }, [token])
-
-  // Créer le div interne et initialiser la carte UNIQUEMENT si active === true ET scriptReady ET tokenReady
-  useEffect(() => {
-    // Mettre à jour la ref de active
     const wasActive = prevActiveRef.current
     prevActiveRef.current = active
 
-    // Ne pas initialiser si inactive
     if (!active) {
-      // Si active passe de true à false, nettoyer
       if (wasActive && !active) {
-        // Nettoyer le conteneur
         requestAnimationFrame(() => {
           try {
             if (hostRef.current && hostRef.current.isConnected) {
               hostRef.current.replaceChildren()
             }
-          } catch (error) {
-            // Ignorer les erreurs
+          } catch {
+            // Ignorer
           }
           mapInstanceRef.current = null
           mapContainerElementRef.current = null
@@ -173,17 +207,13 @@ export default function BoxtalRelayMap({
 
     // Vérifier les prérequis
     if (!scriptLoaded || !token || !hostRef.current || !scriptSrc || scriptSrc === 'A_REMPLACER') {
-      console.log('⏳ Prérequis non remplis:', { scriptLoaded, token: !!token, hostRef: !!hostRef.current })
       return
     }
 
-    // Vérifier que le conteneur est visible
     if (!hostRef.current || !hostRef.current.isConnected) {
-      console.log('⏳ Conteneur non visible ou non connecté au DOM')
       return
     }
 
-    // Vérifier la visibilité du conteneur (style display, visibility, etc.)
     const computedStyle = window.getComputedStyle(hostRef.current)
     const isVisible = computedStyle.display !== 'none' && 
                      computedStyle.visibility !== 'hidden' && 
@@ -192,82 +222,59 @@ export default function BoxtalRelayMap({
                      hostRef.current.offsetHeight > 0
 
     if (!isVisible) {
-      console.log('⏳ Conteneur non visible (display/visibility/opacity)')
       return
     }
 
-    // Si le div interne existe déjà et est connecté, ne pas réinitialiser
     if (mapContainerElementRef.current && mapContainerElementRef.current.isConnected && mapInstanceRef.current) {
-      console.log('✅ Carte Boxtal déjà initialisée, pas de réinitialisation')
       return
     }
 
-    // Si le div existe mais n'est plus dans le DOM, le nettoyer
     if (mapContainerElementRef.current && !mapContainerElementRef.current.isConnected) {
-      console.log('⚠️ Div interne existe mais n\'est plus connecté, nettoyage...')
       mapContainerElementRef.current = null
       isInitializedRef.current = false
       mapInstanceRef.current = null
     }
 
-    console.log('🗺️ Initialisation de la carte Boxtal...')
-    console.log('window.BoxtalParcelPointMap:', window.BoxtalParcelPointMap)
-    console.log('État actuel:', { scriptLoaded, token: !!token, hostRef: !!hostRef.current, active, isVisible })
-
-    // Vérifier que BoxtalParcelPointMap.BoxtalParcelPointMap existe
     if (!window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
-      console.error("❌ BoxtalParcelPointMap.BoxtalParcelPointMap n'est pas disponible")
-      setScriptError("L'API Boxtal n'est pas disponible. Vérifiez la version du script.")
+      setScriptError("L'API Boxtal n'est pas disponible.")
       return
     }
 
     let isMounted = true
 
-    // Fonction d'initialisation
     const init = () => {
-      // Vérifier à nouveau que active est toujours true et que le conteneur est visible
       if (!active || !hostRef.current || !hostRef.current.isConnected) {
-        console.log('⏳ Conditions non remplies pour l\'initialisation (active ou conteneur)')
         return
       }
 
       try {
-        // Vérifier que BoxtalParcelPointMap est disponible
-        const boxtalGlobal = window.BoxtalParcelPointMap
-        if (!boxtalGlobal || !boxtalGlobal.BoxtalParcelPointMap) {
-          console.error('BoxtalParcelPointMap n\'est pas disponible')
-          return
-        }
+        const BoxtalParcelPointMap = window.BoxtalParcelPointMap!.BoxtalParcelPointMap
 
-        const BoxtalParcelPointMap = boxtalGlobal.BoxtalParcelPointMap
+        if (!hostRef.current) return
 
-        // Vérifier que le host existe
-        if (!hostRef.current) {
-          return
-        }
-
-        // Créer le div interne via DOM (pas React)
+        // Créer le div interne
         const mapContainerElement = document.createElement('div')
         mapContainerElement.id = mapId
-        mapContainerElement.style.width = '100%'
-        mapContainerElement.style.height = '450px'
-        mapContainerElement.style.minHeight = '450px'
-        mapContainerElement.style.maxHeight = '450px'
-        mapContainerElement.style.position = 'relative'
-        mapContainerElement.style.zIndex = '1'
-        mapContainerElement.style.display = 'block'
-        mapContainerElement.style.backgroundColor = '#f3f4f6'
-        mapContainerElement.style.overflow = 'hidden'
-        mapContainerElement.style.isolation = 'isolate' // Créer un nouveau contexte d'empilement
-        mapContainerElement.style.contain = 'layout style paint' // Empêcher les débordements
-        mapContainerElement.style.clipPath = 'inset(0)' // Limiter strictement la zone
+        mapContainerElement.style.cssText = `
+          width: 100%;
+          height: 450px;
+          min-height: 450px;
+          max-height: 450px;
+          position: relative;
+          z-index: 1;
+          display: block;
+          background-color: #f3f4f6;
+          overflow: hidden;
+          isolation: isolate;
+          contain: layout style paint;
+          clip-path: inset(0);
+        `
         mapContainerElement.className = 'w-full border border-gray-300 rounded-md'
         
-        // Ajouter des règles CSS pour limiter strictement les iframes enfants
+        // CSS pour limiter les iframes
         const style = document.createElement('style')
         style.textContent = `
-          #${mapId} iframe,
-          #${mapId} * {
+          #${mapId} iframe, #${mapId} * {
             max-width: 100% !important;
             max-height: 450px !important;
             overflow: hidden !important;
@@ -275,17 +282,12 @@ export default function BoxtalRelayMap({
         `
         document.head.appendChild(style)
 
-        // Append dans le host React
         hostRef.current.appendChild(mapContainerElement)
         mapContainerElementRef.current = mapContainerElement
-        
-        console.log('✅ Div interne créé et ajouté au DOM:', mapId, mapContainerElement.isConnected)
 
-        // Initialiser la carte avec un délai supplémentaire
+        // Initialiser immédiatement (réduit de 300ms à 50ms)
         setTimeout(() => {
-          // Vérifier une dernière fois avant d'initialiser
           if (!active || !hostRef.current || !hostRef.current.isConnected || !isMounted) {
-            console.log('⏳ Conditions non remplies juste avant l\'initialisation')
             return
           }
 
@@ -301,91 +303,34 @@ export default function BoxtalRelayMap({
             },
             onMapLoaded: () => {
               if (isMounted) {
-                console.log('✅ Carte Boxtal chargée')
-                console.log('Instance de la carte:', mapInstanceRef.current)
-                
-                // Attendre un peu pour que l'instance soit complètement initialisée
-                // L'erreur sendCallbackEvent suggère qu'il faut attendre que les propriétés internes soient prêtes
+                // Réduit de 1500ms à 300ms
                 setTimeout(() => {
-                  // Vérifier que l'instance a bien toutes ses propriétés
-                  const instance = mapInstanceRef.current
-                  if (instance) {
-                    console.log('Méthodes disponibles sur l\'instance:', {
-                      searchParcelPoints: typeof instance.searchParcelPoints,
-                      keys: Object.keys(instance).slice(0, 20),
-                      prototype: Object.getOwnPropertyNames(Object.getPrototypeOf(instance)).slice(0, 20),
-                      // Vérifier si la méthode a des propriétés internes
-                      hasSendCallbackEvent: 'sendCallbackEvent' in instance || 
-                        (instance.searchParcelPoints && 'sendCallbackEvent' in instance.searchParcelPoints)
-                    })
-                  }
-                  console.log('Méthodes disponibles sur window:', {
-                    searchParcelPoints: typeof window.BoxtalParcelPointMap?.searchParcelPoints,
-                    keys: Object.keys(window.BoxtalParcelPointMap || {}).slice(0, 20)
-                  })
                   setMapReady(true)
-                }, 1500) // Délai encore plus long pour s'assurer que tout est complètement initialisé
+                }, 300)
               }
             },
             onParcelPointSelected: (parcelPoint: any) => {
               if (isMounted) {
-                console.log('📍 Point relais sélectionné (données brutes):', parcelPoint)
-                console.log('📍 Structure de l\'adresse:', parcelPoint.address)
-                console.log('📍 Toutes les propriétés:', Object.keys(parcelPoint))
-                
-                // Normaliser l'adresse - Boxtal peut retourner différentes structures
-                // Chercher dans address ET directement sur parcelPoint
+                // Normaliser l'adresse
                 let normalizedAddress: any = {}
                 
-                // Extraire depuis address si disponible
                 if (parcelPoint.address) {
                   normalizedAddress = {
-                    street: parcelPoint.address.street || 
-                            parcelPoint.address.address || 
-                            parcelPoint.address.line1 || 
-                            parcelPoint.address.adresse || 
-                            parcelPoint.address.fullAddress ||
-                            parcelPoint.address.streetAddress || '',
-                    postalCode: parcelPoint.address.postalCode || 
-                               parcelPoint.address.postal_code || 
-                               parcelPoint.address.zipCode || 
-                               parcelPoint.address.zip || 
-                               parcelPoint.address.codePostal ||
-                               parcelPoint.address.postcode || '',
-                    city: parcelPoint.address.city || 
-                         parcelPoint.address.ville || 
-                         parcelPoint.address.locality ||
-                         parcelPoint.address.town ||
-                         parcelPoint.address.commune || '',
-                    country: parcelPoint.address.country || 
-                            parcelPoint.address.countryCode || 
-                            parcelPoint.address.pays || 'FR'
+                    street: parcelPoint.address.street || parcelPoint.address.address || parcelPoint.address.line1 || '',
+                    postalCode: parcelPoint.address.postalCode || parcelPoint.address.postal_code || parcelPoint.address.zipCode || '',
+                    city: parcelPoint.address.city || parcelPoint.address.ville || parcelPoint.address.locality || '',
+                    country: parcelPoint.address.country || parcelPoint.address.countryCode || 'FR'
                   }
                 }
                 
-                // Si les données ne sont pas dans address, chercher directement sur parcelPoint
                 if (!normalizedAddress.postalCode) {
-                  normalizedAddress.postalCode = parcelPoint.postalCode || 
-                                                 parcelPoint.postal_code || 
-                                                 parcelPoint.zipCode || 
-                                                 parcelPoint.zip || 
-                                                 parcelPoint.codePostal ||
-                                                 parcelPoint.postcode || ''
+                  normalizedAddress.postalCode = parcelPoint.postalCode || parcelPoint.postal_code || parcelPoint.zipCode || ''
                 }
-                
                 if (!normalizedAddress.city) {
-                  normalizedAddress.city = parcelPoint.city || 
-                                          parcelPoint.ville || 
-                                          parcelPoint.locality ||
-                                          parcelPoint.town ||
-                                          parcelPoint.commune || ''
+                  normalizedAddress.city = parcelPoint.city || parcelPoint.ville || parcelPoint.locality || ''
                 }
-                
                 if (!normalizedAddress.street) {
-                  normalizedAddress.street = parcelPoint.street || 
-                                            parcelPoint.address || 
-                                            parcelPoint.line1 || 
-                                            parcelPoint.adresse || ''
+                  normalizedAddress.street = parcelPoint.street || parcelPoint.address || parcelPoint.line1 || ''
                 }
                 
                 const point: BoxtalParcelPoint = {
@@ -394,86 +339,64 @@ export default function BoxtalRelayMap({
                   address: normalizedAddress,
                   coordinates: parcelPoint.coordinates || parcelPoint.coordonnees || {},
                   network: parcelPoint.network || parcelPoint.networkCode || '',
-                  // Sauvegarder toutes les données brutes aussi
                   rawData: parcelPoint,
                   ...parcelPoint
                 }
                 
-                console.log('📍 Point relais normalisé:', JSON.stringify(point, null, 2))
-                console.log('📍 Adresse extraite:', {
-                  postalCode: normalizedAddress.postalCode,
-                  city: normalizedAddress.city,
-                  street: normalizedAddress.street,
-                  hasPostalCode: !!normalizedAddress.postalCode,
-                  hasCity: !!normalizedAddress.city
-                })
-                
                 setSelectedParcelPoint(point)
-                if (onSelect) {
-                  onSelect(point)
-                }
+                onSelect?.(point)
               }
             }
           })
 
           if (isMounted) {
             isInitializedRef.current = true
-            console.log('✅ Carte Boxtal initialisée avec succès')
           }
-        }, 300) // Délai de 300ms avant l'initialisation
+        }, 50) // Réduit de 300ms à 50ms
       } catch (error: any) {
         if (isMounted) {
-          console.error("❌ Erreur lors de l'initialisation:", error)
-          setScriptError(error.message || "Erreur lors de l'initialisation de la carte")
+          setScriptError(error.message || "Erreur d'initialisation")
         }
       }
     }
 
-    // Appeler init avec un délai de 300ms
-    setTimeout(init, 300)
+    // Réduit de 300ms à 50ms
+    setTimeout(init, 50)
 
-    // Cleanup robuste : ne jamais casser l'app
-    // Le cleanup ne se déclenche que si le composant est démonté ou si les dépendances changent
-    // On ne nettoie PAS ici car le nettoyage est géré dans le useEffect lui-même
-    // quand active passe de true à false
     return () => {
       isMounted = false
-      // Ne rien faire ici - le nettoyage est géré dans le useEffect principal
-      // pour éviter de supprimer le conteneur quand active reste true
     }
   }, [active, scriptLoaded, token, mapId, onSelect])
 
-  // Fonction pour rechercher des points relais
-  const handleSearch = () => {
-    if (!searchPostalCode || searchPostalCode.length < 5) {
-      console.warn('⚠️ Code postal invalide pour la recherche')
-      return
+  // Recherche automatique si code postal pré-rempli
+  useEffect(() => {
+    if (mapReady && initialPostalCode && initialPostalCode.length >= 5 && !autoSearchDoneRef.current) {
+      autoSearchDoneRef.current = true
+      // Lancer la recherche automatiquement après un court délai
+      setTimeout(() => {
+        handleSearchInternal(initialPostalCode, initialCity)
+      }, 200)
     }
+  }, [mapReady, initialPostalCode, initialCity])
+
+  // Fonction de recherche interne
+  const handleSearchInternal = useCallback((postalCode: string, city: string) => {
+    if (!postalCode || postalCode.length < 5) return
 
     setMapError(null)
     setSearching(true)
 
     const map = mapInstanceRef.current
 
-    if (!active) {
-      setSearching(false)
-      return
-    }
-    if (!map || typeof map.searchParcelPoints !== "function") {
-      setMapError("Carte pas prête.")
-      setSearching(false)
-      return
-    }
-    if (!mapReady) {
-      setMapError("Carte pas prête (chargement...).")
+    if (!active || !map || typeof map.searchParcelPoints !== "function" || !mapReady) {
       setSearching(false)
       return
     }
 
     const address = { 
       country: "FR", 
-      city: searchCity.trim(), 
-      zipCode: searchPostalCode.trim() 
+      city: city.trim(), 
+      zipCode: postalCode.trim() 
     }
 
     let tries = 0
@@ -488,80 +411,71 @@ export default function BoxtalRelayMap({
       } catch (e: any) {
         const msg = String(e?.message || e)
 
-        // cas Boxtal: callback system pas prêt -> on retente
-        if (msg.includes("sendCallbackEvent") && tries < 10) {
+        if (msg.includes("sendCallbackEvent") && tries < 5) {
           tries += 1
-          setTimeout(run, 200)
+          setTimeout(run, 100) // Réduit de 200ms à 100ms
           return
         }
 
-        setMapError(msg || "Erreur lors de la recherche")
-        console.error("❌ Erreur lors de la recherche:", e)
+        setMapError(msg || "Erreur de recherche")
         setSearching(false)
       }
     }
 
     run()
+  }, [active, mapReady, onSelect])
+
+  // Fonction pour le bouton rechercher
+  const handleSearch = () => {
+    handleSearchInternal(searchPostalCode, searchCity)
   }
 
-  // Attendre que l'URL du script soit récupérée depuis Supabase
+  // Afficher l'erreur si l'URL du script n'est pas configurée
   if (!scriptUrlReady) {
     return (
       <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-        <p className="text-blue-700 font-medium">Chargement de la configuration...</p>
-        <p className="text-sm text-blue-600 mt-1">
-          Récupération de l'URL du script Boxtal depuis Supabase
-        </p>
+        <div className="flex items-center gap-2">
+          <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+          <p className="text-blue-700 font-medium">Chargement...</p>
+        </div>
       </div>
     )
   }
 
-  // Afficher l'erreur si l'URL du script n'est pas configurée
   if (!scriptSrc || scriptSrc === 'A_REMPLACER') {
     return (
       <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-        <p className="text-red-700 font-medium">URL du script Boxtal manquante</p>
-        <p className="text-sm text-red-600 mt-1">
-          Veuillez configurer l'URL du script Boxtal dans Supabase (table boxtal_config, colonne map_script_url ou script_url)
-        </p>
+        <p className="text-red-700 font-medium">Configuration Boxtal manquante</p>
       </div>
     )
   }
 
   return (
     <div className="w-full space-y-4">
-      {/* Script Boxtal - chargé UNE SEULE FOIS avec id fixe + flag window */}
+      {/* Script Boxtal */}
       <Script
         id="boxtal-parcelpoint-script"
         key={scriptSrc}
         src={scriptSrc}
         strategy="afterInteractive"
         onLoad={() => {
-          // Vérifier le flag global pour éviter les rechargements lors de rerenders
           if (window.__boxtalScriptLoaded) {
-            // Le script est déjà chargé, juste mettre à jour l'état
             setScriptLoaded(true)
             return
           }
           window.__boxtalScriptLoaded = true
-          console.log('✅ Script Boxtal chargé depuis:', scriptSrc)
           
-          // Vérifier que l'objet global est disponible
+          // Réduit de 500ms à 100ms
           setTimeout(() => {
-            console.log('🔍 Vérification window.BoxtalParcelPointMap:', window.BoxtalParcelPointMap)
             if (!window.BoxtalParcelPointMap || !window.BoxtalParcelPointMap.BoxtalParcelPointMap) {
-              console.warn('⚠️ window.BoxtalParcelPointMap non disponible après chargement')
-              setScriptError('Le script Boxtal est chargé mais l\'API n\'est pas disponible. Vérifiez l\'URL du script.')
-            } else {
-              console.log('✅ window.BoxtalParcelPointMap disponible')
+              setScriptError('API Boxtal non disponible')
             }
-          }, 500)
+          }, 100)
           
           setScriptLoaded(true)
         }}
-        onError={(e) => {
-          console.error("❌ Erreur chargement script Boxtal depuis:", scriptSrc, e)
-          setScriptError(`Impossible de charger le script Boxtal depuis ${scriptSrc}. Vérifiez l'URL dans Supabase.`)
+        onError={() => {
+          setScriptError('Impossible de charger le script Boxtal')
         }}
       />
 
@@ -601,7 +515,6 @@ export default function BoxtalRelayMap({
             onClick={handleSearch}
             disabled={!mapReady || !mapInstanceRef.current || !searchPostalCode || searchPostalCode.length < 5 || searching}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            title={!mapReady ? 'En attente de la carte...' : !mapInstanceRef.current ? 'Carte non initialisée' : ''}
           >
             {searching ? 'Recherche...' : 'Rechercher'}
           </button>
@@ -609,27 +522,13 @@ export default function BoxtalRelayMap({
       </div>
 
       {/* Messages d'erreur */}
-      {mapError && (
+      {(mapError || tokenError || scriptError) && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700">
-          <p className="font-medium">Erreur</p>
-          <p className="text-sm">{mapError}</p>
-        </div>
-      )}
-      {tokenError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700">
-          <p className="font-medium">Erreur token</p>
-          <p className="text-sm">{tokenError}</p>
+          <p className="text-sm">{mapError || tokenError || scriptError}</p>
         </div>
       )}
 
-      {scriptError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700">
-          <p className="font-medium">Erreur</p>
-          <p className="text-sm">{scriptError}</p>
-        </div>
-      )}
-
-      {/* Host React : conteneur qui accueillera le div interne créé via DOM */}
+      {/* Conteneur de la carte */}
       <div
         ref={hostRef}
         style={{ 
@@ -638,37 +537,34 @@ export default function BoxtalRelayMap({
           height: active && mapContainerElementRef.current ? '450px' : '0',
           position: 'relative',
           overflow: 'hidden',
-          isolation: 'isolate', // Créer un nouveau contexte d'empilement
-          zIndex: active ? 1 : -1, // Mettre en arrière-plan quand inactive
-          pointerEvents: active ? 'auto' : 'none' // Désactiver les interactions quand inactive
+          isolation: 'isolate',
+          zIndex: active ? 1 : -1,
+          pointerEvents: active ? 'auto' : 'none'
         }}
         className="w-full"
       >
-        {/* Afficher le message de chargement seulement si le div interne n'existe pas encore */}
-        {active && (!mapContainerElementRef.current || !mapContainerElementRef.current.isConnected) && (!scriptLoaded || !token || (scriptLoaded && token && !mapReady)) && (
+        {active && !mapReady && (
           <div 
             className="absolute inset-0 flex items-center justify-center text-gray-500 bg-gray-100 rounded-md" 
             style={{ zIndex: 10, pointerEvents: 'none' }}
           >
             <div className="text-center">
-              {!scriptLoaded && <p className="mb-2">Chargement du script Boxtal...</p>}
-              {scriptLoaded && !token && !tokenError && <p className="mb-2">Récupération du token...</p>}
-              {scriptLoaded && token && !mapReady && <p className="mb-2">Initialisation de la carte...</p>}
-              <p className="text-sm">Veuillez patienter</p>
+              <div className="animate-spin w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+              <p className="text-sm">
+                {!scriptLoaded ? 'Chargement...' : !token ? 'Connexion...' : 'Initialisation...'}
+              </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Affichage du point sélectionné avec JSON - version simplifiée pour éviter de bloquer */}
+      {/* Point sélectionné */}
       {selectedParcelPoint && (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-md mt-2">
+        <div className="p-3 bg-green-50 border border-green-200 rounded-md">
           <h3 className="font-medium text-green-900 mb-1 text-sm">✓ Point relais sélectionné</h3>
           <div className="text-xs text-green-800">
             <p><strong>{selectedParcelPoint.name}</strong></p>
-            {selectedParcelPoint.address?.street && (
-              <p>{selectedParcelPoint.address.street}</p>
-            )}
+            {selectedParcelPoint.address?.street && <p>{selectedParcelPoint.address.street}</p>}
             {(selectedParcelPoint.address?.postalCode || selectedParcelPoint.address?.city) && (
               <p>{selectedParcelPoint.address?.postalCode} {selectedParcelPoint.address?.city}</p>
             )}
