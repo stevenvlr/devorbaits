@@ -56,6 +56,27 @@ SELECT * FROM (VALUES
 ) AS default_rates(min_weight, max_weight, price)
 WHERE NOT EXISTS (SELECT 1 FROM sponsor_shipping_rates LIMIT 1);
 
+-- 4. Politique RLS pour permettre aux admins de modifier is_sponsored sur profiles
+-- (Important : sans ça, l'ajout de sponsors depuis l'admin ne fonctionne pas)
+DROP POLICY IF EXISTS "Admins can update profiles" ON profiles;
+
+CREATE POLICY "Admins can update profiles"
+  ON profiles FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = auth.uid()
+      AND p.role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = auth.uid()
+      AND p.role = 'admin'
+    )
+  );
+
 -- Vérification
 SELECT 'Table sponsor_shipping_rates créée' AS status;
 SELECT * FROM sponsor_shipping_rates ORDER BY min_weight;

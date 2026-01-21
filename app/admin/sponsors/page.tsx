@@ -1,11 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { ArrowLeft, Check, Mail, Plus, RefreshCw, Save, Star, Trash2, Truck, User as UserIcon, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, Check, Mail, Plus, RefreshCw, Save, Search, Star, Trash2, Truck, User as UserIcon, X } from 'lucide-react'
 import { getAllUsers, type User } from '@/lib/auth-supabase'
 import { getSupabaseClient } from '@/lib/supabase'
-import { getSponsorShippingRates, saveSponsorShippingRates, type SponsorShippingRate } from '@/lib/shipping-prices'
+import { getSponsorShippingRates, saveSponsorShippingRates } from '@/lib/shipping-prices'
 
 export default function AdminSponsorsPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -15,7 +15,8 @@ export default function AdminSponsorsPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [showAddSponsor, setShowAddSponsor] = useState(false)
-  const [selectedUserId, setSelectedUserId] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
 
   // Tarifs par défaut
   const defaultRates = [
@@ -53,6 +54,17 @@ export default function AdminSponsorsPage() {
   const sponsors = users.filter(u => u.isSponsored)
   const nonSponsors = users.filter(u => !u.isSponsored)
 
+  // Filtrer les non-sponsors par recherche
+  const filteredNonSponsors = useMemo(() => {
+    if (!searchQuery.trim()) return nonSponsors
+    const q = searchQuery.toLowerCase()
+    return nonSponsors.filter(u => 
+      u.email.toLowerCase().includes(q) ||
+      (u.nom && u.nom.toLowerCase().includes(q)) ||
+      (u.prenom && u.prenom.toLowerCase().includes(q))
+    )
+  }, [nonSponsors, searchQuery])
+
   // Sauvegarder la grille tarifaire
   const saveRates = async () => {
     setSaving(true)
@@ -72,8 +84,39 @@ export default function AdminSponsorsPage() {
     }
   }
 
-  // Ajouter/Retirer un sponsor
-  const toggleSponsor = async (userId: string, isSponsored: boolean) => {
+  // Ajouter plusieurs sponsors
+  const addSponsors = async () => {
+    if (selectedUserIds.length === 0) return
+    
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const supabase = getSupabaseClient()
+      if (!supabase) throw new Error('Supabase non configuré')
+
+      // Mettre à jour tous les utilisateurs sélectionnés
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ is_sponsored: true, updated_at: new Date().toISOString() })
+        .in('id', selectedUserIds)
+
+      if (updateError) throw updateError
+
+      setSuccess(`${selectedUserIds.length} sponsor(s) ajouté(s)`)
+      setShowAddSponsor(false)
+      setSelectedUserIds([])
+      setSearchQuery('')
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Erreur')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Retirer un sponsor
+  const removeSponsor = async (userId: string) => {
     setSaving(true)
     setError(null)
     setSuccess(null)
@@ -83,19 +126,35 @@ export default function AdminSponsorsPage() {
 
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ is_sponsored: isSponsored, updated_at: new Date().toISOString() })
+        .update({ is_sponsored: false, updated_at: new Date().toISOString() })
         .eq('id', userId)
 
       if (updateError) throw updateError
 
-      setSuccess(isSponsored ? 'Sponsor ajouté' : 'Sponsor retiré')
-      setShowAddSponsor(false)
-      setSelectedUserId('')
+      setSuccess('Sponsor retiré')
       await loadData()
     } catch (e: any) {
       setError(e?.message || 'Erreur')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Toggle sélection d'un utilisateur
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUserIds(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    )
+  }
+
+  // Sélectionner/Désélectionner tous les résultats filtrés
+  const toggleSelectAll = () => {
+    if (selectedUserIds.length === filteredNonSponsors.length) {
+      setSelectedUserIds([])
+    } else {
+      setSelectedUserIds(filteredNonSponsors.map(u => u.id))
     }
   }
 
@@ -233,11 +292,15 @@ export default function AdminSponsorsPage() {
                 </h2>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setShowAddSponsor(true)}
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-500 transition-colors"
+                    onClick={() => setShowAddSponsor(!showAddSponsor)}
+                    className={`inline-flex items-center gap-2 px-3 py-2 font-medium rounded-lg transition-colors ${
+                      showAddSponsor 
+                        ? 'bg-noir-700 text-white' 
+                        : 'bg-green-600 text-white hover:bg-green-500'
+                    }`}
                   >
-                    <Plus className="w-4 h-4" />
-                    Ajouter
+                    {showAddSponsor ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    {showAddSponsor ? 'Fermer' : 'Ajouter'}
                   </button>
                   <button
                     onClick={loadData}
@@ -248,46 +311,92 @@ export default function AdminSponsorsPage() {
                 </div>
               </div>
 
-              {/* Modal ajouter sponsor */}
+              {/* Panel ajouter sponsors */}
               {showAddSponsor && (
-                <div className="mb-4 bg-noir-900 border border-green-500/50 rounded-lg p-4">
-                  <p className="text-sm text-gray-400 mb-2">Sélectionner un utilisateur :</p>
-                  <div className="flex gap-2">
-                    <select
-                      value={selectedUserId}
-                      onChange={(e) => setSelectedUserId(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-noir-800 border border-noir-700 rounded-lg text-white focus:outline-none focus:border-yellow-500"
-                    >
-                      <option value="">-- Choisir --</option>
-                      {nonSponsors.map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.email} {u.nom && u.prenom ? `(${u.nom} ${u.prenom})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => selectedUserId && toggleSponsor(selectedUserId, true)}
-                      disabled={!selectedUserId || saving}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 disabled:opacity-50"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => { setShowAddSponsor(false); setSelectedUserId('') }}
-                      className="px-3 py-2 bg-noir-700 text-white rounded-lg hover:bg-noir-600"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                <div className="mb-6 bg-noir-900 border border-green-500/50 rounded-lg p-4">
+                  <p className="text-sm text-gray-400 mb-3">Rechercher et sélectionner des utilisateurs à ajouter :</p>
+                  
+                  {/* Barre de recherche */}
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Rechercher par email, nom ou prénom..."
+                      className="w-full pl-10 pr-4 py-2 bg-noir-800 border border-noir-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                    />
                   </div>
+
+                  {/* Boutons d'action */}
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      onClick={toggleSelectAll}
+                      className="text-sm text-yellow-500 hover:text-yellow-400"
+                    >
+                      {selectedUserIds.length === filteredNonSponsors.length && filteredNonSponsors.length > 0
+                        ? 'Tout désélectionner'
+                        : `Tout sélectionner (${filteredNonSponsors.length})`
+                      }
+                    </button>
+                    <span className="text-sm text-gray-400">
+                      {selectedUserIds.length} sélectionné(s)
+                    </span>
+                  </div>
+
+                  {/* Liste des utilisateurs */}
+                  <div className="max-h-64 overflow-y-auto space-y-1 mb-3">
+                    {filteredNonSponsors.length === 0 ? (
+                      <p className="text-center text-gray-500 py-4">
+                        {searchQuery ? 'Aucun résultat' : 'Tous les utilisateurs sont déjà sponsors'}
+                      </p>
+                    ) : (
+                      filteredNonSponsors.map(u => (
+                        <label
+                          key={u.id}
+                          className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
+                            selectedUserIds.includes(u.id) 
+                              ? 'bg-green-500/20 border border-green-500/50' 
+                              : 'bg-noir-800 hover:bg-noir-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.includes(u.id)}
+                            onChange={() => toggleUserSelection(u.id)}
+                            className="w-4 h-4 rounded border-noir-600 text-green-500 focus:ring-green-500 focus:ring-offset-noir-900"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">
+                              {u.nom && u.prenom ? `${u.nom} ${u.prenom}` : u.email}
+                            </p>
+                            {u.nom && u.prenom && (
+                              <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                            )}
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Bouton ajouter */}
+                  <button
+                    onClick={addSponsors}
+                    disabled={selectedUserIds.length === 0 || saving}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Check className="w-4 h-4" />
+                    {saving ? 'Ajout en cours...' : `Ajouter ${selectedUserIds.length} sponsor(s)`}
+                  </button>
                 </div>
               )}
 
-              {/* Liste */}
+              {/* Liste des sponsors actuels */}
               {sponsors.length === 0 ? (
                 <div className="text-center py-8">
                   <Star className="w-12 h-12 text-gray-600 mx-auto mb-2" />
                   <p className="text-gray-400">Aucun sponsor</p>
-                  <p className="text-sm text-gray-500">Cliquez sur "Ajouter" pour ajouter un membre sponsor</p>
+                  <p className="text-sm text-gray-500">Cliquez sur "Ajouter" pour ajouter des membres sponsors</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -310,10 +419,11 @@ export default function AdminSponsorsPage() {
                       <button
                         onClick={() => {
                           if (confirm('Retirer le statut sponsor ?')) {
-                            toggleSponsor(user.id, false)
+                            removeSponsor(user.id)
                           }
                         }}
-                        className="inline-flex items-center gap-1 px-3 py-1 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded"
+                        disabled={saving}
+                        className="inline-flex items-center gap-1 px-3 py-1 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded disabled:opacity-50"
                       >
                         <Trash2 className="w-4 h-4" />
                         Retirer
