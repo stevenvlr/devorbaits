@@ -292,20 +292,23 @@ export default function CheckoutPage() {
             let rounded = Math.round(finalPrice * 100) / 100
             
             // Appliquer le tarif sponsor si applicable (remplace le tarif normal)
-            console.log('🎁 Vérification sponsor - user.isSponsored:', user?.isSponsored)
-            if (user?.isSponsored) {
-              console.log('🎁 Utilisateur sponsor détecté, récupération du tarif...')
+            console.log('🎁 Vérification sponsor - user:', user?.email, 'isSponsored:', user?.isSponsored)
+            if (user?.isSponsored === true) {
+              console.log('🎁 Utilisateur sponsor détecté, récupération du tarif pour poids:', totalWeight, 'kg')
               const sponsorPrice = await getSponsorShippingPrice(totalWeight)
-              if (sponsorPrice !== null) {
+              console.log('🎁 Tarif sponsor retourné:', sponsorPrice)
+              if (sponsorPrice !== null && sponsorPrice >= 0) {
                 const normalPrice = rounded
                 rounded = sponsorPrice
                 const discount = Math.max(0, normalPrice - rounded)
-                console.log(`🎁 Tarif sponsor: ${rounded}€ (économie: ${discount.toFixed(2)}€)`)
+                console.log(`🎁 Tarif sponsor appliqué: ${rounded}€ (économie: ${discount.toFixed(2)}€)`)
                 setSponsorShippingDiscount(discount)
               } else {
+                console.log('⚠️ Pas de tarif sponsor trouvé pour ce poids')
                 setSponsorShippingDiscount(0)
               }
             } else {
+              console.log('ℹ️ Utilisateur non sponsor ou isSponsored non défini')
               setSponsorShippingDiscount(0)
             }
             
