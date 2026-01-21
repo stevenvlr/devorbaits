@@ -239,10 +239,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
       console.log('[CartContext] Stock réservé pour amicale-blanc:', productId)
     }
     
-    // Pas de vérification de stock pour les produits en livraison
-    // On permet l'ajout au panier sans limite de quantité
+    // Vérifier le stock pour informer sur le délai (sans bloquer l'ajout)
     if (productId && !item.pointRetrait) {
-      console.log('[CartContext] Ajout au panier sans vérification de stock pour:', item.produit, 'quantité:', item.quantite)
+      try {
+        const availableStock = await getAvailableStock(productId, item.variantId)
+        console.log('[CartContext] Stock disponible pour', productId, ':', availableStock)
+        
+        // Si le stock est insuffisant, informer sur le délai prolongé
+        if (availableStock >= 0 && item.quantite > availableStock) {
+          alert(
+            `📦 Information délai de livraison\n\n` +
+            `La quantité demandée (${item.quantite}) dépasse le stock disponible (${availableStock}).\n\n` +
+            `Le délai de livraison sera de 8 à 10 jours ouvrés.`
+          )
+        }
+      } catch (error) {
+        console.error('[CartContext] Erreur lors de la vérification du stock:', error)
+      }
+      console.log('[CartContext] Ajout au panier:', item.produit, 'quantité:', item.quantite)
     }
     
     // Normaliser certains champs variants (diamètre / conditionnement) pour le checkout + calcul poids
