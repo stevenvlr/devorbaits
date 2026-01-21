@@ -239,66 +239,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       console.log('[CartContext] Stock réservé pour amicale-blanc:', productId)
     }
     
-    // Si c'est un produit avec productId (livraison), vérifier le stock (système général)
+    // Pas de vérification de stock pour les produits en livraison
+    // On permet l'ajout au panier sans limite de quantité
     if (productId && !item.pointRetrait) {
-      try {
-        // Vérifier le stock disponible (version asynchrone)
-        const availableStock = await getAvailableStock(productId, item.variantId)
-        console.log('[CartContext] Stock disponible pour', productId, ':', availableStock)
-        
-        // Si le stock est à zéro, afficher un message sur le délai de livraison mais permettre l'ajout
-        if (availableStock === 0) {
-          const confirmed = confirm(
-            `⚠️ Stock épuisé pour ${item.produit}\n\n` +
-            `Le délai de livraison sera de 8 à 10 jours ouvrés.\n\n` +
-            `Souhaitez-vous quand même ajouter ce produit au panier ?`
-          )
-          if (!confirmed) {
-            console.log('[CartContext] Utilisateur a annulé l\'ajout du produit en rupture')
-            return
-          }
-          console.log('[CartContext] Utilisateur a confirmé l\'ajout du produit en rupture')
-        } else if (availableStock > 0 && availableStock < item.quantite) {
-          // Stock insuffisant pour la quantité demandée - permettre la pré-commande
-          const quantiteEnStock = availableStock
-          const quantiteEnPrecommande = item.quantite - availableStock
-          const confirmed = confirm(
-            `⚠️ Stock limité pour ${item.produit}\n\n` +
-            `📦 ${quantiteEnStock} unité(s) disponible(s) immédiatement\n` +
-            `⏳ ${quantiteEnPrecommande} unité(s) en pré-commande (délai de 8 à 10 jours ouvrés)\n\n` +
-            `Souhaitez-vous quand même ajouter ${item.quantite} unité(s) au panier ?`
-          )
-          if (!confirmed) {
-            console.log('[CartContext] Utilisateur a annulé l\'ajout avec stock partiel')
-            return
-          }
-          console.log('[CartContext] Utilisateur a confirmé l\'ajout avec stock partiel:', quantiteEnStock, 'immédiat +', quantiteEnPrecommande, 'en pré-commande')
-          // Réserver uniquement le stock disponible
-          const stockReserved = await reserveStock(productId, quantiteEnStock, item.variantId)
-          if (!stockReserved) {
-            console.error('[CartContext] Échec de la réservation du stock partiel pour:', item.produit)
-            // On continue quand même car l'utilisateur a accepté le délai
-          } else {
-            console.log('[CartContext] Stock partiel réservé avec succès:', quantiteEnStock, 'unités')
-          }
-        } else if (availableStock > 0) {
-          // Si le stock est suffisant, réserver normalement
-          const stockReserved = await reserveStock(productId, item.quantite, item.variantId)
-          if (!stockReserved) {
-            console.error('[CartContext] Échec de la réservation du stock pour:', item.produit)
-            alert(`Erreur lors de la réservation du stock pour ${item.produit}.`)
-            return
-          }
-          console.log('[CartContext] Stock réservé avec succès:', item.quantite, 'unités')
-        } else {
-          // availableStock < 0 (illimité) - on continue sans réserver
-          console.log('[CartContext] Stock illimité, pas de réservation nécessaire')
-        }
-      } catch (error) {
-        console.error('[CartContext] Erreur lors de la vérification du stock:', error)
-        // En cas d'erreur, on permet l'ajout au panier pour ne pas bloquer l'utilisateur
-        console.log('[CartContext] Ajout au panier malgré l\'erreur de vérification du stock')
-      }
+      console.log('[CartContext] Ajout au panier sans vérification de stock pour:', item.produit, 'quantité:', item.quantite)
     }
     
     // Normaliser certains champs variants (diamètre / conditionnement) pour le checkout + calcul poids
