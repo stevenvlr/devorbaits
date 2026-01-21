@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import Script from 'next/script'
 import { getBoxtalToken } from '@/src/lib/getBoxtalToken'
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase'
 
@@ -43,8 +42,6 @@ declare global {
       BoxtalParcelPointMap?: any
       searchParcelPoints?: (params: any, callback: (points: any[]) => void) => void
     }
-    __boxtalScriptLoaded?: boolean
-    __boxtalToken?: string | null
   }
 }
 
@@ -73,307 +70,278 @@ function setCachedScriptUrl(url: string) {
   }
 }
 
+// Charger un script dynamiquement
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Vérifier si le script est déjà chargé ET l'API disponible
+    if (window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
+      resolve()
+      return
+    }
+    
+    // Supprimer l'ancien script s'il existe
+    const existingScript = document.getElementById('boxtal-script')
+    if (existingScript) {
+      existingScript.remove()
+    }
+    
+    const script = document.createElement('script')
+    script.id = 'boxtal-script'
+    script.src = src
+    script.async = true
+    
+    script.onload = () => {
+      // Vérifier que l'API est disponible après le chargement
+      setTimeout(() => {
+        if (window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
+          resolve()
+        } else {
+          // Réessayer après un délai
+          setTimeout(() => {
+            if (window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
+              resolve()
+            } else {
+              reject(new Error('API Boxtal non disponible après chargement'))
+            }
+          }, 300)
+        }
+      }, 100)
+    }
+    
+    script.onerror = () => {
+      reject(new Error('Impossible de charger le script Boxtal'))
+    }
+    
+    document.head.appendChild(script)
+  })
+}
+
 export default function BoxtalRelayMap({
   active,
   onSelect,
   initialCity = '',
   initialPostalCode = ''
 }: BoxtalRelayMapProps) {
-  // ID stable du conteneur interne (généré une seule fois)
-  const mapIdRef = useRef(`parcel-point-map-${Math.random().toString(36).slice(2)}`)
-  const mapId = mapIdRef.current
+  // ID unique pour ce composant
+  const componentIdRef = useRef(`boxtal-${Math.random().toString(36).slice(2)}`)
+  const mapId = componentIdRef.current
 
   // Refs
   const hostRef = useRef<HTMLDivElement>(null)
   const mapContainerElementRef = useRef<HTMLDivElement | null>(null)
   const mapInstanceRef = useRef<any>(null)
-  const isInitializedRef = useRef(false)
-  const prevActiveRef = useRef(active)
   const autoSearchDoneRef = useRef(false)
+  const isMountedRef = useRef(true)
 
-  // États - optimisés avec valeurs initiales depuis cache
-  // IMPORTANT: Vérifier que l'objet BoxtalParcelPointMap existe réellement, pas juste le flag
-  const [scriptSrc, setScriptSrc] = useState<string>(() => getCachedScriptUrl() || DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
-  const [scriptUrlReady, setScriptUrlReady] = useState(() => !!getCachedScriptUrl())
-  const [scriptLoaded, setScriptLoaded] = useState(() => {
-    // Le script est vraiment chargé uniquement si l'objet global existe
-    const isReallyLoaded = !!(window?.__boxtalScriptLoaded && window?.BoxtalParcelPointMap?.BoxtalParcelPointMap)
-    // Réinitialiser le flag si le script n'est plus disponible
-    if (window?.__boxtalScriptLoaded && !window?.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
-      window.__boxtalScriptLoaded = false
-    }
-    return isReallyLoaded
-  })
-  const [scriptError, setScriptError] = useState<string | null>(null)
+  // États
+  const [scriptSrc, setScriptSrc] = useState<string>(DEFAULT_BOXTAL_MAP_SCRIPT_SRC)
+  const [isLoading, setIsLoading] = useState(true)
+  const [scriptLoaded, setScriptLoaded] = useState(false)
+  const [token, setToken] = useState<string | null>(null)
   const [mapReady, setMapReady] = useState(false)
-  const [token, setToken] = useState<string | null>(() => window?.__boxtalToken || null)
-  const [tokenError, setTokenError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [searchCity, setSearchCity] = useState(initialCity)
   const [searchPostalCode, setSearchPostalCode] = useState(initialPostalCode)
   const [selectedParcelPoint, setSelectedParcelPoint] = useState<BoxtalParcelPoint | null>(null)
   const [searching, setSearching] = useState(false)
-  const [mapError, setMapError] = useState<string | null>(null)
 
-  // Charger URL script et token EN PARALLÈLE dès le montage
+  // Effet de montage/démontage
   useEffect(() => {
-    let isMounted = true
-
-    const loadResources = async () => {
-      // Lancer les deux requêtes en parallèle
-      const [scriptUrlResult, tokenResult] = await Promise.allSettled([
-        // 1. Récupérer l'URL du script (si pas en cache)
-        (async () => {
-          if (getCachedScriptUrl()) {
-            return getCachedScriptUrl()
-          }
-          
-          if (!isSupabaseConfigured()) {
-            return DEFAULT_BOXTAL_MAP_SCRIPT_SRC
-          }
-
-          const supabase = getSupabaseClient()
-          if (!supabase) {
-            return DEFAULT_BOXTAL_MAP_SCRIPT_SRC
-          }
-
-          try {
-            const { data, error } = await supabase
-              .from('boxtal_config')
-              .select('map_script_url')
-              .limit(1)
-              .single()
-
-            if (error || !data?.map_script_url) {
-              return DEFAULT_BOXTAL_MAP_SCRIPT_SRC
-            }
-
-            // Mettre en cache
-            setCachedScriptUrl(data.map_script_url)
-            return data.map_script_url
-          } catch {
-            return DEFAULT_BOXTAL_MAP_SCRIPT_SRC
-          }
-        })(),
-
-        // 2. Récupérer le token (si pas déjà en mémoire)
-        (async () => {
-          if (window.__boxtalToken) {
-            return window.__boxtalToken
-          }
-          
-          const accessToken = await getBoxtalToken()
-          window.__boxtalToken = accessToken
-          return accessToken
-        })()
-      ])
-
-      if (!isMounted) return
-
-      // Traiter les résultats
-      if (scriptUrlResult.status === 'fulfilled' && scriptUrlResult.value) {
-        setScriptSrc(scriptUrlResult.value)
-        setScriptUrlReady(true)
-      } else {
-        setScriptUrlReady(true) // Utiliser l'URL par défaut
-      }
-
-      if (tokenResult.status === 'fulfilled' && tokenResult.value) {
-        setToken(tokenResult.value)
-      } else if (tokenResult.status === 'rejected') {
-        setTokenError(tokenResult.reason?.message || 'Erreur token')
-      }
-    }
-
-    loadResources()
-
+    isMountedRef.current = true
     return () => {
-      isMounted = false
+      isMountedRef.current = false
     }
   }, [])
 
-  // Créer le div interne et initialiser la carte
+  // Charger les ressources (URL script + token + script) au montage
   useEffect(() => {
-    const wasActive = prevActiveRef.current
-    prevActiveRef.current = active
+    let cancelled = false
 
-    if (!active) {
-      if (wasActive && !active) {
-        requestAnimationFrame(() => {
-          try {
-            if (hostRef.current && hostRef.current.isConnected) {
-              hostRef.current.replaceChildren()
-            }
-          } catch {
-            // Ignorer
-          }
-          mapInstanceRef.current = null
-          mapContainerElementRef.current = null
-          isInitializedRef.current = false
-        })
-      }
-      return
-    }
-
-    // Vérifier les prérequis
-    if (!scriptLoaded || !token || !hostRef.current || !scriptSrc || scriptSrc === 'A_REMPLACER') {
-      return
-    }
-
-    if (!hostRef.current || !hostRef.current.isConnected) {
-      return
-    }
-
-    const computedStyle = window.getComputedStyle(hostRef.current)
-    const isVisible = computedStyle.display !== 'none' && 
-                     computedStyle.visibility !== 'hidden' && 
-                     computedStyle.opacity !== '0' &&
-                     hostRef.current.offsetWidth > 0 &&
-                     hostRef.current.offsetHeight > 0
-
-    if (!isVisible) {
-      return
-    }
-
-    if (mapContainerElementRef.current && mapContainerElementRef.current.isConnected && mapInstanceRef.current) {
-      return
-    }
-
-    if (mapContainerElementRef.current && !mapContainerElementRef.current.isConnected) {
-      mapContainerElementRef.current = null
-      isInitializedRef.current = false
-      mapInstanceRef.current = null
-    }
-
-    if (!window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
-      setScriptError("L'API Boxtal n'est pas disponible.")
-      return
-    }
-
-    let isMounted = true
-
-    const init = () => {
-      if (!active || !hostRef.current || !hostRef.current.isConnected) {
-        return
-      }
+    const init = async () => {
+      setIsLoading(true)
+      setError(null)
+      setScriptLoaded(false)
+      setMapReady(false)
 
       try {
-        const BoxtalParcelPointMap = window.BoxtalParcelPointMap!.BoxtalParcelPointMap
-
-        if (!hostRef.current) return
-
-        // Créer le div interne
-        const mapContainerElement = document.createElement('div')
-        mapContainerElement.id = mapId
-        mapContainerElement.style.cssText = `
-          width: 100%;
-          height: 450px;
-          min-height: 450px;
-          max-height: 450px;
-          position: relative;
-          z-index: 1;
-          display: block;
-          background-color: #f3f4f6;
-          overflow: hidden;
-          isolation: isolate;
-          contain: layout style paint;
-          clip-path: inset(0);
-        `
-        mapContainerElement.className = 'w-full border border-gray-300 rounded-md'
+        // 1. Récupérer l'URL du script
+        let url = getCachedScriptUrl() || DEFAULT_BOXTAL_MAP_SCRIPT_SRC
         
-        // CSS pour limiter les iframes
-        const style = document.createElement('style')
-        style.textContent = `
-          #${mapId} iframe, #${mapId} * {
-            max-width: 100% !important;
-            max-height: 450px !important;
-            overflow: hidden !important;
-          }
-        `
-        document.head.appendChild(style)
-
-        hostRef.current.appendChild(mapContainerElement)
-        mapContainerElementRef.current = mapContainerElement
-
-        // Initialiser immédiatement (réduit de 300ms à 50ms)
-        setTimeout(() => {
-          if (!active || !hostRef.current || !hostRef.current.isConnected || !isMounted) {
-            return
-          }
-
-          mapInstanceRef.current = new BoxtalParcelPointMap({
-            domToLoadMap: '#' + mapId,
-            accessToken: token,
-            config: {
-              locale: 'fr',
-              parcelPointNetworks: [{ code: 'CHRP_NETWORK' }],
-              options: {
-                autoSelectNearestParcelPoint: false
+        if (!getCachedScriptUrl() && isSupabaseConfigured()) {
+          const supabase = getSupabaseClient()
+          if (supabase) {
+            try {
+              const { data } = await supabase
+                .from('boxtal_config')
+                .select('map_script_url')
+                .limit(1)
+                .single()
+              
+              if (data?.map_script_url) {
+                url = data.map_script_url
+                setCachedScriptUrl(url)
               }
-            },
-            onMapLoaded: () => {
-              if (isMounted) {
-                // Réduit de 1500ms à 300ms
-                setTimeout(() => {
-                  setMapReady(true)
-                }, 300)
-              }
-            },
-            onParcelPointSelected: (parcelPoint: any) => {
-              if (isMounted) {
-                // Normaliser l'adresse
-                let normalizedAddress: any = {}
-                
-                if (parcelPoint.address) {
-                  normalizedAddress = {
-                    street: parcelPoint.address.street || parcelPoint.address.address || parcelPoint.address.line1 || '',
-                    postalCode: parcelPoint.address.postalCode || parcelPoint.address.postal_code || parcelPoint.address.zipCode || '',
-                    city: parcelPoint.address.city || parcelPoint.address.ville || parcelPoint.address.locality || '',
-                    country: parcelPoint.address.country || parcelPoint.address.countryCode || 'FR'
-                  }
-                }
-                
-                if (!normalizedAddress.postalCode) {
-                  normalizedAddress.postalCode = parcelPoint.postalCode || parcelPoint.postal_code || parcelPoint.zipCode || ''
-                }
-                if (!normalizedAddress.city) {
-                  normalizedAddress.city = parcelPoint.city || parcelPoint.ville || parcelPoint.locality || ''
-                }
-                if (!normalizedAddress.street) {
-                  normalizedAddress.street = parcelPoint.street || parcelPoint.address || parcelPoint.line1 || ''
-                }
-                
-                const point: BoxtalParcelPoint = {
-                  code: parcelPoint.code || parcelPoint.id || '',
-                  name: parcelPoint.name || parcelPoint.nom || '',
-                  address: normalizedAddress,
-                  coordinates: parcelPoint.coordinates || parcelPoint.coordonnees || {},
-                  network: parcelPoint.network || parcelPoint.networkCode || '',
-                  rawData: parcelPoint,
-                  ...parcelPoint
-                }
-                
-                setSelectedParcelPoint(point)
-                onSelect?.(point)
-              }
+            } catch {
+              // Utiliser l'URL par défaut
             }
-          })
-
-          if (isMounted) {
-            isInitializedRef.current = true
           }
-        }, 50) // Réduit de 300ms à 50ms
-      } catch (error: any) {
-        if (isMounted) {
-          setScriptError(error.message || "Erreur d'initialisation")
+        }
+
+        if (cancelled) return
+        setScriptSrc(url)
+
+        // 2. Charger le token en parallèle avec le script
+        const [tokenResult] = await Promise.allSettled([
+          getBoxtalToken(),
+          loadScript(url)
+        ])
+
+        if (cancelled) return
+
+        if (tokenResult.status === 'fulfilled') {
+          setToken(tokenResult.value)
+        } else {
+          throw new Error('Impossible de récupérer le token Boxtal')
+        }
+
+        // Vérifier que le script est bien chargé
+        if (!window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
+          throw new Error('API Boxtal non disponible')
+        }
+
+        setScriptLoaded(true)
+        setIsLoading(false)
+
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || 'Erreur de chargement')
+          setIsLoading(false)
         }
       }
     }
 
-    // Réduit de 300ms à 50ms
-    setTimeout(init, 50)
+    init()
 
     return () => {
-      isMounted = false
+      cancelled = true
+    }
+  }, []) // Se relance à chaque montage du composant
+
+  // Initialiser la carte quand tout est prêt
+  useEffect(() => {
+    if (!active || !scriptLoaded || !token || !hostRef.current) {
+      return
+    }
+
+    // Vérifier que l'API est disponible
+    if (!window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
+      setError("L'API Boxtal n'est pas disponible")
+      return
+    }
+
+    // Si déjà initialisé, ne pas réinitialiser
+    if (mapContainerElementRef.current && mapContainerElementRef.current.isConnected && mapInstanceRef.current) {
+      return
+    }
+
+    // Nettoyer si nécessaire
+    if (mapContainerElementRef.current && !mapContainerElementRef.current.isConnected) {
+      mapContainerElementRef.current = null
+      mapInstanceRef.current = null
+    }
+
+    const BoxtalParcelPointMap = window.BoxtalParcelPointMap.BoxtalParcelPointMap
+
+    // Créer le conteneur de la carte
+    const mapContainer = document.createElement('div')
+    mapContainer.id = mapId
+    mapContainer.style.cssText = `
+      width: 100%;
+      height: 450px;
+      min-height: 450px;
+      max-height: 450px;
+      position: relative;
+      background-color: #f3f4f6;
+      overflow: hidden;
+    `
+    mapContainer.className = 'w-full border border-gray-300 rounded-md'
+
+    hostRef.current.innerHTML = ''
+    hostRef.current.appendChild(mapContainer)
+    mapContainerElementRef.current = mapContainer
+
+    // Initialiser la carte
+    try {
+      mapInstanceRef.current = new BoxtalParcelPointMap({
+        domToLoadMap: '#' + mapId,
+        accessToken: token,
+        config: {
+          locale: 'fr',
+          parcelPointNetworks: [{ code: 'CHRP_NETWORK' }],
+          options: {
+            autoSelectNearestParcelPoint: false
+          }
+        },
+        onMapLoaded: () => {
+          if (isMountedRef.current) {
+            setTimeout(() => {
+              if (isMountedRef.current) {
+                setMapReady(true)
+              }
+            }, 300)
+          }
+        },
+        onParcelPointSelected: (parcelPoint: any) => {
+          if (!isMountedRef.current) return
+          
+          // Normaliser l'adresse
+          let normalizedAddress: any = {}
+          
+          if (parcelPoint.address) {
+            normalizedAddress = {
+              street: parcelPoint.address.street || parcelPoint.address.address || parcelPoint.address.line1 || '',
+              postalCode: parcelPoint.address.postalCode || parcelPoint.address.postal_code || parcelPoint.address.zipCode || '',
+              city: parcelPoint.address.city || parcelPoint.address.ville || parcelPoint.address.locality || '',
+              country: parcelPoint.address.country || parcelPoint.address.countryCode || 'FR'
+            }
+          }
+          
+          if (!normalizedAddress.postalCode) {
+            normalizedAddress.postalCode = parcelPoint.postalCode || parcelPoint.postal_code || parcelPoint.zipCode || ''
+          }
+          if (!normalizedAddress.city) {
+            normalizedAddress.city = parcelPoint.city || parcelPoint.ville || parcelPoint.locality || ''
+          }
+          if (!normalizedAddress.street) {
+            normalizedAddress.street = parcelPoint.street || parcelPoint.address || parcelPoint.line1 || ''
+          }
+          
+          const point: BoxtalParcelPoint = {
+            code: parcelPoint.code || parcelPoint.id || '',
+            name: parcelPoint.name || parcelPoint.nom || '',
+            address: normalizedAddress,
+            coordinates: parcelPoint.coordinates || parcelPoint.coordonnees || {},
+            network: parcelPoint.network || parcelPoint.networkCode || '',
+            rawData: parcelPoint,
+            ...parcelPoint
+          }
+          
+          setSelectedParcelPoint(point)
+          onSelect?.(point)
+        }
+      })
+    } catch (err: any) {
+      setError(err.message || "Erreur d'initialisation de la carte")
+    }
+
+    return () => {
+      // Cleanup quand le composant se démonte ou active devient false
+      if (hostRef.current) {
+        hostRef.current.innerHTML = ''
+      }
+      mapContainerElementRef.current = null
+      mapInstanceRef.current = null
+      setMapReady(false)
     }
   }, [active, scriptLoaded, token, mapId, onSelect])
 
@@ -381,23 +349,22 @@ export default function BoxtalRelayMap({
   useEffect(() => {
     if (mapReady && initialPostalCode && initialPostalCode.length >= 5 && !autoSearchDoneRef.current) {
       autoSearchDoneRef.current = true
-      // Lancer la recherche automatiquement après un court délai
       setTimeout(() => {
         handleSearchInternal(initialPostalCode, initialCity)
       }, 200)
     }
   }, [mapReady, initialPostalCode, initialCity])
 
-  // Fonction de recherche interne
+  // Fonction de recherche
   const handleSearchInternal = useCallback((postalCode: string, city: string) => {
     if (!postalCode || postalCode.length < 5) return
 
-    setMapError(null)
+    setError(null)
     setSearching(true)
 
     const map = mapInstanceRef.current
 
-    if (!active || !map || typeof map.searchParcelPoints !== "function" || !mapReady) {
+    if (!map || typeof map.searchParcelPoints !== "function" || !mapReady) {
       setSearching(false)
       return
     }
@@ -422,78 +389,51 @@ export default function BoxtalRelayMap({
 
         if (msg.includes("sendCallbackEvent") && tries < 5) {
           tries += 1
-          setTimeout(run, 100) // Réduit de 200ms à 100ms
+          setTimeout(run, 100)
           return
         }
 
-        setMapError(msg || "Erreur de recherche")
+        setError("Erreur lors de la recherche")
         setSearching(false)
       }
     }
 
     run()
-  }, [active, mapReady, onSelect])
+  }, [mapReady, onSelect])
 
-  // Fonction pour le bouton rechercher
   const handleSearch = () => {
     handleSearchInternal(searchPostalCode, searchCity)
   }
 
-  // Afficher l'erreur si l'URL du script n'est pas configurée
-  if (!scriptUrlReady) {
+  // Affichage pendant le chargement
+  if (isLoading) {
     return (
       <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
         <div className="flex items-center gap-2">
           <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-          <p className="text-blue-700 font-medium">Chargement...</p>
+          <p className="text-blue-700 font-medium">Chargement de la carte...</p>
         </div>
       </div>
     )
   }
 
-  if (!scriptSrc || scriptSrc === 'A_REMPLACER') {
+  // Affichage en cas d'erreur
+  if (error && !scriptLoaded) {
     return (
       <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-        <p className="text-red-700 font-medium">Configuration Boxtal manquante</p>
+        <p className="text-red-700 font-medium">Erreur : {error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-2 text-sm text-red-600 underline"
+        >
+          Recharger la page
+        </button>
       </div>
     )
   }
 
   return (
     <div className="w-full space-y-4">
-      {/* Script Boxtal */}
-      <Script
-        id="boxtal-parcelpoint-script"
-        key={scriptSrc}
-        src={scriptSrc}
-        strategy="afterInteractive"
-        onLoad={() => {
-          // Vérifier que l'objet global existe réellement avant de considérer le script comme chargé
-          const checkAndSetLoaded = () => {
-            if (window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
-              window.__boxtalScriptLoaded = true
-              setScriptLoaded(true)
-            } else {
-              // Réessayer après un court délai
-              setTimeout(() => {
-                if (window.BoxtalParcelPointMap?.BoxtalParcelPointMap) {
-                  window.__boxtalScriptLoaded = true
-                  setScriptLoaded(true)
-                } else {
-                  setScriptError('API Boxtal non disponible')
-                }
-              }, 200)
-            }
-          }
-          
-          // Petit délai pour laisser le script s'initialiser
-          setTimeout(checkAndSetLoaded, 50)
-        }}
-        onError={() => {
-          setScriptError('Impossible de charger le script Boxtal')
-        }}
-      />
-
       {/* Formulaire de recherche */}
       <div className="flex gap-2 flex-wrap">
         <div className="flex-1 min-w-[200px]">
@@ -528,7 +468,7 @@ export default function BoxtalRelayMap({
         <div className="flex items-end">
           <button
             onClick={handleSearch}
-            disabled={!mapReady || !mapInstanceRef.current || !searchPostalCode || searchPostalCode.length < 5 || searching}
+            disabled={!mapReady || !searchPostalCode || searchPostalCode.length < 5 || searching}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             {searching ? 'Recherche...' : 'Rechercher'}
@@ -536,10 +476,10 @@ export default function BoxtalRelayMap({
         </div>
       </div>
 
-      {/* Messages d'erreur */}
-      {(mapError || tokenError || scriptError) && (
+      {/* Message d'erreur */}
+      {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700">
-          <p className="text-sm">{mapError || tokenError || scriptError}</p>
+          <p className="text-sm">{error}</p>
         </div>
       )}
 
@@ -549,25 +489,21 @@ export default function BoxtalRelayMap({
         style={{ 
           minHeight: active ? 450 : 0, 
           maxHeight: active ? 450 : 0,
-          height: active && mapContainerElementRef.current ? '450px' : '0',
+          height: active ? '450px' : '0',
           position: 'relative',
           overflow: 'hidden',
-          isolation: 'isolate',
-          zIndex: active ? 1 : -1,
-          pointerEvents: active ? 'auto' : 'none'
+          display: active ? 'block' : 'none'
         }}
         className="w-full"
       >
         {active && !mapReady && (
           <div 
             className="absolute inset-0 flex items-center justify-center text-gray-500 bg-gray-100 rounded-md" 
-            style={{ zIndex: 10, pointerEvents: 'none' }}
+            style={{ zIndex: 10 }}
           >
             <div className="text-center">
-              <div className="animate-spin w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-              <p className="text-sm">
-                {!scriptLoaded ? 'Chargement...' : !token ? 'Connexion...' : 'Initialisation...'}
-              </p>
+              <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+              <p className="text-sm">Initialisation de la carte...</p>
             </div>
           </div>
         )}
