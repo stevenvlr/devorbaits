@@ -127,8 +127,6 @@ export default function BoxtalRelayMap({
   const mapId = componentIdRef.current
 
   // Refs
-  const hostRef = useRef<HTMLDivElement>(null)
-  const mapContainerElementRef = useRef<HTMLDivElement | null>(null)
   const mapInstanceRef = useRef<any>(null)
   const autoSearchDoneRef = useRef(false)
   const isMountedRef = useRef(true)
@@ -229,7 +227,7 @@ export default function BoxtalRelayMap({
 
   // Initialiser la carte quand tout est prêt
   useEffect(() => {
-    if (!active || !scriptLoaded || !token || !hostRef.current) {
+    if (!active || !scriptLoaded || !token) {
       return
     }
 
@@ -240,112 +238,90 @@ export default function BoxtalRelayMap({
     }
 
     // Si déjà initialisé, ne pas réinitialiser
-    if (mapContainerElementRef.current && mapContainerElementRef.current.isConnected && mapInstanceRef.current) {
+    if (mapInstanceRef.current) {
       return
-    }
-
-    // Nettoyer si nécessaire
-    if (mapContainerElementRef.current && !mapContainerElementRef.current.isConnected) {
-      mapContainerElementRef.current = null
-      mapInstanceRef.current = null
     }
 
     const BoxtalParcelPointMap = window.BoxtalParcelPointMap.BoxtalParcelPointMap
 
-    // Créer le conteneur de la carte
-    const mapContainer = document.createElement('div')
-    mapContainer.id = mapId
-    mapContainer.style.cssText = `
-      width: 100%;
-      height: 450px;
-      min-height: 450px;
-      max-height: 450px;
-      position: relative;
-      background-color: #f3f4f6;
-      overflow: hidden;
-    `
-    mapContainer.className = 'w-full border border-gray-300 rounded-md'
-
-    // Vider le conteneur de manière sûre (sans conflit avec React)
-    try {
-      while (hostRef.current.firstChild) {
-        hostRef.current.removeChild(hostRef.current.firstChild)
+    // Attendre que le DOM soit prêt
+    const initMap = () => {
+      const container = document.getElementById(mapId)
+      if (!container) {
+        // Réessayer après un court délai
+        setTimeout(initMap, 100)
+        return
       }
-    } catch {
-      // Ignorer les erreurs de suppression
-    }
-    hostRef.current.appendChild(mapContainer)
-    mapContainerElementRef.current = mapContainer
 
-    // Initialiser la carte
-    try {
-      mapInstanceRef.current = new BoxtalParcelPointMap({
-        domToLoadMap: '#' + mapId,
-        accessToken: token,
-        config: {
-          locale: 'fr',
-          parcelPointNetworks: [{ code: 'CHRP_NETWORK' }],
-          options: {
-            autoSelectNearestParcelPoint: false
-          }
-        },
-        onMapLoaded: () => {
-          if (isMountedRef.current) {
-            setTimeout(() => {
-              if (isMountedRef.current) {
-                setMapReady(true)
-              }
-            }, 300)
-          }
-        },
-        onParcelPointSelected: (parcelPoint: any) => {
-          if (!isMountedRef.current) return
-          
-          // Normaliser l'adresse
-          let normalizedAddress: any = {}
-          
-          if (parcelPoint.address) {
-            normalizedAddress = {
-              street: parcelPoint.address.street || parcelPoint.address.address || parcelPoint.address.line1 || '',
-              postalCode: parcelPoint.address.postalCode || parcelPoint.address.postal_code || parcelPoint.address.zipCode || '',
-              city: parcelPoint.address.city || parcelPoint.address.ville || parcelPoint.address.locality || '',
-              country: parcelPoint.address.country || parcelPoint.address.countryCode || 'FR'
+      try {
+        mapInstanceRef.current = new BoxtalParcelPointMap({
+          domToLoadMap: '#' + mapId,
+          accessToken: token,
+          config: {
+            locale: 'fr',
+            parcelPointNetworks: [{ code: 'CHRP_NETWORK' }],
+            options: {
+              autoSelectNearestParcelPoint: false
             }
+          },
+          onMapLoaded: () => {
+            if (isMountedRef.current) {
+              setTimeout(() => {
+                if (isMountedRef.current) {
+                  setMapReady(true)
+                }
+              }, 300)
+            }
+          },
+          onParcelPointSelected: (parcelPoint: any) => {
+            if (!isMountedRef.current) return
+            
+            // Normaliser l'adresse
+            let normalizedAddress: any = {}
+            
+            if (parcelPoint.address) {
+              normalizedAddress = {
+                street: parcelPoint.address.street || parcelPoint.address.address || parcelPoint.address.line1 || '',
+                postalCode: parcelPoint.address.postalCode || parcelPoint.address.postal_code || parcelPoint.address.zipCode || '',
+                city: parcelPoint.address.city || parcelPoint.address.ville || parcelPoint.address.locality || '',
+                country: parcelPoint.address.country || parcelPoint.address.countryCode || 'FR'
+              }
+            }
+            
+            if (!normalizedAddress.postalCode) {
+              normalizedAddress.postalCode = parcelPoint.postalCode || parcelPoint.postal_code || parcelPoint.zipCode || ''
+            }
+            if (!normalizedAddress.city) {
+              normalizedAddress.city = parcelPoint.city || parcelPoint.ville || parcelPoint.locality || ''
+            }
+            if (!normalizedAddress.street) {
+              normalizedAddress.street = parcelPoint.street || parcelPoint.address || parcelPoint.line1 || ''
+            }
+            
+            const point: BoxtalParcelPoint = {
+              code: parcelPoint.code || parcelPoint.id || '',
+              name: parcelPoint.name || parcelPoint.nom || '',
+              address: normalizedAddress,
+              coordinates: parcelPoint.coordinates || parcelPoint.coordonnees || {},
+              network: parcelPoint.network || parcelPoint.networkCode || '',
+              rawData: parcelPoint,
+              ...parcelPoint
+            }
+            
+            setSelectedParcelPoint(point)
+            onSelect?.(point)
           }
-          
-          if (!normalizedAddress.postalCode) {
-            normalizedAddress.postalCode = parcelPoint.postalCode || parcelPoint.postal_code || parcelPoint.zipCode || ''
-          }
-          if (!normalizedAddress.city) {
-            normalizedAddress.city = parcelPoint.city || parcelPoint.ville || parcelPoint.locality || ''
-          }
-          if (!normalizedAddress.street) {
-            normalizedAddress.street = parcelPoint.street || parcelPoint.address || parcelPoint.line1 || ''
-          }
-          
-          const point: BoxtalParcelPoint = {
-            code: parcelPoint.code || parcelPoint.id || '',
-            name: parcelPoint.name || parcelPoint.nom || '',
-            address: normalizedAddress,
-            coordinates: parcelPoint.coordinates || parcelPoint.coordonnees || {},
-            network: parcelPoint.network || parcelPoint.networkCode || '',
-            rawData: parcelPoint,
-            ...parcelPoint
-          }
-          
-          setSelectedParcelPoint(point)
-          onSelect?.(point)
-        }
-      })
-    } catch (err: any) {
-      setError(err.message || "Erreur d'initialisation de la carte")
+        })
+      } catch (err: any) {
+        setError(err.message || "Erreur d'initialisation de la carte")
+      }
     }
+
+    // Lancer l'initialisation
+    setTimeout(initMap, 50)
 
     return () => {
-      // Cleanup quand le composant se démonte ou active devient false
-      // Ne PAS manipuler le DOM ici car React le fait automatiquement
-      // Juste nettoyer les refs
-      mapContainerElementRef.current = null
+      // Juste nettoyer les refs, ne pas toucher au DOM
       mapInstanceRef.current = null
     }
   }, [active, scriptLoaded, token, mapId, onSelect])
@@ -488,31 +464,34 @@ export default function BoxtalRelayMap({
         </div>
       )}
 
-      {/* Conteneur de la carte */}
-      <div
-        ref={hostRef}
-        style={{ 
-          minHeight: active ? 450 : 0, 
-          maxHeight: active ? 450 : 0,
-          height: active ? '450px' : '0',
-          position: 'relative',
-          overflow: 'hidden',
-          display: active ? 'block' : 'none'
-        }}
-        className="w-full"
-      >
-        {active && !mapReady && (
-          <div 
-            className="absolute inset-0 flex items-center justify-center text-gray-500 bg-gray-100 rounded-md" 
-            style={{ zIndex: 10 }}
-          >
-            <div className="text-center">
-              <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-              <p className="text-sm">Initialisation de la carte...</p>
+      {/* Conteneur de la carte - géré entièrement par React */}
+      {active && (
+        <div style={{ position: 'relative', width: '100%', height: '450px' }}>
+          {/* Le conteneur où Boxtal va injecter la carte */}
+          <div
+            id={mapId}
+            style={{ 
+              width: '100%',
+              height: '450px',
+              backgroundColor: '#f3f4f6',
+              overflow: 'hidden'
+            }}
+            className="w-full border border-gray-300 rounded-md"
+          />
+          {/* Overlay de chargement */}
+          {!mapReady && (
+            <div 
+              className="absolute inset-0 flex items-center justify-center text-gray-500 bg-gray-100 rounded-md" 
+              style={{ zIndex: 10 }}
+            >
+              <div className="text-center">
+                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                <p className="text-sm">Initialisation de la carte...</p>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Point sélectionné */}
       {selectedParcelPoint && (
