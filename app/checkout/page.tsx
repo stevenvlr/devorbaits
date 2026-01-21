@@ -29,6 +29,7 @@ import PayPalButton from '@/components/PayPalButton'
 import { calculateCartWeightAsync } from '@/lib/product-weights'
 import BoxtalRelayMap, { type BoxtalParcelPoint } from '@/components/BoxtalRelayMap'
 import type { ChronopostRelaisPoint } from '@/components/ChronopostRelaisWidget'
+import { sendNewOrderNotification } from '@/lib/telegram-notifications'
 
 type RetraitMode = 'livraison' | 'amicale-blanc' | 'wavignies-rdv' | 'chronopost-relais'
 type PaymentMethod = 'card' | 'paypal' 
@@ -839,6 +840,26 @@ export default function CheckoutPage() {
 
         // Supprimer la commande en attente
         localStorage.removeItem(`pending-order-${orderReference}`)
+        
+        // Envoyer notification Telegram
+        try {
+          await sendNewOrderNotification({
+            reference: orderReference,
+            total: finalTotal,
+            itemCount: cartItems.length,
+            customerName: user?.nom || user?.email,
+            customerEmail: user?.email,
+            shippingCost: calculatedShippingCost,
+            retraitMode: retraitMode,
+            items: cartItems.map(item => ({
+              produit: item.produit,
+              quantity: item.quantite,
+              price: item.prix
+            }))
+          })
+        } catch (telegramError) {
+          console.warn('⚠️ Erreur notification Telegram:', telegramError)
+        }
 
         // Vider le panier
         clearCart()
@@ -2098,6 +2119,26 @@ export default function CheckoutPage() {
                               }
                             } catch (invoiceError) {
                               console.warn('⚠️ Erreur appel API auto-invoice (PayPal):', invoiceError)
+                            }
+                            
+                            // Envoyer notification Telegram
+                            try {
+                              await sendNewOrderNotification({
+                                reference: currentRef,
+                                total: finalTotal,
+                                itemCount: cartItems.length,
+                                customerName: user?.nom || user?.email,
+                                customerEmail: user?.email,
+                                shippingCost: calculatedShippingCost,
+                                retraitMode: retraitMode,
+                                items: cartItems.map(item => ({
+                                  produit: item.produit,
+                                  quantity: item.quantite,
+                                  price: item.prix
+                                }))
+                              })
+                            } catch (telegramError) {
+                              console.warn('⚠️ Erreur notification Telegram:', telegramError)
                             }
                           }
 

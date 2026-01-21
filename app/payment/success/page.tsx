@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { createOrder, updateOrderStatus, getOrderByReference, type OrderItem } from '@/lib/revenue-supabase'
 import { loadProducts } from '@/lib/products-manager'
 import { getPromoCodeByCode, recordPromoCodeUsageAsync } from '@/lib/promo-codes-manager'
+import { sendNewOrderNotification } from '@/lib/telegram-notifications'
 
 function PaymentSuccessContent() {
   const router = useRouter()
@@ -351,6 +352,26 @@ function PaymentSuccessContent() {
                 }
               } catch (invoiceError) {
                 console.warn('⚠️ Erreur appel API auto-invoice (Monetico):', invoiceError)
+              }
+              
+              // Envoyer notification Telegram
+              try {
+                await sendNewOrderNotification({
+                  reference: returnData.reference || '',
+                  total: total,
+                  itemCount: orderItems.length,
+                  customerName: user?.nom || user?.email,
+                  customerEmail: user?.email,
+                  shippingCost: pendingOrder?.shippingCost,
+                  retraitMode: pendingOrder?.retraitMode,
+                  items: orderItems.map((item: any) => ({
+                    produit: item.produit,
+                    quantity: item.quantity,
+                    price: item.price
+                  }))
+                })
+              } catch (telegramError) {
+                console.warn('⚠️ Erreur notification Telegram:', telegramError)
               }
             }
             
