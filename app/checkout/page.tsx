@@ -862,6 +862,8 @@ export default function CheckoutPage() {
               <div className="space-y-4">
                 {cartItems.map((item) => {
                   const availableAtAmicale = isAvailableAtAmicale(item)
+                  // Trouver la réduction du code promo pour cet article
+                  const promoItemDiscount = promoValidation?.appliedItems?.find(ai => ai.itemId === item.id)?.discount || 0
                   
                   return (
                     <div key={item.id} className="flex items-start justify-between p-4 bg-noir-900/50 rounded-lg border border-noir-700">
@@ -897,17 +899,35 @@ export default function CheckoutPage() {
                               const prixAvecPromo = getItemPrice(item)
                               const prixOriginal = item.prixOriginal !== undefined ? item.prixOriginal : item.prix
                               const hasPromotion = promotion && promotion.active && prixAvecPromo < prixOriginal
+                              const prixApresPromoGlobale = prixAvecPromo * item.quantite
+                              const prixFinal = prixApresPromoGlobale - promoItemDiscount
                               
                               return (
                                 <div>
+                                  {/* Prix original barré si promo globale */}
                                   {hasPromotion && (
-                                    <p className="text-sm text-gray-400 line-through mb-1">
+                                    <p className="text-sm text-gray-500 line-through">
                                       {(prixOriginal * item.quantite).toFixed(2)} €
                                     </p>
                                   )}
-                                  <p className="text-xl font-bold text-yellow-500">
-                                    {(prixAvecPromo * item.quantite).toFixed(2)} €
-                                  </p>
+                                  {/* Prix après promo globale, barré si code promo appliqué */}
+                                  {promoItemDiscount > 0 ? (
+                                    <>
+                                      <p className="text-sm text-gray-400 line-through">
+                                        {prixApresPromoGlobale.toFixed(2)} €
+                                      </p>
+                                      <p className="text-xl font-bold text-yellow-500">
+                                        {prixFinal.toFixed(2)} €
+                                      </p>
+                                      <p className="text-xs text-green-400 mt-1">
+                                        -{promoItemDiscount.toFixed(2)} € (code promo)
+                                      </p>
+                                    </>
+                                  ) : (
+                                    <p className="text-xl font-bold text-yellow-500">
+                                      {prixApresPromoGlobale.toFixed(2)} €
+                                    </p>
+                                  )}
                                 </div>
                               )
                             })()}
