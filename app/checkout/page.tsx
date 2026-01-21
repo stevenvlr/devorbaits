@@ -1220,7 +1220,12 @@ export default function CheckoutPage() {
                   </label>
                 )}
 
-                {/* Option Wavignies sur RDV */}
+              </div>
+              )}
+              {/* Fin du bloc conditionnel pour poids <= 50 kg */}
+
+              {/* Option Wavignies sur RDV - Toujours disponible */}
+              <div className={`${totalWeight <= 50 ? 'mt-3' : ''}`}>
                 <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
                   style={{
                     borderColor: retraitMode === 'wavignies-rdv' ? '#EAB308' : '#374151',
@@ -1243,8 +1248,6 @@ export default function CheckoutPage() {
                   </div>
                 </label>
               </div>
-              )}
-              {/* Fin du bloc conditionnel pour poids <= 50 kg */}
 
             </div>
           </div>
