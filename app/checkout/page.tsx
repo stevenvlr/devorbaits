@@ -162,15 +162,40 @@ export default function CheckoutPage() {
     calculateWeight()
   }, [cartItems])
 
-  // Forcer Chronopost Relais si le poids est inférieur à 18 kg
+  // Gérer le mode de livraison selon le poids
+  // 0-18 kg: Point relais uniquement
+  // 18.01-28 kg: Domicile uniquement
+  // 28.01-38 kg: Point relais (2 colis)
+  // 38.01-50 kg: Domicile (2 colis)
+  // >50 kg: Nous contacter (blocage)
   useEffect(() => {
-    const WEIGHT_LIMIT = 18 // Limite en kg
-    
-    // Si le poids est inférieur à 18 kg et que le mode est 'livraison', forcer 'chronopost-relais'
-    if (totalWeight < WEIGHT_LIMIT && retraitMode === 'livraison') {
-      console.log(`⚠️ Poids ${totalWeight.toFixed(2)}kg < ${WEIGHT_LIMIT}kg - Forçage Chronopost Relais`)
-      setRetraitMode('chronopost-relais')
+    // Forcer le mode selon le poids
+    if (totalWeight <= 18) {
+      // 0-18 kg: Point relais uniquement
+      if (retraitMode === 'livraison') {
+        console.log(`⚠️ Poids ${totalWeight.toFixed(2)}kg <= 18kg - Forçage Chronopost Relais`)
+        setRetraitMode('chronopost-relais')
+      }
+    } else if (totalWeight > 18 && totalWeight <= 28) {
+      // 18.01-28 kg: Domicile uniquement
+      if (retraitMode === 'chronopost-relais') {
+        console.log(`⚠️ Poids ${totalWeight.toFixed(2)}kg entre 18.01-28kg - Forçage Livraison domicile`)
+        setRetraitMode('livraison')
+      }
+    } else if (totalWeight > 28 && totalWeight <= 38) {
+      // 28.01-38 kg: Point relais (2 colis)
+      if (retraitMode === 'livraison') {
+        console.log(`⚠️ Poids ${totalWeight.toFixed(2)}kg entre 28.01-38kg - Forçage Chronopost Relais (2 colis)`)
+        setRetraitMode('chronopost-relais')
+      }
+    } else if (totalWeight > 38 && totalWeight <= 50) {
+      // 38.01-50 kg: Domicile (2 colis)
+      if (retraitMode === 'chronopost-relais') {
+        console.log(`⚠️ Poids ${totalWeight.toFixed(2)}kg entre 38.01-50kg - Forçage Livraison domicile (2 colis)`)
+        setRetraitMode('livraison')
+      }
     }
+    // >50 kg: pas de forçage, mais blocage affiché ailleurs
   }, [totalWeight, retraitMode])
 
   // Calculer le prix d'expédition basé sur les tarifs configurés
@@ -184,10 +209,16 @@ export default function CheckoutPage() {
         // Utiliser le poids total calculé depuis la base de données
         // (déjà calculé dans le useEffect précédent)
         
+        // Calculer si on est en mode 2 colis (poids > 28 kg)
+        const isDoubleShipment = totalWeight > 28 && totalWeight <= 50
+        // Pour le calcul du tarif, on divise le poids par 2 si 2 colis
+        const weightForPricing = isDoubleShipment ? totalWeight / 2 : totalWeight
+        
         // Log pour debug
         console.log('🛒 Calcul expédition - Articles:', cartItems.length, 
           'Quantité totale:', cartItems.reduce((sum, item) => sum + item.quantite, 0),
-          'Poids total RÉEL (depuis DB):', totalWeight.toFixed(2), 'kg')
+          'Poids total RÉEL (depuis DB):', totalWeight.toFixed(2), 'kg',
+          isDoubleShipment ? `(2 colis de ${weightForPricing.toFixed(2)}kg)` : '')
 
         // Calculer la valeur totale avec promotion
         const totalValue = cartItems.reduce(
@@ -230,36 +261,36 @@ export default function CheckoutPage() {
             if (shippingPrice.min_order_value && totalValue < shippingPrice.min_order_value) {
               console.log('⚠️ Commande inférieure au minimum requis:', shippingPrice.min_order_value, '€')
               // Utiliser un prix par défaut si le minimum n'est pas atteint
-              const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
-              setShippingCost(defaultPrice)
+              const defaultPrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
+              setShippingCost(isDoubleShipment ? defaultPrice * 2 : defaultPrice)
               return
             }
             
-            // Vérifier les limites de poids
-            if (shippingPrice.min_weight && totalWeight < shippingPrice.min_weight) {
+            // Vérifier les limites de poids (utiliser weightForPricing pour le calcul)
+            if (shippingPrice.min_weight && weightForPricing < shippingPrice.min_weight) {
               console.log('⚠️ Poids inférieur au minimum:', shippingPrice.min_weight, 'kg')
-              const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
-              setShippingCost(defaultPrice)
+              const defaultPrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
+              setShippingCost(isDoubleShipment ? defaultPrice * 2 : defaultPrice)
               return
             }
-            if (shippingPrice.max_weight && totalWeight > shippingPrice.max_weight) {
+            if (shippingPrice.max_weight && weightForPricing > shippingPrice.max_weight) {
               console.log('⚠️ Poids supérieur au maximum:', shippingPrice.max_weight, 'kg')
-              const defaultPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
-              setShippingCost(defaultPrice)
+              const defaultPrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
+              setShippingCost(isDoubleShipment ? defaultPrice * 2 : defaultPrice)
               return
             }
             
-            // Calculer le prix selon le type de tarif
+            // Calculer le prix selon le type de tarif (utiliser weightForPricing)
             let finalPrice = 0
             
             if (shippingPrice.type === 'fixed' && shippingPrice.fixed_price !== undefined) {
               finalPrice = shippingPrice.fixed_price
               console.log('💰 Prix fixe:', finalPrice, '€')
             } else if (shippingPrice.type === 'weight_ranges' && shippingPrice.weight_ranges) {
-              // Trouver la tranche de poids correspondante
+              // Trouver la tranche de poids correspondante (utiliser weightForPricing)
               let found = false
               for (const range of shippingPrice.weight_ranges) {
-                if (totalWeight >= range.min && (range.max === null || totalWeight <= range.max)) {
+                if (weightForPricing >= range.min && (range.max === null || weightForPricing <= range.max)) {
                   finalPrice = range.price
                   found = true
                   console.log('📊 Tranche trouvée:', range.min, '-', range.max || '∞', 'kg →', finalPrice, '€')
@@ -269,23 +300,29 @@ export default function CheckoutPage() {
               // Si aucune tranche ne correspond, utiliser un prix par défaut
               if (!found) {
                 console.warn('⚠️ Aucune tranche de poids ne correspond, utilisation prix par défaut')
-                finalPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+                finalPrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
               }
             } else if (shippingPrice.type === 'margin_percent' && shippingPrice.margin_percent !== undefined) {
               // Pour les marges en pourcentage, on a besoin d'un prix de base
               // Utiliser un prix de base par défaut basé sur le poids
-              const basePrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+              const basePrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
               finalPrice = basePrice * (1 + shippingPrice.margin_percent / 100)
               console.log('📈 Marge %:', shippingPrice.margin_percent, '% sur', basePrice, '€ =', finalPrice, '€')
             } else if (shippingPrice.type === 'margin_fixed' && shippingPrice.margin_fixed !== undefined) {
               // Pour les marges fixes, on a besoin d'un prix de base
-              const basePrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+              const basePrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
               finalPrice = basePrice + shippingPrice.margin_fixed
               console.log('➕ Marge fixe:', shippingPrice.margin_fixed, '€ sur', basePrice, '€ =', finalPrice, '€')
             } else {
               // Type non reconnu, utiliser un prix par défaut
               console.warn('⚠️ Type de tarif non reconnu:', shippingPrice.type)
-              finalPrice = totalWeight <= 1 ? 10 : totalWeight <= 5 ? 15 : 20
+              finalPrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
+            }
+            
+            // Doubler le prix si 2 colis
+            if (isDoubleShipment) {
+              console.log('📦📦 Double expédition: prix unitaire', finalPrice, '€ x 2 =', finalPrice * 2, '€')
+              finalPrice = finalPrice * 2
             }
             
             // Appliquer le prix calculé
@@ -294,12 +331,13 @@ export default function CheckoutPage() {
             // Appliquer le tarif sponsor si applicable (remplace le tarif normal)
             console.log('🎁 Vérification sponsor - user:', user?.email, 'isSponsored:', user?.isSponsored)
             if (user?.isSponsored === true) {
-              console.log('🎁 Utilisateur sponsor détecté, récupération du tarif pour poids:', totalWeight, 'kg')
-              const sponsorPrice = await getSponsorShippingPrice(totalWeight)
+              console.log('🎁 Utilisateur sponsor détecté, récupération du tarif pour poids:', weightForPricing, 'kg')
+              const sponsorPrice = await getSponsorShippingPrice(weightForPricing)
               console.log('🎁 Tarif sponsor retourné:', sponsorPrice)
               if (sponsorPrice !== null && sponsorPrice >= 0) {
                 const normalPrice = rounded
-                rounded = sponsorPrice
+                // Doubler aussi le tarif sponsor si 2 colis
+                rounded = isDoubleShipment ? sponsorPrice * 2 : sponsorPrice
                 const discount = Math.max(0, normalPrice - rounded)
                 console.log(`🎁 Tarif sponsor appliqué: ${rounded}€ (économie: ${discount.toFixed(2)}€)`)
                 setSponsorShippingDiscount(discount)
@@ -458,6 +496,11 @@ export default function CheckoutPage() {
 
   // Vérifier si le formulaire est valide pour le paiement
   const isFormValid = () => {
+    // Bloquer si le poids dépasse 50 kg
+    if (totalWeight > 50) {
+      return false
+    }
+    
     // Les CGV doivent toujours être acceptées
     if (!cgvAccepted) {
       return false
@@ -947,17 +990,76 @@ export default function CheckoutPage() {
             <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6">
               <h2 className="text-2xl font-bold mb-6">Mode de retrait</h2>
               
-              {/* Message informatif pour colis < 18kg */}
+              {/* Message informatif selon le poids */}
               {(() => {
-                const WEIGHT_LIMIT = 18
-                if (totalWeight < WEIGHT_LIMIT) {
+                // > 50 kg : Blocage total
+                if (totalWeight > 50) {
+                  return (
+                    <div className="mb-4 bg-red-500/20 border border-red-500/50 rounded-lg p-4">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-red-300">
+                          <p className="font-semibold mb-1">Commande trop lourde ({totalWeight.toFixed(1)} kg)</p>
+                          <p className="mb-2">Les commandes de plus de 50 kg nécessitent un devis personnalisé.</p>
+                          <a href="/contact" className="inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Nous contacter
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                // 38.01-50 kg : Domicile 2 colis
+                if (totalWeight > 38 && totalWeight <= 50) {
+                  return (
+                    <div className="mb-4 bg-orange-500/10 border border-orange-500/50 rounded-lg p-4">
+                      <div className="flex items-start gap-2">
+                        <Package className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-orange-300">
+                          <p className="font-semibold mb-1">Expédition en 2 colis ({totalWeight.toFixed(1)} kg)</p>
+                          <p>Votre commande sera expédiée en <strong>2 colis à domicile</strong>. Les frais de port sont calculés en conséquence.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                // 28.01-38 kg : Point relais 2 colis
+                if (totalWeight > 28 && totalWeight <= 38) {
+                  return (
+                    <div className="mb-4 bg-orange-500/10 border border-orange-500/50 rounded-lg p-4">
+                      <div className="flex items-start gap-2">
+                        <Package className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-orange-300">
+                          <p className="font-semibold mb-1">Expédition en 2 colis ({totalWeight.toFixed(1)} kg)</p>
+                          <p>Votre commande sera expédiée en <strong>2 colis en point relais</strong>. Les frais de port sont calculés en conséquence.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                // 18.01-28 kg : Domicile uniquement
+                if (totalWeight > 18 && totalWeight <= 28) {
                   return (
                     <div className="mb-4 bg-blue-500/10 border border-blue-500/50 rounded-lg p-4">
                       <div className="flex items-start gap-2">
-                        <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                        <Truck className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                         <div className="text-sm text-blue-300">
-                          <p className="font-semibold mb-1">Colis de {totalWeight.toFixed(2)} kg</p>
-                          <p>Les colis pesant moins de {WEIGHT_LIMIT} kg doivent être envoyés par <strong>Chronopost Relais</strong>.</p>
+                          <p className="font-semibold mb-1">Livraison à domicile uniquement ({totalWeight.toFixed(1)} kg)</p>
+                          <p>Les colis entre 18 et 28 kg sont livrés exclusivement <strong>à domicile</strong>.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                // 0-18 kg : Point relais uniquement
+                if (totalWeight > 0 && totalWeight <= 18) {
+                  return (
+                    <div className="mb-4 bg-blue-500/10 border border-blue-500/50 rounded-lg p-4">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-blue-300">
+                          <p className="font-semibold mb-1">Point relais uniquement ({totalWeight.toFixed(1)} kg)</p>
+                          <p>Les colis de moins de 18 kg sont livrés exclusivement en <strong>point relais Chronopost</strong>.</p>
                         </div>
                       </div>
                     </div>
@@ -966,11 +1068,15 @@ export default function CheckoutPage() {
                 return null
               })()}
               
+              {/* Masquer les options si > 50 kg */}
+              {totalWeight <= 50 && (
               <div className="space-y-3">
-                {/* Option Livraison */}
+                {/* Option Livraison à domicile */}
                 {(() => {
-                  const WEIGHT_LIMIT = 18
-                  const isDisabled = totalWeight < WEIGHT_LIMIT
+                  // Domicile disponible : 18.01-28 kg OU 38.01-50 kg
+                  const isAvailable = (totalWeight > 18 && totalWeight <= 28) || (totalWeight > 38 && totalWeight <= 50)
+                  const isDisabled = !isAvailable
+                  const is2Colis = totalWeight > 38 && totalWeight <= 50
                   
                   return (
                     <label className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-all ${
@@ -999,6 +1105,11 @@ export default function CheckoutPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <Truck className="w-5 h-5 text-yellow-500" />
                           <span className="font-semibold text-lg">Livraison à domicile</span>
+                          {is2Colis && !isDisabled && (
+                            <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded">
+                              2 colis
+                            </span>
+                          )}
                           {isDisabled && (
                             <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded">
                               Non disponible
@@ -1007,8 +1118,10 @@ export default function CheckoutPage() {
                         </div>
                         <p className="text-sm text-gray-400">
                           {isDisabled 
-                            ? `Disponible uniquement pour les colis de ${WEIGHT_LIMIT} kg et plus`
-                            : 'Livraison de toute la commande à votre adresse'
+                            ? 'Disponible pour les colis de 18 à 28 kg ou de 38 à 50 kg'
+                            : is2Colis 
+                              ? 'Expédition en 2 colis à votre adresse'
+                              : 'Livraison de toute la commande à votre adresse'
                           }
                         </p>
                       </div>
@@ -1017,27 +1130,62 @@ export default function CheckoutPage() {
                 })()}
 
                 {/* Option Chronopost Relais */}
-                <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
-                  style={{
-                    borderColor: retraitMode === 'chronopost-relais' ? '#EAB308' : '#374151',
-                    backgroundColor: retraitMode === 'chronopost-relais' ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
-                  }}>
-                  <input
-                    type="radio"
-                    name="retrait-mode"
-                    value="chronopost-relais"
-                    checked={retraitMode === 'chronopost-relais'}
-                    onChange={(e) => setRetraitMode(e.target.value as RetraitMode)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <MapPin className="w-5 h-5 text-yellow-500" />
-                      <span className="font-semibold text-lg">Chronopost Relais</span>
-                    </div>
-                    <p className="text-sm text-gray-400">Retrait dans un point relais Chronopost près de chez vous</p>
-                  </div>
-                </label>
+                {(() => {
+                  // Relais disponible : 0-18 kg OU 28.01-38 kg
+                  const isAvailable = (totalWeight <= 18) || (totalWeight > 28 && totalWeight <= 38)
+                  const isDisabled = !isAvailable
+                  const is2Colis = totalWeight > 28 && totalWeight <= 38
+                  
+                  return (
+                    <label className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-all ${
+                      isDisabled 
+                        ? 'opacity-50 cursor-not-allowed' 
+                        : 'cursor-pointer hover:bg-noir-900/50'
+                    }`}
+                      style={{
+                        borderColor: retraitMode === 'chronopost-relais' && !isDisabled ? '#EAB308' : '#374151',
+                        backgroundColor: retraitMode === 'chronopost-relais' && !isDisabled ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
+                      }}>
+                      <input
+                        type="radio"
+                        name="retrait-mode"
+                        value="chronopost-relais"
+                        checked={retraitMode === 'chronopost-relais'}
+                        onChange={(e) => {
+                          if (!isDisabled) {
+                            setRetraitMode(e.target.value as RetraitMode)
+                          }
+                        }}
+                        disabled={isDisabled}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <MapPin className="w-5 h-5 text-yellow-500" />
+                          <span className="font-semibold text-lg">Chronopost Relais</span>
+                          {is2Colis && !isDisabled && (
+                            <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded">
+                              2 colis
+                            </span>
+                          )}
+                          {isDisabled && (
+                            <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded">
+                              Non disponible
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-400">
+                          {isDisabled 
+                            ? 'Disponible pour les colis de moins de 18 kg ou de 28 à 38 kg'
+                            : is2Colis
+                              ? 'Expédition en 2 colis en point relais'
+                              : 'Retrait dans un point relais Chronopost près de chez vous'
+                          }
+                        </p>
+                      </div>
+                    </label>
+                  )
+                })()}
 
                 {/* Option Amicale des pêcheurs */}
                 {produitsDisponiblesAmicale.length > 0 && (
@@ -1087,6 +1235,8 @@ export default function CheckoutPage() {
                   </div>
                 </label>
               </div>
+              )}
+              {/* Fin du bloc conditionnel pour poids <= 50 kg */}
 
             </div>
           </div>
