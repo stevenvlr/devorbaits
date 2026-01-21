@@ -1000,10 +1000,18 @@ export default function CheckoutPage() {
                         <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                         <div className="text-sm text-red-300">
                           <p className="font-semibold mb-1">Commande trop lourde ({totalWeight.toFixed(1)} kg)</p>
-                          <p className="mb-2">Les commandes de plus de 50 kg nécessitent un devis personnalisé.</p>
-                          <a href="/contact" className="inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
-                            Nous contacter
-                          </a>
+                          <p className="mb-3">Les commandes de plus de 50 kg nécessitent un devis personnalisé. Contactez-nous :</p>
+                          <div className="flex flex-wrap gap-2">
+                            <a href="mailto:contact@devorbaits.com" className="inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg transition-colors text-xs">
+                              <span>📧</span> contact@devorbaits.com
+                            </a>
+                            <a href="tel:+33761288512" className="inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg transition-colors text-xs">
+                              <span>📞</span> 07 61 28 85 12
+                            </a>
+                            <a href="https://www.facebook.com/profile.php?id=100055390522858" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg transition-colors text-xs">
+                              <span>📘</span> Facebook
+                            </a>
+                          </div>
                         </div>
                       </div>
                     </div>
