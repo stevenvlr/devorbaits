@@ -518,18 +518,25 @@ export async function getSponsorShippingRates(): Promise<SponsorShippingRate[]> 
  * Calcule le prix d'expédition pour un sponsor selon le poids
  */
 export async function getSponsorShippingPrice(weight: number): Promise<number | null> {
+  console.log('🎁 getSponsorShippingPrice - Poids:', weight, 'kg')
   const rates = await getSponsorShippingRates()
   
+  console.log('🎁 Tarifs sponsors récupérés:', rates.length, 'tranches')
+  
   if (rates.length === 0) {
+    console.log('⚠️ Aucun tarif sponsor configuré')
     return null
   }
 
   for (const rate of rates) {
+    console.log(`🎁 Vérification tranche: ${rate.min_weight}-${rate.max_weight ?? '∞'}kg = ${rate.price}€`)
     if (weight >= rate.min_weight && (rate.max_weight === null || weight <= rate.max_weight)) {
+      console.log(`✅ Tarif sponsor trouvé: ${rate.price}€`)
       return rate.price
     }
   }
 
+  console.log('⚠️ Aucune tranche ne correspond au poids')
   return null
 }
 

@@ -292,7 +292,9 @@ export default function CheckoutPage() {
             let rounded = Math.round(finalPrice * 100) / 100
             
             // Appliquer le tarif sponsor si applicable (remplace le tarif normal)
+            console.log('🎁 Vérification sponsor - user.isSponsored:', user?.isSponsored)
             if (user?.isSponsored) {
+              console.log('🎁 Utilisateur sponsor détecté, récupération du tarif...')
               const sponsorPrice = await getSponsorShippingPrice(totalWeight)
               if (sponsorPrice !== null) {
                 const normalPrice = rounded
