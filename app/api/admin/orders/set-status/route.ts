@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { buildProductNameWithVariants } from '@/lib/price-utils'
 
 export const runtime = 'edge'
 
@@ -95,14 +96,20 @@ async function getInvoiceLines(params: {
   const mapped: InvoiceLine[] = []
   for (const raw of items) {
     const r = raw as any
-    const name =
-      (typeof r?.name === 'string' && r.name.trim() !== ''
-        ? r.name.trim()
-        : typeof r?.produit === 'string' && r.produit.trim() !== ''
-          ? r.produit.trim()
-          : typeof r?.product_id === 'string' && r.product_id.trim() !== ''
-            ? r.product_id.trim()
-            : 'Article') || 'Article'
+    // Utiliser la fonction utilitaire pour construire le nom complet avec variantes et conditionnements
+    const name = buildProductNameWithVariants({
+      produit: r?.produit,
+      name: r?.name,
+      product_id: r?.product_id,
+      arome: r?.arome,
+      taille: r?.taille,
+      couleur: r?.couleur,
+      diametre: r?.diametre,
+      conditionnement: r?.conditionnement,
+      forme: r?.forme,
+      saveur: r?.saveur,
+      gamme: r?.gamme,
+    })
     const qty = toNumber(r?.qty ?? r?.quantity) ?? 0
     const unitPrice = toNumber(r?.unit_price ?? r?.unitPrice ?? r?.price) ?? 0
     if (qty <= 0) continue

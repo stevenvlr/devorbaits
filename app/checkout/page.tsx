@@ -2134,7 +2134,15 @@ export default function CheckoutPage() {
                                 items: cartItems.map(item => ({
                                   produit: item.produit,
                                   quantity: item.quantite,
-                                  price: item.prix
+                                  price: item.prix,
+                                  arome: item.arome,
+                                  taille: item.taille,
+                                  couleur: item.couleur,
+                                  diametre: item.diametre,
+                                  conditionnement: item.conditionnement,
+                                  forme: item.format,
+                                  saveur: item.arome, // Pour Pop-up Duo
+                                  gamme: item.gamme,
                                 }))
                               })
                             } catch (telegramError) {

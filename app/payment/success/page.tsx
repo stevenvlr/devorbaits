@@ -394,7 +394,15 @@ function PaymentSuccessContent() {
                   items: orderItems.map((item: any) => ({
                     produit: item.produit,
                     quantity: item.quantity,
-                    price: item.price
+                    price: item.price,
+                    arome: item.arome,
+                    taille: item.taille,
+                    couleur: item.couleur,
+                    diametre: item.diametre,
+                    conditionnement: item.conditionnement,
+                    forme: item.forme,
+                    saveur: item.saveur || item.arome, // Pour Pop-up Duo
+                    gamme: item.gamme,
                   }))
                 })
               } catch (telegramError) {

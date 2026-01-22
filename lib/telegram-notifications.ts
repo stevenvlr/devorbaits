@@ -2,6 +2,8 @@
  * Notifications Telegram pour les nouvelles commandes
  */
 
+import { buildProductNameWithVariants } from './price-utils'
+
 const TELEGRAM_BOT_TOKEN = process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN || '8403689427:AAHIaMeqQDfEugboMn3EhO8xtESy2g3W8rg'
 const TELEGRAM_CHAT_ID = process.env.NEXT_PUBLIC_TELEGRAM_CHAT_ID || '8279833370'
 
@@ -15,8 +17,18 @@ interface OrderNotificationData {
   retraitMode?: string
   items?: Array<{
     produit?: string
+    name?: string
+    product_id?: string
     quantity: number
     price: number
+    arome?: string
+    taille?: string
+    couleur?: string
+    diametre?: string
+    conditionnement?: string
+    forme?: string
+    saveur?: string
+    gamme?: string
   }>
 }
 
@@ -53,8 +65,9 @@ export async function sendNewOrderNotification(order: OrderNotificationData): Pr
     if (order.items && order.items.length > 0) {
       message += `\n📦 <b>Articles (${order.itemCount}):</b>\n`
       order.items.slice(0, 10).forEach(item => {
-        const name = item.produit || 'Article'
-        message += `  • ${item.quantity}x ${name} - ${item.price.toFixed(2)}€\n`
+        // Utiliser la fonction utilitaire pour construire le nom complet avec variantes
+        const fullName = buildProductNameWithVariants(item)
+        message += `  • ${item.quantity}x ${fullName} - ${item.price.toFixed(2)}€\n`
       })
       if (order.items.length > 10) {
         message += `  ... et ${order.items.length - 10} autre(s)\n`
