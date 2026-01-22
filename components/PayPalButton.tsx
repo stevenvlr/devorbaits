@@ -47,6 +47,7 @@ export default function PayPalButton({
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
+        'enable-funding': 'paylater',
         ...(isTestMode && { 'data-client-token': undefined }),
       }}
     >
