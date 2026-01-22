@@ -11,18 +11,45 @@ import { createOrder, updateOrderStatus, getOrderByReference, type OrderItem } f
 import { loadProducts } from '@/lib/products-manager'
 import { getPromoCodeByCode, recordPromoCodeUsageAsync } from '@/lib/promo-codes-manager'
 import { sendNewOrderNotification } from '@/lib/telegram-notifications'
+import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
+import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 
 function PaymentSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { clearCart, cartItems } = useCart()
   const { user } = useAuth()
+  const { promotion } = useGlobalPromotion()
   const [orderReference, setOrderReference] = useState<string>('')
   const [montant, setMontant] = useState<string>('')
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [orderComment, setOrderComment] = useState<string | null>(null)
+
+  // Fonction pour obtenir le prix avec promotion pour un item
+  const getItemPrice = (item: any) => {
+    if (item.isGratuit) return 0
+    
+    // Si on a une promotion active
+    if (promotion && promotion.active) {
+      // Si on a le prix original, l'utiliser (meilleur cas)
+      const prixBase = item.prixOriginal !== undefined ? item.prixOriginal : item.prix
+      
+      // Si la promotion s'applique à tout le site, l'appliquer même sans category/gamme
+      if (promotion.applyToAll) {
+        return applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+      }
+      
+      // Si on a category ou gamme, vérifier l'éligibilité
+      if (item.category || item.gamme) {
+        return applyGlobalPromotion(prixBase, promotion, item.category, item.gamme)
+      }
+    }
+    
+    // Sinon, utiliser le prix stocké
+    return item.prix
+  }
 
   useEffect(() => {
     const processPayment = async () => {
@@ -50,12 +77,12 @@ function PaymentSuccessContent() {
               const pendingOrder = JSON.parse(pendingOrderData)
               const total = parseFloat(montant || '0')
               
-              // Créer les items de commande
+              // Créer les items de commande avec prix avec promotion
               const orderItems = pendingOrder.cartItems.map((item: any) => ({
                 product_id: item.productId || item.produit,
                 variant_id: item.variantId,
                 quantity: item.quantite,
-                price: item.prix,
+                price: getItemPrice(item), // Utiliser le prix avec promotion
                 arome: item.arome,
                 taille: item.taille,
                 couleur: item.couleur,
@@ -155,7 +182,7 @@ function PaymentSuccessContent() {
               product_id: item.productId || item.produit,
               variant_id: item.variantId,
               quantity: item.quantite,
-              price: item.prix,
+              price: getItemPrice(item), // Utiliser le prix avec promotion
               // Inclure les informations de variante pour l'affichage
               arome: item.arome,
               taille: item.taille,

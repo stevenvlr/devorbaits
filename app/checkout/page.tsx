@@ -641,7 +641,7 @@ export default function CheckoutPage() {
           product_id: item.productId || item.produit || `product-${item.id}`,
           variant_id: item.variantId || undefined,
           quantity: item.quantite,
-          price: item.prix,
+          price: getItemPrice(item), // Utiliser le prix avec promotion
           // Inclure les informations de variante pour l'affichage
           arome: item.arome,
           taille: item.taille,
@@ -1899,7 +1899,7 @@ export default function CheckoutPage() {
                             product_id: item.productId || item.produit || `product-${item.id}`,
                             variant_id: item.variantId || undefined,
                             quantity: item.quantite,
-                            price: item.prix,
+                            price: getItemPrice(item), // Utiliser le prix avec promotion
                             arome: item.arome,
                             taille: item.taille,
                             couleur: item.couleur,
