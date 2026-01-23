@@ -102,6 +102,8 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
       url_paiement: url,
     })
     
+    const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    console.log('[MONETICO CALL]', requestId, '/api/monetico/signature')
     console.log('Monetico - Appel API signature...')
 
     // Générer la signature côté serveur pour la sécurité

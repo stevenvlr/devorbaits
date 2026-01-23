@@ -118,6 +118,7 @@ export default function CheckoutPage() {
   })
   const [rdvDate, setRdvDate] = useState('')
   const [rdvTimeSlot, setRdvTimeSlot] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [timeSlots, setTimeSlots] = useState<Array<{ timeSlot: string; available: boolean; bookedCount: number }>>([])
   const [promoCode, setPromoCode] = useState('')
@@ -656,9 +657,13 @@ export default function CheckoutPage() {
   }
 
   const handleSubmit = async () => {
+    if (isSubmitting) return
+    setIsSubmitting(true)
+    let moneticoStarted = false
     // Valider les champs requis selon le mode de retrait
     if (retraitMode === 'livraison' && (!livraisonAddress.adresse || !livraisonAddress.codePostal || !livraisonAddress.ville)) {
       alert('Veuillez remplir l\'adresse de livraison')
+      setIsSubmitting(false)
       return
     }
 
@@ -666,18 +671,21 @@ export default function CheckoutPage() {
     if (retraitMode === 'wavignies-rdv') {
       if (!rdvDate || !rdvTimeSlot) {
         alert('Veuillez sélectionner une date et un créneau pour le retrait à Wavignies')
+        setIsSubmitting(false)
         return
       }
 
       // Vérifier que c'est un mardi ou jeudi
       if (!isAvailableDay(rdvDate)) {
         alert('Les rendez-vous sont disponibles uniquement le mardi et le jeudi')
+        setIsSubmitting(false)
         return
       }
 
       // Créer le rendez-vous
       if (!user) {
         alert('Erreur: utilisateur non connecté')
+        setIsSubmitting(false)
         return
       }
 
@@ -692,6 +700,7 @@ export default function CheckoutPage() {
 
       if (!result.success) {
         alert(result.message)
+        setIsSubmitting(false)
         return
       }
     }
@@ -699,6 +708,7 @@ export default function CheckoutPage() {
     // Préparer la commande pour Monetico
     if (!user) {
       alert('Erreur: utilisateur non connecté')
+      setIsSubmitting(false)
       return
     }
 
@@ -718,6 +728,7 @@ export default function CheckoutPage() {
     if (!Number.isFinite(total) || total <= 0) {
       console.error('[MONETICO] Montant invalide:', { total, itemsTotal, shipping })
       alert('Erreur : montant invalide. Veuillez réessayer.')
+      setIsSubmitting(false)
       return
     }
 
@@ -1028,15 +1039,22 @@ export default function CheckoutPage() {
         
         alert(errorMessage)
         return
+      } finally {
+        setIsSubmitting(false)
       }
     }
 
     // Paiement par carte bleue (Monetico)
     try {
+      moneticoStarted = true
       await submitMoneticoPayment(orderData)
     } catch (error) {
       console.error('Erreur lors de la redirection vers Monetico:', error)
       alert('Erreur lors de la redirection vers le paiement. Veuillez réessayer.')
+      setIsSubmitting(false)
+    }
+    if (!moneticoStarted) {
+      setIsSubmitting(false)
     }
   }
 
@@ -2363,20 +2381,22 @@ export default function CheckoutPage() {
                   <>
                     <button
                       onClick={handleSubmit}
-                      disabled={!isFormValid()}
+                      disabled={!isFormValid() || isSubmitting}
                       style={{ 
                         position: 'relative', 
                         zIndex: 10000,
                         pointerEvents: 'auto'
                       }}
                       className={`w-full font-bold py-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg ${
-                        isFormValid()
+                        isFormValid() && !isSubmitting
                           ? 'bg-yellow-500 text-noir-950 hover:bg-yellow-400 cursor-pointer'
                           : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                       }`}
                     >
                       <CreditCard className="w-5 h-5" />
-                      {!cgvAccepted
+                      {isSubmitting
+                        ? 'Redirection en cours...'
+                        : !cgvAccepted
                         ? 'Acceptez les CGV'
                         : retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
                         ? 'Sélectionnez un créneau'
