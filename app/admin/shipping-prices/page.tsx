@@ -110,6 +110,7 @@ export default function ShippingPricesAdminPage() {
       name: '',
       type: 'fixed',
       shipping_type: 'home',
+      country: 'FR',
       active: true
     })
     setShowForm(true)
@@ -226,6 +227,24 @@ export default function ShippingPricesAdminPage() {
                 </select>
                 <p className="mt-1 text-sm text-gray-400">
                   Choisissez si ce tarif s'applique aux livraisons à domicile ou aux points relais
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Pays <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={editingPrice.country || 'FR'}
+                  onChange={(e) => setEditingPrice({ ...editingPrice, country: e.target.value as 'FR' | 'BE' | 'ALL' })}
+                  className="w-full px-4 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white"
+                >
+                  <option value="FR">France</option>
+                  <option value="BE">Belgique</option>
+                  <option value="ALL">Tous les pays</option>
+                </select>
+                <p className="mt-1 text-sm text-gray-400">
+                  Choisissez pour quel pays ce tarif s'applique (FR = France, BE = Belgique, ALL = Tous les pays)
                 </p>
               </div>
 
@@ -437,6 +456,11 @@ export default function ShippingPricesAdminPage() {
                       {price.type === 'margin_percent' && `Marge: +${price.margin_percent}%`}
                       {price.type === 'margin_fixed' && `Marge: +${price.margin_fixed}€`}
                       {price.type === 'weight_ranges' && `${price.weight_ranges?.length || 0} tranche(s) de poids`}
+                      {price.country && (
+                        <span className="ml-2 px-2 py-0.5 bg-noir-700 text-gray-300 text-xs rounded">
+                          {price.country === 'FR' ? '🇫🇷 France' : price.country === 'BE' ? '🇧🇪 Belgique' : '🌍 Tous les pays'}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -490,6 +514,11 @@ export default function ShippingPricesAdminPage() {
                       {price.type === 'margin_percent' && `Marge: +${price.margin_percent}%`}
                       {price.type === 'margin_fixed' && `Marge: +${price.margin_fixed}€`}
                       {price.type === 'weight_ranges' && `${price.weight_ranges?.length || 0} tranche(s) de poids`}
+                      {price.country && (
+                        <span className="ml-2 px-2 py-0.5 bg-noir-700 text-gray-300 text-xs rounded">
+                          {price.country === 'FR' ? '🇫🇷 France' : price.country === 'BE' ? '🇧🇪 Belgique' : '🌍 Tous les pays'}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex gap-2">

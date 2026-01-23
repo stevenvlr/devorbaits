@@ -387,7 +387,14 @@ export async function saveShippingPrice(price: Partial<ShippingPrice>): Promise<
       cleanPrice.shipping_type = 'home'
     }
     
-    console.log('💾 Sauvegarde tarif avec shipping_type:', cleanPrice.shipping_type, '(valeur originale:', price.shipping_type, ')')
+    // Définir country : utiliser la valeur fournie, ou 'FR' par défaut
+    if (price.country !== undefined && price.country !== null) {
+      cleanPrice.country = price.country
+    } else {
+      cleanPrice.country = 'FR'
+    }
+    
+    console.log('💾 Sauvegarde tarif avec shipping_type:', cleanPrice.shipping_type, 'et country:', cleanPrice.country)
     if (price.fixed_price !== undefined) cleanPrice.fixed_price = price.fixed_price
     if (price.margin_percent !== undefined) cleanPrice.margin_percent = price.margin_percent
     if (price.margin_fixed !== undefined) cleanPrice.margin_fixed = price.margin_fixed
