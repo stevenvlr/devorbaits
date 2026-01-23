@@ -352,7 +352,10 @@ export default function BoxtalRelayMap({
   const handleSearchInternal = useCallback((postalCode: string, city: string) => {
     // Accepter 4 chiffres (Belgique) ou 5 chiffres (France)
     const cleanCode = postalCode.replace(/\D/g, '')
-    if (!cleanCode || (cleanCode.length !== 4 && cleanCode.length !== 5)) return
+    if (!cleanCode || (cleanCode.length !== 4 && cleanCode.length !== 5)) {
+      console.log('❌ Code postal invalide:', cleanCode)
+      return
+    }
 
     setError(null)
     setSearching(true)
@@ -360,12 +363,14 @@ export default function BoxtalRelayMap({
     const map = mapInstanceRef.current
 
     if (!map || typeof map.searchParcelPoints !== "function" || !mapReady) {
+      console.log('❌ Map non prête:', { map: !!map, hasFunction: typeof map?.searchParcelPoints, mapReady })
       setSearching(false)
       return
     }
 
     // Détecter le pays selon le code postal
     const country = detectCountryFromPostalCode(postalCode)
+    console.log('🔍 Recherche points relais:', { country, codePostal: cleanCode, city })
     
     const address = { 
       country: country, 
@@ -377,21 +382,34 @@ export default function BoxtalRelayMap({
 
     const run = () => {
       try {
-        map.searchParcelPoints.call(map, address, (parcelPoint: any) => {
-          setSelectedParcelPoint(parcelPoint)
-          onSelect?.(parcelPoint)
+        console.log('🚀 Appel searchParcelPoints avec:', address)
+        map.searchParcelPoints.call(map, address, (parcelPoints: any[]) => {
+          console.log('✅ Points relais reçus:', parcelPoints?.length || 0, parcelPoints)
+          // searchParcelPoints retourne un tableau de points
+          if (Array.isArray(parcelPoints) && parcelPoints.length > 0) {
+            // Prendre le premier point ou le plus proche
+            const selectedPoint = parcelPoints[0]
+            console.log('📍 Point sélectionné:', selectedPoint)
+            setSelectedParcelPoint(selectedPoint)
+            onSelect?.(selectedPoint)
+          } else {
+            console.log('⚠️ Aucun point relais trouvé')
+            setError("Aucun point relais trouvé pour ce code postal")
+          }
           setSearching(false)
         })
       } catch (e: any) {
         const msg = String(e?.message || e)
+        console.error('❌ Erreur recherche:', e, msg)
 
         if (msg.includes("sendCallbackEvent") && tries < 5) {
           tries += 1
+          console.log(`🔄 Nouvelle tentative ${tries}/5`)
           setTimeout(run, 100)
           return
         }
 
-        setError("Erreur lors de la recherche")
+        setError("Erreur lors de la recherche: " + msg)
         setSearching(false)
       }
     }
