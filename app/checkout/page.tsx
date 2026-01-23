@@ -200,7 +200,17 @@ export default function CheckoutPage() {
   // 38.01-50 kg: Domicile (2 colis)
   // >50 kg: Nous contacter (blocage)
   useEffect(() => {
-    // Forcer le mode selon le poids
+    // Forcer le mode selon le poids ET le pays
+    // Belgique : toujours point relais uniquement
+    if (livraisonAddress.pays === 'BE') {
+      if (retraitMode === 'livraison') {
+        console.log(`⚠️ Belgique - Forçage Chronopost Relais`)
+        setRetraitMode('chronopost-relais')
+      }
+      return
+    }
+    
+    // France : règles selon le poids
     if (totalWeight <= 18) {
       // 0-18 kg: Point relais uniquement
       if (retraitMode === 'livraison') {
@@ -227,7 +237,7 @@ export default function CheckoutPage() {
       }
     }
     // >50 kg: pas de forçage, mais blocage affiché ailleurs
-  }, [totalWeight, retraitMode])
+  }, [totalWeight, retraitMode, livraisonAddress.pays])
 
   // Calculer le prix d'expédition basé sur les tarifs configurés
   useEffect(() => {
@@ -1142,8 +1152,8 @@ export default function CheckoutPage() {
               <div className="space-y-3">
                 {/* Option Livraison à domicile */}
                 {(() => {
-                  // Domicile disponible : 18.01-28 kg OU 38.01-50 kg
-                  const isAvailable = (totalWeight > 18 && totalWeight <= 28) || (totalWeight > 38 && totalWeight <= 50)
+                  // Domicile disponible : 18.01-28 kg OU 38.01-50 kg (uniquement pour la France)
+                  const isAvailable = livraisonAddress.pays !== 'BE' && ((totalWeight > 18 && totalWeight <= 28) || (totalWeight > 38 && totalWeight <= 50))
                   const isDisabled = !isAvailable
                   const is2Colis = totalWeight > 38 && totalWeight <= 50
                   
@@ -1200,8 +1210,8 @@ export default function CheckoutPage() {
 
                 {/* Option Chronopost Relais */}
                 {(() => {
-                  // Relais disponible : 0-18 kg OU 28.01-38 kg
-                  const isAvailable = (totalWeight <= 18) || (totalWeight > 28 && totalWeight <= 38)
+                  // Relais disponible : 0-18 kg OU 28.01-38 kg (ou toujours pour la Belgique)
+                  const isAvailable = livraisonAddress.pays === 'BE' || (totalWeight <= 18) || (totalWeight > 28 && totalWeight <= 38)
                   const isDisabled = !isAvailable
                   const is2Colis = totalWeight > 28 && totalWeight <= 38
                   
