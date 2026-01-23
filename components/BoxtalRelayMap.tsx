@@ -443,15 +443,37 @@ export default function BoxtalRelayMap({
     const run = () => {
       try {
         console.log('🚀 Appel searchParcelPoints avec:', address)
-        map.searchParcelPoints.call(map, address, (parcelPoints: any[]) => {
-          console.log('✅ Points relais reçus:', parcelPoints?.length || 0, parcelPoints)
-          // searchParcelPoints retourne un tableau de points
-          if (Array.isArray(parcelPoints) && parcelPoints.length > 0) {
+        map.searchParcelPoints.call(map, address, (parcelPoints: any) => {
+          console.log('✅ Points relais reçus (type):', typeof parcelPoints, 'isArray:', Array.isArray(parcelPoints), parcelPoints)
+          
+          // Gérer différents formats de retour
+          let pointsArray: any[] = []
+          
+          if (Array.isArray(parcelPoints)) {
+            pointsArray = parcelPoints
+          } else if (parcelPoints && typeof parcelPoints === 'object') {
+            // Si c'est un seul objet, le mettre dans un tableau
+            pointsArray = [parcelPoints]
+          }
+          
+          console.log('📦 Points traités:', pointsArray.length, pointsArray)
+          
+          if (pointsArray.length > 0) {
             // Normaliser le premier point
-            const normalizedPoint = normalizeParcelPoint(parcelPoints[0])
+            const normalizedPoint = normalizeParcelPoint(pointsArray[0])
             console.log('📍 Point normalisé:', normalizedPoint)
-            setSelectedParcelPoint(normalizedPoint)
-            onSelect?.(normalizedPoint)
+            console.log('📍 Nom du point:', normalizedPoint.name)
+            console.log('📍 Adresse:', normalizedPoint.address)
+            
+            // Vérifier que le point a au moins un nom
+            if (normalizedPoint.name || normalizedPoint.code) {
+              setSelectedParcelPoint(normalizedPoint)
+              onSelect?.(normalizedPoint)
+              setError(null) // Effacer les erreurs précédentes
+            } else {
+              console.error('❌ Point normalisé sans nom ni code:', normalizedPoint)
+              setError("Point relais reçu mais format invalide")
+            }
           } else {
             console.log('⚠️ Aucun point relais trouvé')
             setError("Aucun point relais trouvé pour ce code postal")
@@ -616,10 +638,16 @@ export default function BoxtalRelayMap({
         <div className="p-3 bg-green-50 border border-green-200 rounded-md">
           <h3 className="font-medium text-green-900 mb-1 text-sm">✓ Point relais sélectionné</h3>
           <div className="text-xs text-green-800">
-            <p><strong>{selectedParcelPoint.name}</strong></p>
+            <p><strong>{selectedParcelPoint.name || selectedParcelPoint.code || 'Point relais'}</strong></p>
             {selectedParcelPoint.address?.street && <p>{selectedParcelPoint.address.street}</p>}
             {(selectedParcelPoint.address?.postalCode || selectedParcelPoint.address?.city) && (
               <p>{selectedParcelPoint.address?.postalCode} {selectedParcelPoint.address?.city}</p>
+            )}
+            {/* Debug: afficher les données brutes si le nom est vide */}
+            {!selectedParcelPoint.name && !selectedParcelPoint.code && (
+              <p className="text-red-600 text-xs mt-2">
+                Debug: {JSON.stringify(selectedParcelPoint, null, 2).slice(0, 200)}
+              </p>
             )}
           </div>
         </div>
