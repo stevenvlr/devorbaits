@@ -74,6 +74,8 @@ export async function POST(request: NextRequest) {
     const SOCIETE = process.env.MONETICO_SOCIETE || process.env.NEXT_PUBLIC_MONETICO_SOCIETE || ''
     const CLE_HMAC = process.env.MONETICO_CLE_HMAC || process.env.MONETICO_CLE_SECRETE
     const ACTION_URL = process.env.MONETICO_ACTION_URL || process.env.NEXT_PUBLIC_MONETICO_URL
+    const URL_RETOUR = process.env.MONETICO_URL_RETOUR || process.env.NEXT_PUBLIC_MONETICO_URL_RETOUR || ''
+    const URL_RETOUR_ERR = process.env.MONETICO_URL_RETOUR_ERR || process.env.NEXT_PUBLIC_MONETICO_URL_RETOUR_ERR || ''
 
     // Vérifier les variables obligatoires
     if (!TPE) {
@@ -154,25 +156,23 @@ export async function POST(request: NextRequest) {
     const date = formatDate()
     const reference = generateReference()
 
-    // Construire la chaîne à signer selon l'ordre EXACT Monetico
-    // Format: <TPE>*<date>*<montant>*<reference>*<texte-libre>*<version>*<lgue>*<societe>*<mail>*
+    // Construire la chaîne à signer selon l'ordre EXACT demandé
+    // Format: TPE*date*lgue*mail*montant*reference*societe*url_retour*url_retour_err*
     const version = '3.0'
     const lgue = 'FR'
     const texteLibreClean = texteLibre || ''
-    
-    // Construire la chaîne MAC exacte selon les spécifications Monetico
-    // IMPORTANT : Utiliser "texte-libre" (avec tiret) dans la chaîne MAC
+
     const macString = [
       TPE,
       date,
+      lgue,
+      mail,
       montant,
       reference,
-      texteLibreClean, // texte-libre dans la chaîne MAC
-      version,
-      lgue,
-      SOCIETE, // societe ne peut plus être vide (vérifié plus haut)
-      mail,
-    ].join('*') + '*' // Astérisque final après mail
+      SOCIETE,
+      URL_RETOUR,
+      URL_RETOUR_ERR,
+    ].join('*') + '*'
 
     // Calculer le MAC
     const MAC = await calculateMAC(CLE_HMAC, macString)
@@ -186,8 +186,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Log temporaire avant génération du formulaire
-    console.log('[MONETICO] montant', { montant, macString })
+    // Log serveur temporaire avant génération du formulaire
+    console.log('[MONETICO FINAL]', { montant, macString })
 
     // Construire les champs du formulaire
     // IMPORTANT : Utiliser "texte-libre" (avec tiret) comme nom de champ
@@ -201,6 +201,8 @@ export async function POST(request: NextRequest) {
       'texte-libre': texteLibreClean, // Nom du champ avec tiret, pas underscore
       lgue,
       mail,
+      url_retour: URL_RETOUR,
+      url_retour_err: URL_RETOUR_ERR,
       MAC,
     }
 
