@@ -13,7 +13,7 @@ const MONETICO_CONFIG = {
 
 // Interface pour les données de commande
 export interface MoneticoOrderData {
-  montant: number
+  montant: number // Montant en CENTIMES (entier)
   reference: string
   email: string
   texteLibre?: string
@@ -42,8 +42,9 @@ export function prepareMoneticoPayment(orderData: MoneticoOrderData) {
   const secondes = String(now.getSeconds()).padStart(2, '0')
   const date = `${jour}/${mois}/${annee}:${heures}:${minutes}:${secondes}`
   
-  // Formater le montant (ex: 25.50EUR)
-  const montant = `${orderData.montant.toFixed(2)}EUR`
+  // Le montant est déjà en centimes (entier), le convertir en string pour Monetico
+  // Format Monetico : montant en centimes (ex: "2550" pour 25.50€)
+  const montant = String(orderData.montant)
   
   // Préparer le texte libre avec les infos de commande
   // Important : Le texte libre ne doit pas contenir de caractères spéciaux qui pourraient casser le format

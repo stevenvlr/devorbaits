@@ -705,9 +705,38 @@ export default function CheckoutPage() {
     // Générer une référence de commande unique
     const orderReference = generateOrderReference()
 
+    // Calculer le montant en centimes (entier) pour Monetico
+    // Sécuriser toutes les valeurs numériques
+    const itemsTotal = Number(totalWithDiscount || 0)
+    const shipping = Number(calculatedShippingCost || 0)
+    const discount = Number(promoValidation?.discount || 0)
+    
+    // Calculer le total en euros
+    const total = itemsTotal + shipping - discount
+    
+    // Convertir en centimes (entier)
+    const montant = Math.round(total * 100)
+    
+    // Validation : montant doit être un entier > 0
+    if (!Number.isFinite(montant) || montant <= 0) {
+      console.error('[MONETICO] Montant invalide:', { total, montant, itemsTotal, shipping, discount })
+      alert('Erreur : montant invalide. Veuillez réessayer.')
+      return
+    }
+    
+    // Log pour debug
+    console.log('[MONETICO]', { 
+      total: total.toFixed(2), 
+      montant, 
+      type: typeof montant,
+      itemsTotal: itemsTotal.toFixed(2),
+      shipping: shipping.toFixed(2),
+      discount: discount.toFixed(2)
+    })
+
     // Préparer les données de commande
     const orderData = {
-      montant: finalTotal, // Utiliser le total final avec expédition
+      montant: montant, // Montant en centimes (entier)
       reference: orderReference,
       email: user.email,
       retraitMode,

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'edge'
 
 interface MoneticoRequest {
-  montant: string // Format: "20.99EUR"
+  montant: number | string // Montant en CENTIMES (entier) - peut être number ou string
   mail: string
   texteLibre?: string
 }
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
 
     // Lire les données de la requête
     const body: MoneticoRequest = await request.json()
-    const { montant, mail, texteLibre = '' } = body
+    let { montant, mail, texteLibre = '' } = body
 
     if (!montant || !mail) {
       return NextResponse.json(
@@ -121,6 +121,30 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Convertir le montant en nombre entier (centimes)
+    // Sécuriser : accepter number ou string, avec valeur par défaut 0
+    const montantNumber = typeof montant === 'string' ? parseInt(montant, 10) : Number(montant || 0)
+    
+    // Validation stricte : montant doit être un entier fini > 0
+    if (!Number.isFinite(montantNumber) || !Number.isInteger(montantNumber) || montantNumber <= 0) {
+      console.error('[MONETICO] Montant invalide:', { montant, montantNumber, type: typeof montant })
+      return NextResponse.json(
+        { error: `Montant Monetico invalide: ${montant} (doit être un entier > 0 en centimes)` },
+        { status: 400 }
+      )
+    }
+    
+    // Utiliser le montant comme string pour Monetico (format attendu)
+    montant = String(montantNumber)
+    
+    // Log pour debug
+    console.log('[MONETICO]', { 
+      montantOriginal: body.montant, 
+      montantNumber, 
+      montant, 
+      type: typeof montant 
+    })
 
     // Générer la date et la référence (12 chars, alphanumérique uniquement)
     const date = formatDate()
