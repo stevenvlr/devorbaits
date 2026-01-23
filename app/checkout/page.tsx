@@ -1287,9 +1287,9 @@ export default function CheckoutPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <MapPin className="w-5 h-5 text-yellow-500" />
                           <span className="font-semibold text-lg">Chronopost Relais</span>
-                          {is2Colis && !isDisabled && (
+                          {isMultiColis && !isDisabled && (
                             <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded">
-                              2 colis
+                              {numberOfPackages} colis
                             </span>
                           )}
                           {isDisabled && (
