@@ -305,8 +305,6 @@ export default function CheckoutPage() {
           }
         }
         
-        const isDoubleShipment = numberOfPackages >= 2
-        
         // Log pour debug
         console.log('🛒 Calcul expédition - Articles:', cartItems.length, 
           'Quantité totale:', cartItems.reduce((sum, item) => sum + item.quantite, 0),
@@ -344,8 +342,16 @@ export default function CheckoutPage() {
           // Récupérer le tarif actif selon le type d'envoi et le pays
           const shippingPrice = await getActiveShippingPrice(shippingType, country)
           
+          console.log('🔍 Recherche tarif - Type:', shippingType, 'Pays:', country, 'Poids pour tarif:', weightForPricing.toFixed(2), 'kg', 'Nombre de colis:', numberOfPackages)
+          
           if (shippingPrice) {
-            console.log('📦 Tarif trouvé:', shippingPrice.name, 'Type:', shippingPrice.type)
+            console.log('📦 Tarif trouvé:', shippingPrice.name, 'Type:', shippingPrice.type, 'Pays:', shippingPrice.country)
+            console.log('📦 Détails tarif:', {
+              fixed_price: shippingPrice.fixed_price,
+              weight_ranges: shippingPrice.weight_ranges,
+              margin_percent: shippingPrice.margin_percent,
+              margin_fixed: shippingPrice.margin_fixed
+            })
 
             // Livraison gratuite si seuil atteint
             if (shippingPrice.free_shipping_threshold && totalValue >= shippingPrice.free_shipping_threshold) {
@@ -379,10 +385,11 @@ export default function CheckoutPage() {
             
             // Calculer le prix selon le type de tarif (utiliser weightForPricing)
             let finalPrice = 0
+            console.log('💰 Calcul prix - Type tarif:', shippingPrice.type, 'Poids pour tarif:', weightForPricing.toFixed(2), 'kg')
             
             if (shippingPrice.type === 'fixed' && shippingPrice.fixed_price !== undefined) {
               finalPrice = shippingPrice.fixed_price
-              console.log('💰 Prix fixe:', finalPrice, '€')
+              console.log('💰 Prix fixe unitaire:', finalPrice, '€')
             } else if (shippingPrice.type === 'weight_ranges' && shippingPrice.weight_ranges) {
               // Trouver la tranche de poids correspondante (utiliser weightForPricing)
               let found = false
@@ -416,14 +423,18 @@ export default function CheckoutPage() {
               finalPrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
             }
             
-            // Doubler le prix si 2 colis
-            if (isDoubleShipment) {
-              console.log('📦📦 Double expédition: prix unitaire', finalPrice, '€ x 2 =', finalPrice * 2, '€')
-              finalPrice = finalPrice * 2
+            // Multiplier le prix par le nombre de colis
+            const priceBeforeMultiplication = finalPrice
+            if (numberOfPackages > 1) {
+              console.log(`📦📦 Expédition multiple: prix unitaire ${finalPrice.toFixed(2)}€ x ${numberOfPackages} colis = ${(finalPrice * numberOfPackages).toFixed(2)}€`)
+              finalPrice = finalPrice * numberOfPackages
+            } else {
+              console.log(`📦 Expédition simple: prix ${finalPrice.toFixed(2)}€`)
             }
             
             // Appliquer le prix calculé
             let rounded = Math.round(finalPrice * 100) / 100
+            console.log('💰 Prix final arrondi:', rounded, '€ (avant arrondi:', finalPrice.toFixed(2), '€)')
             
             // Appliquer le tarif sponsor si applicable (remplace le tarif normal)
             console.log('🎁 Vérification sponsor - user:', user?.email, 'isSponsored:', user?.isSponsored)
