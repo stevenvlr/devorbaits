@@ -705,38 +705,37 @@ export default function CheckoutPage() {
     // Générer une référence de commande unique
     const orderReference = generateOrderReference()
 
-    // Calculer le montant en centimes (entier) pour Monetico
+    // Calculer le montant en euros pour Monetico (string avec devise)
     // IMPORTANT : totalWithDiscount inclut déjà la remise promo, ne pas la soustraire une seconde fois
     // Sécuriser toutes les valeurs numériques
     const itemsTotal = Number(totalWithDiscount || 0) // Déjà remisé (totalWithPromotion - discount)
     const shipping = Number(calculatedShippingCost || 0)
 
-    
     // Calculer le total en euros (itemsTotal est déjà remisé, pas besoin de re-soustraire discount)
-    const total = itemsTotal + shipping
-    
-    // Convertir en centimes (entier)
-    const montant = Math.round(total * 100)
-    
-    // Validation : montant doit être un entier > 0
-    if (!Number.isFinite(montant) || montant <= 0) {
-      console.error('[MONETICO] Montant invalide:', { total, montant, itemsTotal, shipping })
+    const total = round2(itemsTotal + shipping)
+
+    // Validation : total doit être > 0
+    if (!Number.isFinite(total) || total <= 0) {
+      console.error('[MONETICO] Montant invalide:', { total, itemsTotal, shipping })
       alert('Erreur : montant invalide. Veuillez réessayer.')
       return
     }
-    
+
+    // Format Monetico : euros avec devise (ex: "95.25EUR")
+    const montant = `${total.toFixed(2)}EUR`
+
     // Log pour debug - Comparer finalTotal (PayPal) et total (Monetico)
     const diff = Math.abs(finalTotal - total)
-    console.log('[MONETICO] Calcul montant:', { 
+    console.log('[MONETICO] Calcul montant:', {
       finalTotal: finalTotal.toFixed(2), // Total PayPal/affiché
       totalMonetico: total.toFixed(2), // Total Monetico
       difference: diff.toFixed(2), // Différence (devrait être < 0.01)
-      montant, 
+      montant,
       type: typeof montant,
       itemsTotal: itemsTotal.toFixed(2),
       shipping: shipping.toFixed(2)
     })
-    
+
     // Vérification : finalTotal et total doivent matcher (à 1 centime près)
     if (diff > 0.01) {
       console.warn('[MONETICO] ⚠️ Différence entre finalTotal et total Monetico:', diff.toFixed(2))
@@ -744,7 +743,7 @@ export default function CheckoutPage() {
 
     // Préparer les données de commande
     const orderData = {
-      montant: montant, // Montant en centimes (entier)
+      montant: montant, // Montant au format "95.25EUR"
       reference: orderReference,
       email: user.email,
       retraitMode,

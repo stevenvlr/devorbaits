@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'edge'
 
 interface MoneticoRequest {
-  montant: number | string // Montant en CENTIMES (entier) - peut être number ou string
+  montant: string // Montant au format "95.25EUR" (euros avec devise)
   mail: string
   texteLibre?: string
 }
@@ -122,28 +122,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Convertir le montant en nombre entier (centimes)
-    // Sécuriser : accepter number ou string, avec valeur par défaut 0
-    const montantNumber = typeof montant === 'string' ? parseInt(montant, 10) : Number(montant || 0)
-    
-    // Validation stricte : montant doit être un entier fini > 0
-    if (!Number.isFinite(montantNumber) || !Number.isInteger(montantNumber) || montantNumber <= 0) {
-      console.error('[MONETICO] Montant invalide:', { montant, montantNumber, type: typeof montant })
+    // Validation stricte du format Monetico
+    const montantRegex = /^[0-9]+(\.[0-9]{1,2})?[A-Z]{3}$/
+    if (typeof montant !== 'string' || !montantRegex.test(montant)) {
+      console.error('[MONETICO] Format montant invalide:', { montant, type: typeof montant })
       return NextResponse.json(
-        { error: `Montant Monetico invalide: ${montant} (doit être un entier > 0 en centimes)` },
+        { error: `Format montant Monetico invalide: ${montant} (attendu: "95.25EUR")` },
         { status: 400 }
       )
     }
-    
-    // Utiliser le montant comme string pour Monetico (format attendu)
-    montant = String(montantNumber)
-    
+
+    // Vérifier que la partie numérique est > 0
+    const montantNumber = parseFloat(montant.replace(/[A-Z]{3}$/, ''))
+    if (!Number.isFinite(montantNumber) || montantNumber <= 0) {
+      console.error('[MONETICO] Montant numérique invalide:', { montant, montantNumber })
+      return NextResponse.json(
+        { error: `Montant Monetico invalide: ${montant} (montant numérique doit être > 0)` },
+        { status: 400 }
+      )
+    }
+
     // Log pour debug
-    console.log('[MONETICO]', { 
-      montantOriginal: body.montant, 
-      montantNumber, 
-      montant, 
-      type: typeof montant 
+    console.log('[MONETICO]', {
+      montantOriginal: body.montant,
+      montantNumber,
+      montant,
+      type: typeof montant
     })
 
     // Générer la date et la référence (12 chars, alphanumérique uniquement)
@@ -181,6 +185,9 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
+
+    // Log temporaire avant génération du formulaire
+    console.log('[MONETICO] montant', { montant, macString })
 
     // Construire les champs du formulaire
     // IMPORTANT : Utiliser "texte-libre" (avec tiret) comme nom de champ

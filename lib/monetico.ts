@@ -13,7 +13,7 @@ const MONETICO_CONFIG = {
 
 // Interface pour les données de commande
 export interface MoneticoOrderData {
-  montant: number // Montant en CENTIMES (entier)
+  montant: string // Montant au format "95.25EUR" (euros avec devise)
   reference: string
   email: string
   texteLibre?: string
@@ -42,9 +42,8 @@ export function prepareMoneticoPayment(orderData: MoneticoOrderData) {
   const secondes = String(now.getSeconds()).padStart(2, '0')
   const date = `${jour}/${mois}/${annee}:${heures}:${minutes}:${secondes}`
   
-  // Le montant est déjà en centimes (entier), le convertir en string pour Monetico
-  // Format Monetico : montant en centimes (ex: "2550" pour 25.50€)
-  const montant = String(orderData.montant)
+  // Le montant est déjà au format "95.25EUR" (string)
+  const montant = orderData.montant
   
   // Préparer le texte libre avec les infos de commande
   // Important : Le texte libre ne doit pas contenir de caractères spéciaux qui pourraient casser le format
@@ -150,6 +149,20 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
     return
   }
   
+  // Log temporaire avant génération du formulaire
+  const macString = [
+    params.TPE,
+    params.date,
+    params.montant,
+    params.reference,
+    params.texte_libre || '',
+    params.version,
+    params.lgue,
+    params.societe,
+    params.mail,
+  ].join('*') + '*********'
+  console.log('[MONETICO] montant', { montant: params.montant, macString })
+
   // Créer un formulaire dynamique
   console.log('Monetico - Création du formulaire...')
   const form = document.createElement('form')
