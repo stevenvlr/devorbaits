@@ -41,6 +41,13 @@ export default function CheckoutPage() {
   const { isAuthenticated, user } = useAuth()
   const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
   
+  // Fonction pour valider le code postal (4 chiffres pour BE, 5 pour FR)
+  const isValidPostalCode = (code: string): boolean => {
+    if (!code) return false
+    const cleanCode = code.replace(/\D/g, '')
+    return cleanCode.length === 4 || cleanCode.length === 5
+  }
+  
   // Fonction pour obtenir le prix avec promotion pour un item
   const getItemPrice = (item: typeof cartItems[0]) => {
     if (item.isGratuit) return 0
@@ -521,8 +528,8 @@ export default function CheckoutPage() {
       
       if (MODE_TEST) {
         // En mode test, on accepte même sans point relais sélectionné
-        // Vérifier juste le code postal pour le calcul du prix
-        if (!livraisonAddress.codePostal || livraisonAddress.codePostal.length < 5) {
+        // Vérifier juste le code postal pour le calcul du prix (4 ou 5 chiffres)
+        if (!isValidPostalCode(livraisonAddress.codePostal)) {
           return false
         }
         return true
@@ -533,7 +540,7 @@ export default function CheckoutPage() {
       if (!chronopostRelaisPoint && !boxtalParcelPoint) {
         return false
       }
-      if (!livraisonAddress.codePostal || livraisonAddress.codePostal.length < 5) {
+      if (!isValidPostalCode(livraisonAddress.codePostal)) {
         return false
       }
       // Le prix d'expédition peut être 0 (gratuit) ou > 0
@@ -1473,11 +1480,16 @@ export default function CheckoutPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="text"
-                        placeholder="Code postal"
+                        placeholder="Code postal (4 ou 5 chiffres)"
                         value={livraisonAddress.codePostal}
-                        onChange={(e) => setLivraisonAddress({ ...livraisonAddress, codePostal: e.target.value })}
+                        onChange={(e) => {
+                          // Accepter jusqu'à 5 chiffres (France) ou 4 chiffres (Belgique)
+                          const cleanValue = e.target.value.replace(/\D/g, '').slice(0, 5)
+                          setLivraisonAddress({ ...livraisonAddress, codePostal: cleanValue })
+                        }}
                         className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
                         style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                        maxLength={5}
                         required
                       />
                       <input

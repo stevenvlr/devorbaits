@@ -45,6 +45,17 @@ declare global {
   }
 }
 
+// Fonction pour détecter le pays selon le code postal
+function detectCountryFromPostalCode(postalCode: string): 'FR' | 'BE' {
+  // Belgique : 4 chiffres (1000-9999)
+  // France : 5 chiffres (01000-99999)
+  const cleanCode = postalCode.replace(/\D/g, '')
+  if (cleanCode.length === 4) {
+    return 'BE'
+  }
+  return 'FR'
+}
+
 // Fonction utilitaire pour récupérer l'URL depuis le cache
 function getCachedScriptUrl(): string | null {
   if (typeof window === 'undefined') return null
@@ -328,7 +339,8 @@ export default function BoxtalRelayMap({
 
   // Recherche automatique si code postal pré-rempli
   useEffect(() => {
-    if (mapReady && initialPostalCode && initialPostalCode.length >= 5 && !autoSearchDoneRef.current) {
+    const cleanCode = initialPostalCode ? initialPostalCode.replace(/\D/g, '') : ''
+    if (mapReady && cleanCode && (cleanCode.length === 4 || cleanCode.length === 5) && !autoSearchDoneRef.current) {
       autoSearchDoneRef.current = true
       setTimeout(() => {
         handleSearchInternal(initialPostalCode, initialCity)
@@ -338,7 +350,9 @@ export default function BoxtalRelayMap({
 
   // Fonction de recherche
   const handleSearchInternal = useCallback((postalCode: string, city: string) => {
-    if (!postalCode || postalCode.length < 5) return
+    // Accepter 4 chiffres (Belgique) ou 5 chiffres (France)
+    const cleanCode = postalCode.replace(/\D/g, '')
+    if (!cleanCode || (cleanCode.length !== 4 && cleanCode.length !== 5)) return
 
     setError(null)
     setSearching(true)
@@ -350,10 +364,13 @@ export default function BoxtalRelayMap({
       return
     }
 
+    // Détecter le pays selon le code postal
+    const country = detectCountryFromPostalCode(postalCode)
+    
     const address = { 
-      country: "FR", 
+      country: country, 
       city: city.trim(), 
-      zipCode: postalCode.trim() 
+      zipCode: cleanCode 
     }
 
     let tries = 0
@@ -439,8 +456,12 @@ export default function BoxtalRelayMap({
             id="boxtal-postal-code"
             type="text"
             value={searchPostalCode}
-            onChange={(e) => setSearchPostalCode(e.target.value.replace(/\D/g, '').slice(0, 5))}
-            placeholder="75001"
+            onChange={(e) => {
+              const cleanValue = e.target.value.replace(/\D/g, '')
+              // Accepter jusqu'à 5 chiffres (France) ou 4 chiffres (Belgique)
+              setSearchPostalCode(cleanValue.slice(0, 5))
+            }}
+            placeholder="75001 (FR) ou 1000 (BE)"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             style={{ color: '#000000', backgroundColor: '#ffffff' }}
             maxLength={5}
@@ -449,7 +470,7 @@ export default function BoxtalRelayMap({
         <div className="flex items-end">
           <button
             onClick={handleSearch}
-            disabled={!mapReady || !searchPostalCode || searchPostalCode.length < 5 || searching}
+            disabled={!mapReady || !searchPostalCode || (searchPostalCode.replace(/\D/g, '').length !== 4 && searchPostalCode.replace(/\D/g, '').length !== 5) || searching}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             {searching ? 'Recherche...' : 'Rechercher'}

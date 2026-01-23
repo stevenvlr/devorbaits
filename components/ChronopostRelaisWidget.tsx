@@ -4,6 +4,17 @@ import { useState, useEffect, useRef } from 'react'
 import { MapPin, Loader2, AlertCircle, CheckCircle2, X } from 'lucide-react'
 import Script from 'next/script'
 
+// Fonction pour détecter le pays selon le code postal
+function detectCountryFromPostalCode(postalCode: string): 'FR' | 'BE' {
+  // Belgique : 4 chiffres (1000-9999)
+  // France : 5 chiffres (01000-99999)
+  const cleanCode = postalCode.replace(/\D/g, '')
+  if (cleanCode.length === 4) {
+    return 'BE'
+  }
+  return 'FR'
+}
+
 // Type pour les informations du point relais Chronopost
 export interface ChronopostRelaisPoint {
   identifiant: string
@@ -56,8 +67,9 @@ export default function ChronopostRelaisWidget({
   }, [])
 
   const openWidget = () => {
-    if (!codePostal || codePostal.length < 5) {
-      setError('Veuillez d\'abord entrer un code postal valide (5 chiffres)')
+    const cleanCode = codePostal ? codePostal.replace(/\D/g, '') : ''
+    if (!cleanCode || (cleanCode.length !== 4 && cleanCode.length !== 5)) {
+      setError('Veuillez d\'abord entrer un code postal valide (4 chiffres pour la Belgique, 5 pour la France)')
       return
     }
 
@@ -146,11 +158,15 @@ export default function ChronopostRelaisWidget({
         }
       }
 
+      // Détecter le pays selon le code postal
+      const country = detectCountryFromPostalCode(codePostal)
+      const cleanCode = codePostal.replace(/\D/g, '')
+      
       // Options pour le widget Colissimo (avec token si disponible)
       const widgetOptions: any = {
         URLColissimo: 'https://ws.colissimo.fr',
-        ceCountry: 'FR',
-        ceZipCode: codePostal,
+        ceCountry: country,
+        ceZipCode: cleanCode,
         ceTown: ville || '',
         ceAddress: ville ? `${ville}` : '', // Adresse pour aider la recherche
         origin: 'WIDGET',
