@@ -404,8 +404,9 @@ export async function saveShippingPrice(price: Partial<ShippingPrice>): Promise<
     if (price.min_order_value !== undefined) cleanPrice.min_order_value = price.min_order_value
     if (price.free_shipping_threshold !== undefined) cleanPrice.free_shipping_threshold = price.free_shipping_threshold
 
-    // Important: éviter plusieurs tarifs "active=true" pour un même shipping_type
-    // (sinon le checkout peut prendre un autre tarif actif que celui que tu viens de modifier).
+    // Important: éviter plusieurs tarifs "active=true" pour un même shipping_type ET pays
+    // On peut avoir un tarif FR actif et un tarif BE actif en même temps
+    // Mais pas deux tarifs FR actifs pour le même shipping_type
     if (cleanPrice.active === true && cleanPrice.shipping_type) {
       const nowIso = new Date().toISOString()
 
@@ -423,13 +424,46 @@ export async function saveShippingPrice(price: Partial<ShippingPrice>): Promise<
         }
       }
 
-      if (cleanPrice.shipping_type === 'home') {
-        // Désactiver les autres "home"
-        await deactivate((q: any) => q.eq('active', true).eq('shipping_type', 'home'))
-        // Désactiver aussi les anciens tarifs sans type (rétrocompatibilité)
-        await deactivate((q: any) => q.eq('active', true).is('shipping_type', null))
+      // Si le tarif est 'ALL', désactiver tous les tarifs du même shipping_type (car 'ALL' couvre tout)
+      if (cleanPrice.country === 'ALL') {
+        if (cleanPrice.shipping_type === 'home') {
+          await deactivate((q: any) => q.eq('active', true).eq('shipping_type', 'home'))
+          // Désactiver aussi les anciens tarifs sans type (rétrocompatibilité)
+          await deactivate((q: any) => q.eq('active', true).is('shipping_type', null))
+        } else {
+          await deactivate((q: any) => q.eq('active', true).eq('shipping_type', cleanPrice.shipping_type))
+        }
       } else {
-        await deactivate((q: any) => q.eq('active', true).eq('shipping_type', cleanPrice.shipping_type))
+        // Pour un tarif spécifique (FR ou BE), désactiver seulement les tarifs du même pays et shipping_type
+        const countryFilter = cleanPrice.country || 'FR'
+        
+        // Construire le filtre pour le pays : le pays spécifique OU null (rétrocompatibilité = FR)
+        const countryQuery = countryFilter === 'FR' 
+          ? `country.eq.FR,country.is.null` 
+          : `country.eq.${countryFilter}`
+        
+        if (cleanPrice.shipping_type === 'home') {
+          // Désactiver les autres tarifs "home" du même pays
+          await deactivate((q: any) => 
+            q.eq('active', true)
+              .eq('shipping_type', 'home')
+              .or(countryQuery)
+          )
+          // Désactiver aussi les anciens tarifs sans type ET sans pays (rétrocompatibilité = FR)
+          if (countryFilter === 'FR') {
+            await deactivate((q: any) => 
+              q.eq('active', true)
+                .is('shipping_type', null)
+                .or('country.is.null,country.eq.FR')
+            )
+          }
+        } else {
+          await deactivate((q: any) => 
+            q.eq('active', true)
+              .eq('shipping_type', cleanPrice.shipping_type)
+              .or(countryQuery)
+          )
+        }
       }
     }
 
