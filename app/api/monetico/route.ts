@@ -197,8 +197,15 @@ export async function POST(request: NextRequest) {
     // Log serveur temporaire avant génération du formulaire
     console.log('[MONETICO FINAL]', { fields, macString })
 
+    // Logs temporaires pour la clé HMAC (sans afficher la valeur)
+    const raw = process.env.MONETICO_CLE_HMAC
+    console.log('[HMAC]', { present: !!raw, len: raw?.length })
+    if (!raw) throw new Error('MONETICO_CLE_HMAC manquante')
+    const key = raw.trim()
+    console.log('[HMAC trim]', { lenTrim: key.length })
+
     // Calculer le MAC
-    const MAC = await calculateMAC(CLE_HMAC, macString)
+    const MAC = await calculateMAC(key, macString)
 
     // Vérifier que le MAC fait bien 40 caractères
     if (MAC.length !== 40) {
