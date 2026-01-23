@@ -51,14 +51,20 @@ export async function POST(request: NextRequest) {
     console.log('Monetico - Chaîne à signer:', toSign)
     console.log('Monetico - Paramètres reçus:', JSON.stringify(params, null, 2))
 
+    // Logs temporaires pour la clé HMAC (sans afficher la valeur)
+    const raw = process.env.MONETICO_CLE_HMAC
+    if (!raw) throw new Error('MONETICO_CLE_HMAC manquante')
+    const hmacKey = raw.trim()
+    console.log('[HMAC CHECK]', { present: true, len: raw.length, lenTrim: hmacKey.length })
+
     // Générer le MAC avec HMAC-SHA1 (format Monetico)
     // Utilisation de l'API Web Crypto pour Edge Runtime
     const encoder = new TextEncoder()
-    const keyData = encoder.encode(cleSecrete)
+    const keyData = encoder.encode(hmacKey)
     const messageData = encoder.encode(toSign)
     
     // Import de la clé pour HMAC
-    const key = await crypto.subtle.importKey(
+    const cryptoKey = await crypto.subtle.importKey(
       'raw',
       keyData,
       { name: 'HMAC', hash: 'SHA-1' },
@@ -67,7 +73,7 @@ export async function POST(request: NextRequest) {
     )
     
     // Signer le message
-    const signature = await crypto.subtle.sign('HMAC', key, messageData)
+    const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
     
     // Convertir en hexadécimal (format Monetico, pas base64)
     const mac = Array.from(new Uint8Array(signature))
