@@ -337,16 +337,20 @@ export default function BoxtalRelayMap({
     }
   }, [active, scriptLoaded, token, mapId, onSelect])
 
-  // Recherche automatique si code postal pré-rempli
+  // Recherche automatique si code postal pré-rempli (une seule fois au montage)
   useEffect(() => {
     const cleanCode = initialPostalCode ? initialPostalCode.replace(/\D/g, '') : ''
     if (mapReady && cleanCode && (cleanCode.length === 4 || cleanCode.length === 5) && !autoSearchDoneRef.current) {
       autoSearchDoneRef.current = true
+      // Pré-remplir les champs de recherche avec les valeurs initiales
+      setSearchPostalCode(initialPostalCode)
+      setSearchCity(initialCity)
       setTimeout(() => {
         handleSearchInternal(initialPostalCode, initialCity)
       }, 200)
     }
-  }, [mapReady, initialPostalCode, initialCity])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady]) // Ne dépendre que de mapReady pour ne se déclencher qu'une fois
 
   // Fonction de recherche
   const handleSearchInternal = useCallback((postalCode: string, city: string) => {
@@ -418,6 +422,7 @@ export default function BoxtalRelayMap({
   }, [mapReady, onSelect])
 
   const handleSearch = () => {
+    console.log('🔘 Bouton Rechercher cliqué:', { searchPostalCode, searchCity })
     handleSearchInternal(searchPostalCode, searchCity)
   }
 
