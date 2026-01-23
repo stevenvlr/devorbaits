@@ -57,6 +57,21 @@ export default function CheckoutPage() {
     return 'FR'
   }
   
+  // Fonction pour calculer le nombre de colis selon le pays et le poids
+  const calculateNumberOfPackages = (weight: number, country: 'FR' | 'BE'): number => {
+    if (country === 'BE') {
+      // Règles pour la Belgique : 18 kg par colis
+      if (weight <= 18) return 1
+      if (weight > 18 && weight <= 36) return 2
+      if (weight > 36 && weight <= 54) return 3
+      return 0 // > 54 kg : bloqué
+    } else {
+      // Règles pour la France : 28 kg pour 2 colis
+      if (weight > 28 && weight <= 50) return 2
+      return 1
+    }
+  }
+  
   // Fonction pour obtenir le prix avec promotion pour un item
   const getItemPrice = (item: typeof cartItems[0]) => {
     if (item.isGratuit) return 0
@@ -253,16 +268,51 @@ export default function CheckoutPage() {
         // Utiliser le poids total calculé depuis la base de données
         // (déjà calculé dans le useEffect précédent)
         
-        // Calculer si on est en mode 2 colis (poids > 28 kg)
-        const isDoubleShipment = totalWeight > 28 && totalWeight <= 50
-        // Pour le calcul du tarif, on divise le poids par 2 si 2 colis
-        const weightForPricing = isDoubleShipment ? totalWeight / 2 : totalWeight
+        // Déterminer le pays pour calculer le nombre de colis
+        let country: 'FR' | 'BE' = livraisonAddress.pays || 'FR'
+        if (!country && livraisonAddress.codePostal) {
+          country = detectCountryFromPostalCode(livraisonAddress.codePostal)
+        }
+        
+        // Calculer le nombre de colis selon le pays
+        let numberOfPackages = 1
+        let weightForPricing = totalWeight
+        
+        if (country === 'BE') {
+          // Règles pour la Belgique : 18 kg par colis
+          if (totalWeight <= 18) {
+            numberOfPackages = 1
+            weightForPricing = totalWeight
+          } else if (totalWeight > 18 && totalWeight <= 36) {
+            numberOfPackages = 2
+            weightForPricing = totalWeight / 2
+          } else if (totalWeight > 36 && totalWeight <= 54) {
+            numberOfPackages = 3
+            weightForPricing = totalWeight / 3
+          } else {
+            // > 54 kg : bloqué (affiché ailleurs)
+            numberOfPackages = 0
+            weightForPricing = totalWeight
+          }
+        } else {
+          // Règles pour la France : 28 kg pour 2 colis
+          if (totalWeight > 28 && totalWeight <= 50) {
+            numberOfPackages = 2
+            weightForPricing = totalWeight / 2
+          } else {
+            numberOfPackages = 1
+            weightForPricing = totalWeight
+          }
+        }
+        
+        const isDoubleShipment = numberOfPackages >= 2
         
         // Log pour debug
         console.log('🛒 Calcul expédition - Articles:', cartItems.length, 
           'Quantité totale:', cartItems.reduce((sum, item) => sum + item.quantite, 0),
           'Poids total RÉEL (depuis DB):', totalWeight.toFixed(2), 'kg',
-          isDoubleShipment ? `(2 colis de ${weightForPricing.toFixed(2)}kg)` : '')
+          `(${numberOfPackages} colis de ${weightForPricing.toFixed(2)}kg chacun)`,
+          'Pays:', country)
 
         // Calculer la valeur totale avec promotion
         const totalValue = cartItems.reduce(
@@ -288,11 +338,7 @@ export default function CheckoutPage() {
           // Déterminer le type d'envoi selon le mode de retrait
           const shippingType = retraitMode === 'livraison' ? 'home' : 'relay'
           
-          // Utiliser le pays sélectionné dans le formulaire, ou détecter depuis le code postal
-          let country: 'FR' | 'BE' = livraisonAddress.pays || 'FR'
-          if (!country && livraisonAddress.codePostal) {
-            country = detectCountryFromPostalCode(livraisonAddress.codePostal)
-          }
+          // Le pays a déjà été déterminé plus haut
           console.log('🌍 Pays utilisé pour calcul:', country, 'code postal:', livraisonAddress.codePostal, 'pays sélectionné:', livraisonAddress.pays)
           
           // Récupérer le tarif actif selon le type d'envoi et le pays
@@ -313,7 +359,7 @@ export default function CheckoutPage() {
               console.log('⚠️ Commande inférieure au minimum requis:', shippingPrice.min_order_value, '€')
               // Utiliser un prix par défaut si le minimum n'est pas atteint
               const defaultPrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
-              setShippingCost(isDoubleShipment ? defaultPrice * 2 : defaultPrice)
+              setShippingCost(numberOfPackages > 1 ? defaultPrice * numberOfPackages : defaultPrice)
               return
             }
             
@@ -321,13 +367,13 @@ export default function CheckoutPage() {
             if (shippingPrice.min_weight && weightForPricing < shippingPrice.min_weight) {
               console.log('⚠️ Poids inférieur au minimum:', shippingPrice.min_weight, 'kg')
               const defaultPrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
-              setShippingCost(isDoubleShipment ? defaultPrice * 2 : defaultPrice)
+              setShippingCost(numberOfPackages > 1 ? defaultPrice * numberOfPackages : defaultPrice)
               return
             }
             if (shippingPrice.max_weight && weightForPricing > shippingPrice.max_weight) {
               console.log('⚠️ Poids supérieur au maximum:', shippingPrice.max_weight, 'kg')
               const defaultPrice = weightForPricing <= 1 ? 10 : weightForPricing <= 5 ? 15 : 20
-              setShippingCost(isDoubleShipment ? defaultPrice * 2 : defaultPrice)
+              setShippingCost(numberOfPackages > 1 ? defaultPrice * numberOfPackages : defaultPrice)
               return
             }
             
@@ -387,8 +433,8 @@ export default function CheckoutPage() {
               console.log('🎁 Tarif sponsor retourné:', sponsorPrice)
               if (sponsorPrice !== null && sponsorPrice >= 0) {
                 const normalPrice = rounded
-                // Doubler aussi le tarif sponsor si 2 colis
-                rounded = isDoubleShipment ? sponsorPrice * 2 : sponsorPrice
+                // Multiplier aussi le tarif sponsor par le nombre de colis
+                rounded = numberOfPackages > 1 ? sponsorPrice * numberOfPackages : sponsorPrice
                 const discount = Math.max(0, normalPrice - rounded)
                 console.log(`🎁 Tarif sponsor appliqué: ${rounded}€ (économie: ${discount.toFixed(2)}€)`)
                 setSponsorShippingDiscount(discount)
@@ -1063,15 +1109,19 @@ export default function CheckoutPage() {
               
               {/* Message informatif selon le poids */}
               {(() => {
-                // > 50 kg : Blocage total
-                if (totalWeight > 50) {
+                const country = livraisonAddress.pays || 'FR'
+                const maxWeight = country === 'BE' ? 54 : 50
+                const numberOfPackages = calculateNumberOfPackages(totalWeight, country)
+                
+                // Blocage total selon le pays
+                if ((country === 'BE' && totalWeight > 54) || (country === 'FR' && totalWeight > 50)) {
                   return (
                     <div className="mb-4 bg-red-500/20 border border-red-500/50 rounded-lg p-4">
                       <div className="flex items-start gap-2">
                         <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                         <div className="text-sm text-red-300">
                           <p className="font-semibold mb-1">Commande trop lourde ({totalWeight.toFixed(1)} kg)</p>
-                          <p className="mb-3">Les commandes de plus de 50 kg nécessitent un devis personnalisé. Contactez-nous :</p>
+                          <p className="mb-3">Les commandes de plus de {maxWeight} kg nécessitent un devis personnalisé. Contactez-nous :</p>
                           <div className="flex flex-wrap gap-2">
                             <a href="mailto:contact@devorbaits.com" className="inline-flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg transition-colors text-xs">
                               <span>📧</span> contact@devorbaits.com
@@ -1088,29 +1138,16 @@ export default function CheckoutPage() {
                     </div>
                   )
                 }
-                // 38.01-50 kg : Domicile 2 colis
-                if (totalWeight > 38 && totalWeight <= 50) {
+                // Messages pour multi-colis selon le pays
+                if (numberOfPackages > 1) {
+                  const modeText = country === 'BE' ? 'en point relais' : (totalWeight > 38 ? 'à domicile' : 'en point relais')
                   return (
                     <div className="mb-4 bg-orange-500/10 border border-orange-500/50 rounded-lg p-4">
                       <div className="flex items-start gap-2">
                         <Package className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
                         <div className="text-sm text-orange-300">
-                          <p className="font-semibold mb-1">Expédition en 2 colis ({totalWeight.toFixed(1)} kg)</p>
-                          <p>Votre commande sera expédiée en <strong>2 colis à domicile</strong>. Les frais de port sont calculés en conséquence.</p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                }
-                // 28.01-38 kg : Point relais 2 colis
-                if (totalWeight > 28 && totalWeight <= 38) {
-                  return (
-                    <div className="mb-4 bg-orange-500/10 border border-orange-500/50 rounded-lg p-4">
-                      <div className="flex items-start gap-2">
-                        <Package className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
-                        <div className="text-sm text-orange-300">
-                          <p className="font-semibold mb-1">Expédition en 2 colis ({totalWeight.toFixed(1)} kg)</p>
-                          <p>Votre commande sera expédiée en <strong>2 colis en point relais</strong>. Les frais de port sont calculés en conséquence.</p>
+                          <p className="font-semibold mb-1">Expédition en {numberOfPackages} colis ({totalWeight.toFixed(1)} kg)</p>
+                          <p>Votre commande sera expédiée en <strong>{numberOfPackages} colis {modeText}</strong>. Les frais de port sont calculés en conséquence.</p>
                         </div>
                       </div>
                     </div>
@@ -1147,15 +1184,21 @@ export default function CheckoutPage() {
                 return null
               })()}
               
-              {/* Masquer les options si > 50 kg */}
-              {totalWeight <= 50 && (
+              {/* Masquer les options si > limite selon le pays */}
+              {(() => {
+                const country = livraisonAddress.pays || 'FR'
+                const maxWeight = country === 'BE' ? 54 : 50
+                return totalWeight <= maxWeight
+              })() && (
               <div className="space-y-3">
                 {/* Option Livraison à domicile */}
                 {(() => {
+                  const country = livraisonAddress.pays || 'FR'
                   // Domicile disponible : 18.01-28 kg OU 38.01-50 kg (uniquement pour la France)
-                  const isAvailable = livraisonAddress.pays !== 'BE' && ((totalWeight > 18 && totalWeight <= 28) || (totalWeight > 38 && totalWeight <= 50))
+                  const isAvailable = country !== 'BE' && ((totalWeight > 18 && totalWeight <= 28) || (totalWeight > 38 && totalWeight <= 50))
                   const isDisabled = !isAvailable
-                  const is2Colis = totalWeight > 38 && totalWeight <= 50
+                  const numberOfPackages = calculateNumberOfPackages(totalWeight, country)
+                  const isMultiColis = numberOfPackages > 1
                   
                   return (
                     <label className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-all ${
@@ -1184,9 +1227,9 @@ export default function CheckoutPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <Truck className="w-5 h-5 text-yellow-500" />
                           <span className="font-semibold text-lg">Livraison à domicile</span>
-                          {is2Colis && !isDisabled && (
+                          {isMultiColis && !isDisabled && (
                             <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded">
-                              2 colis
+                              {numberOfPackages} colis
                             </span>
                           )}
                           {isDisabled && (
@@ -1198,8 +1241,8 @@ export default function CheckoutPage() {
                         <p className="text-sm text-gray-400">
                           {isDisabled 
                             ? 'Disponible pour les colis de 18 à 28 kg ou de 38 à 50 kg'
-                            : is2Colis 
-                              ? 'Expédition en 2 colis à votre adresse'
+                            : isMultiColis 
+                              ? `Expédition en ${numberOfPackages} colis à votre adresse`
                               : 'Livraison de toute la commande à votre adresse'
                           }
                         </p>
@@ -1210,10 +1253,12 @@ export default function CheckoutPage() {
 
                 {/* Option Chronopost Relais */}
                 {(() => {
+                  const country = livraisonAddress.pays || 'FR'
                   // Relais disponible : 0-18 kg OU 28.01-38 kg (ou toujours pour la Belgique)
-                  const isAvailable = livraisonAddress.pays === 'BE' || (totalWeight <= 18) || (totalWeight > 28 && totalWeight <= 38)
+                  const isAvailable = country === 'BE' || (totalWeight <= 18) || (totalWeight > 28 && totalWeight <= 38)
                   const isDisabled = !isAvailable
-                  const is2Colis = totalWeight > 28 && totalWeight <= 38
+                  const numberOfPackages = calculateNumberOfPackages(totalWeight, country)
+                  const isMultiColis = numberOfPackages > 1
                   
                   return (
                     <label className={`flex items-start gap-3 p-4 rounded-lg border-2 transition-all ${
@@ -1256,8 +1301,8 @@ export default function CheckoutPage() {
                         <p className="text-sm text-gray-400">
                           {isDisabled 
                             ? 'Disponible pour les colis de moins de 18 kg ou de 28 à 38 kg'
-                            : is2Colis
-                              ? 'Expédition en 2 colis en point relais'
+                            : isMultiColis
+                              ? `Expédition en ${numberOfPackages} colis en point relais`
                               : 'Retrait dans un point relais Chronopost près de chez vous'
                           }
                         </p>
