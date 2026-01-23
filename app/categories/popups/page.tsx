@@ -486,26 +486,17 @@ export default function PopupsPage() {
   }
   
   const handleQuantityChange = (newQuantity: number) => {
-    const availableStock = getPopUpDuoStock()
-    if (availableStock >= 0 && newQuantity > availableStock) {
-      return // Ne pas permettre de dépasser le stock
-    }
+    // Plus de limite de stock - on permet de commander plus que le stock disponible
     setQuantity(Math.max(1, newQuantity))
   }
   
   const handleFlashBoostQuantityChange = (newQuantity: number) => {
-    const availableStock = getFlashBoostStock()
-    if (availableStock >= 0 && newQuantity > availableStock) {
-      return
-    }
+    // Plus de limite de stock - on permet de commander plus que le stock disponible
     setFlashBoostQuantity(Math.max(1, newQuantity))
   }
   
   const handleSprayPlusQuantityChange = (newQuantity: number) => {
-    const availableStock = getSprayPlusStock()
-    if (availableStock >= 0 && newQuantity > availableStock) {
-      return
-    }
+    // Plus de limite de stock - on permet de commander plus que le stock disponible
     setSprayPlusQuantity(Math.max(1, newQuantity))
   }
 
@@ -752,11 +743,7 @@ export default function PopupsPage() {
                 />
                 <button
                   onClick={() => handleQuantityChange(quantity + 1)}
-                  disabled={(() => {
-                    const availableStock = getPopUpDuoStock()
-                    return availableStock >= 0 && availableStock < quantity + 1
-                  })()}
-                  className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors"
                 >
                   +
                 </button>
@@ -808,19 +795,39 @@ export default function PopupsPage() {
                 </div>
               </div>
 
+              {/* Message d'avertissement si quantité dépasse le stock */}
+              {(() => {
+                const availableStock = getPopUpDuoStock()
+                if (availableStock > 0 && quantity > availableStock) {
+                  return (
+                    <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-2 mb-3 text-xs">
+                      <p className="text-orange-400 font-medium">⚠️ Délai prolongé</p>
+                      <p className="text-orange-300/80">
+                        {availableStock} en stock. Délai de 8-10 jours ouvrés pour la totalité.
+                      </p>
+                    </div>
+                  )
+                }
+                if (availableStock === 0) {
+                  return (
+                    <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-2 mb-3 text-xs">
+                      <p className="text-blue-400 font-medium">⏳ Sur commande</p>
+                      <p className="text-blue-300/80">Délai : 8-10 jours ouvrés.</p>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+
               <button
                 onClick={handleAddToCart}
-                disabled={(() => {
-                  const availableStock = getPopUpDuoStock()
-                  return availableStock === 0 || (availableStock > 0 && availableStock < quantity)
-                })()}
-                className="btn btn-primary btn-sm w-full mb-8 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-primary btn-sm w-full mb-8"
               >
                 <ShoppingCart className="w-4 h-4" />
                 {(() => {
                   const availableStock = getPopUpDuoStock()
-                  if (availableStock === 0) return 'Stock épuisé'
-                  if (availableStock > 0 && availableStock < quantity) return 'Stock insuffisant'
+                  if (availableStock === 0) return 'Ajouter (sur commande)'
+                  if (availableStock > 0 && quantity > availableStock) return 'Ajouter (délai prolongé)'
                   return 'Ajouter au panier'
                 })()}
               </button>
@@ -887,10 +894,6 @@ export default function PopupsPage() {
                       />
                       <button
                         onClick={() => handleFlashBoostQuantityChange(flashBoostQuantity + 1)}
-                        disabled={(() => {
-                          const availableStock = getFlashBoostStock()
-                          return availableStock >= 0 && availableStock < flashBoostQuantity + 1
-                        })()}
                         className="px-2 py-1 bg-noir-800 border border-noir-700 rounded text-xs hover:bg-noir-700 transition-colors"
                       >
                         +
@@ -898,21 +901,13 @@ export default function PopupsPage() {
                     </div>
                     <button
                       onClick={handleFlashBoostAdd}
-                      disabled={(() => {
-                        // Ne pas désactiver si le produit n'existe pas, on affichera un message d'erreur
-                        const hasProduct = !!flashBoostProduct
-                        const hasVariant = !!flashBoostVariant
-                        const availableStock = getFlashBoostStock()
-                        const isDisabled = hasProduct && (availableStock === 0 || (availableStock > 0 && availableStock < flashBoostQuantity))
-                        return isDisabled
-                      })()}
-                      className="w-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 rounded px-2 py-1 text-xs font-semibold hover:bg-yellow-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 rounded px-2 py-1 text-xs font-semibold hover:bg-yellow-500/30 transition-colors"
                     >
                       {(() => {
                         if (!flashBoostProduct) return 'Produit non trouvé'
                         const availableStock = getFlashBoostStock()
-                        if (availableStock === 0) return 'Stock épuisé'
-                        if (availableStock > 0 && availableStock < flashBoostQuantity) return 'Stock insuffisant'
+                        if (availableStock === 0) return 'Ajouter (sur commande)'
+                        if (availableStock > 0 && flashBoostQuantity > availableStock) return 'Ajouter (délai)'
                         return 'Ajouter'
                       })()}
                     </button>
@@ -973,10 +968,6 @@ export default function PopupsPage() {
                       />
                       <button
                         onClick={() => handleSprayPlusQuantityChange(sprayPlusQuantity + 1)}
-                        disabled={(() => {
-                          const availableStock = getSprayPlusStock()
-                          return availableStock >= 0 && availableStock < sprayPlusQuantity + 1
-                        })()}
                         className="px-2 py-1 bg-noir-800 border border-noir-700 rounded text-xs hover:bg-noir-700 transition-colors"
                       >
                         +
@@ -984,21 +975,13 @@ export default function PopupsPage() {
                     </div>
                     <button
                       onClick={handleSprayPlusAdd}
-                      disabled={(() => {
-                        // Ne pas désactiver si le produit n'existe pas, on affichera un message d'erreur
-                        const hasProduct = !!sprayPlusProduct
-                        const hasVariant = !!sprayPlusVariant
-                        const availableStock = getSprayPlusStock()
-                        const isDisabled = hasProduct && (availableStock === 0 || (availableStock > 0 && availableStock < sprayPlusQuantity))
-                        return isDisabled
-                      })()}
-                      className="w-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 rounded px-2 py-1 text-xs font-semibold hover:bg-yellow-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 rounded px-2 py-1 text-xs font-semibold hover:bg-yellow-500/30 transition-colors"
                     >
                       {(() => {
                         if (!sprayPlusProduct) return 'Produit non trouvé'
                         const availableStock = getSprayPlusStock()
-                        if (availableStock === 0) return 'Stock épuisé'
-                        if (availableStock > 0 && availableStock < sprayPlusQuantity) return 'Stock insuffisant'
+                        if (availableStock === 0) return 'Ajouter (sur commande)'
+                        if (availableStock > 0 && sprayPlusQuantity > availableStock) return 'Ajouter (délai)'
                         return 'Ajouter'
                       })()}
                     </button>

@@ -246,22 +246,22 @@ export default function ProductDetailModal({
   const selectedVariantAvailable = !hasVariants || (selectedVariant?.available === true)
   // Règle métier:
   // - stock === 0 => commandable (délai), donc NE PAS bloquer sélection/achat
-  // - stock > 0 => limiter la quantité à ce stock
+  // - stock > 0 => on peut commander plus que le stock, mais avec délai prolongé
   // - stock === -1 => stock non défini => illimité
   const isBackorder = selectedAvailableStock === 0
   const isStockLimited = selectedAvailableStock > 0
-  const isStockEnough = !isStockLimited || selectedAvailableStock >= quantity
+  // On permet toujours l'ajout au panier, même si stock insuffisant (pré-commande possible)
+  const exceedsStock = isStockLimited && quantity > selectedAvailableStock
   const canAddToCart =
     isProductAvailable &&
     isSelectionReady &&
-    selectedVariantAvailable &&
-    isStockEnough
+    selectedVariantAvailable
 
+  // On peut toujours incrémenter la quantité (plus de limite de stock)
   const canIncrement =
     isProductAvailable &&
     isSelectionReady &&
-    selectedVariantAvailable &&
-    (!isStockLimited || quantity < selectedAvailableStock)
+    selectedVariantAvailable
 
   return (
     <div 
@@ -611,12 +611,8 @@ export default function ProductDetailModal({
                     value={quantity}
                     onChange={(e) => {
                       const newQty = Math.max(1, parseInt(e.target.value) || 1)
-                      let clamped = newQty
-                      // On limite uniquement si stock > 0. Si stock=0 => sur commande (délai), donc on ne limite pas.
-                      if (selectedAvailableStock > 0) {
-                        clamped = Math.min(clamped, selectedAvailableStock)
-                      }
-                      setQuantity(clamped)
+                      // Plus de limite de stock - on permet de commander plus que le stock disponible
+                      setQuantity(newQty)
                     }}
                     className="w-20 text-center bg-noir-800 border border-noir-700 rounded-lg py-2"
                     min="1"
@@ -657,6 +653,30 @@ export default function ProductDetailModal({
                 <p className="text-gray-400 text-sm capitalize">{product.category}</p>
               </div>
 
+              {/* Message d'avertissement si quantité dépasse le stock */}
+              {exceedsStock && (
+                <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-3 text-sm">
+                  <p className="text-orange-400 font-medium">
+                    ⚠️ Délai de livraison prolongé
+                  </p>
+                  <p className="text-orange-300/80 mt-1">
+                    Seulement {selectedAvailableStock} unité(s) en stock. Pour {quantity} unité(s), le délai de livraison sera de 8 à 10 jours ouvrés pour la totalité de la commande.
+                  </p>
+                </div>
+              )}
+
+              {/* Message si stock à 0 (sur commande) */}
+              {isBackorder && (
+                <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-3 text-sm">
+                  <p className="text-blue-400 font-medium">
+                    ⏳ Produit sur commande
+                  </p>
+                  <p className="text-blue-300/80 mt-1">
+                    Ce produit est actuellement en rupture de stock. Délai de livraison : 8 à 10 jours ouvrés.
+                  </p>
+                </div>
+              )}
+
               {/* Bouton Ajouter au panier */}
               <button
                 onClick={handleAddToCartClick}
@@ -667,8 +687,8 @@ export default function ProductDetailModal({
                 {(() => {
                   if (!isProductAvailable) return 'Indisponible'
                   if (hasVariants && !selectedVariant) return 'Sélectionner une variante'
-                  if (selectedAvailableStock === 0) return 'Sur commande (délai)'
-                  if (selectedAvailableStock > 0 && selectedAvailableStock < quantity) return 'Stock insuffisant'
+                  if (isBackorder) return 'Ajouter au panier (sur commande)'
+                  if (exceedsStock) return 'Ajouter au panier (délai prolongé)'
                   return 'Ajouter au panier'
                 })()}
               </button>

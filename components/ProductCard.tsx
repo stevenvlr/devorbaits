@@ -122,13 +122,14 @@ export default function ProductCard({
   const selectedVariantAvailable = !hasVariants || (selectedVariant?.available === true)
   // Règle métier:
   // - stock === 0 => commandable (afficher délai), donc NE PAS bloquer sélection/achat
-  // - stock > 0 => limiter la quantité à ce stock
+  // - stock > 0 => on peut commander plus que le stock, mais avec délai prolongé
   // - stock === -1 => stock non défini => illimité
   const isBackorder = availableStock === 0
   const isStockLimited = availableStock > 0
-  const isStockEnough = !isStockLimited || availableStock >= quantity
+  const exceedsStock = isStockLimited && quantity > availableStock
   const canChangeQuantity = isProductAvailable && isSelectionReady && selectedVariantAvailable
-  const canAddToCart = isProductAvailable && isSelectionReady && selectedVariantAvailable && isStockEnough
+  // On permet toujours l'ajout au panier, même si stock insuffisant (pré-commande possible)
+  const canAddToCart = isProductAvailable && isSelectionReady && selectedVariantAvailable
 
   const basePrice = hasVariants && selectedVariant ? (selectedVariant.price || 0) : (product.price || 0)
   const priceWithPromotion = getPriceWithPromotion(basePrice)
@@ -194,8 +195,7 @@ export default function ProductCard({
     if (!isProductAvailable) return
     if (hasVariants && !selectedVariant) return
     if (hasVariants && selectedVariant?.available !== true) return
-    // Stock limité uniquement si > 0. Si stock=0 => sur commande (délai), donc on ne limite pas.
-    if (availableStock > 0 && value > availableStock) return
+    // Plus de limite de stock - on permet de commander plus que le stock disponible
     setQuantities(prev => ({ ...prev, [productKey]: Math.max(1, value) }))
   }
 
@@ -500,13 +500,31 @@ export default function ProductCard({
             <span className="w-10 text-center font-semibold text-white">{quantity}</span>
             <button
               onClick={() => setQuantity(quantity + 1)}
-              disabled={!canChangeQuantity || (availableStock > 0 && quantity >= availableStock)}
+              disabled={!canChangeQuantity}
               className="px-3 py-1.5 bg-noir-800 rounded-lg text-sm font-semibold hover:bg-noir-600 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed text-white"
             >
               +
             </button>
           </div>
         </div>
+
+        {/* Message d'avertissement si quantité dépasse le stock */}
+        {exceedsStock && (
+          <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-2 mb-3 text-xs">
+            <p className="text-orange-400 font-medium">⚠️ Délai prolongé</p>
+            <p className="text-orange-300/80">
+              {availableStock} en stock. Délai de 8-10 jours ouvrés pour la totalité.
+            </p>
+          </div>
+        )}
+
+        {/* Message si stock à 0 (sur commande) */}
+        {isBackorder && isSelectionReady && selectedVariantAvailable && (
+          <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-2 mb-3 text-xs">
+            <p className="text-blue-400 font-medium">⏳ Sur commande</p>
+            <p className="text-blue-300/80">Délai : 8-10 jours ouvrés.</p>
+          </div>
+        )}
 
         {showAddToCart && (
           <button
@@ -525,8 +543,8 @@ export default function ProductCard({
               {(() => {
                 if (!isProductAvailable) return 'Indisponible'
                 if (hasVariants && !selectedVariant) return 'Sélectionner une variante'
-                if (availableStock === 0) return 'Sur commande (délai)'
-                if (availableStock > 0 && availableStock < quantity) return 'Stock insuffisant'
+                if (isBackorder) return 'Ajouter (sur commande)'
+                if (exceedsStock) return 'Ajouter (délai prolongé)'
                 return 'Ajouter au panier'
               })()}
             </span>

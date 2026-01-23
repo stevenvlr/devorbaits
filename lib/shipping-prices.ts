@@ -6,6 +6,7 @@ export interface ShippingPrice {
   name: string
   type: 'fixed' | 'margin_percent' | 'margin_fixed' | 'weight_ranges' | 'boxtal_only'
   shipping_type?: 'home' | 'relay' // 'home' = livraison à domicile, 'relay' = point relais
+  country?: 'FR' | 'BE' | 'ALL' // Code pays: FR (France), BE (Belgique), ALL (Tous les pays)
   fixed_price?: number
   margin_percent?: number
   margin_fixed?: number
@@ -22,8 +23,9 @@ export interface ShippingPrice {
 /**
  * Récupère le tarif d'expédition actif
  * @param shippingType - Type d'envoi: 'home' pour livraison à domicile, 'relay' pour point relais
+ * @param country - Code pays: 'FR' (France), 'BE' (Belgique). Si non fourni, cherche d'abord un tarif 'ALL', puis 'FR'
  */
-export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'home'): Promise<ShippingPrice | null> {
+export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'home', country?: 'FR' | 'BE'): Promise<ShippingPrice | null> {
   if (!isSupabaseConfigured()) {
     console.warn('⚠️ Supabase non configuré')
     return null
@@ -36,14 +38,47 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
   }
 
   try {
-    // D'abord, essayer de récupérer un tarif avec le type spécifique
-    console.log(`🔍 Recherche d'un tarif actif pour le type "${shippingType}"`)
+    const targetCountry = country || 'FR' // Par défaut France si non spécifié
+    console.log(`🔍 Recherche d'un tarif actif pour le type "${shippingType}" et pays "${targetCountry}"`)
+    
+    // 1. Chercher un tarif spécifique au pays (si la colonne country existe)
+    try {
+      const { data: dataSpecific, error: errorSpecific } = await supabase
+        .from('shipping_prices')
+        .select('*')
+        .eq('active', true)
+        .eq('shipping_type', shippingType)
+        .or(`country.eq.${targetCountry},country.eq.ALL,country.is.null`)
+        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(10) // Récupérer plusieurs pour pouvoir prioriser
+      
+      // Si pas d'erreur et qu'on a des données, les utiliser
+      if (!errorSpecific && dataSpecific && dataSpecific.length > 0) {
+        // Prioriser le tarif spécifique au pays, puis ALL, puis null
+        const prioritized = dataSpecific.sort((a, b) => {
+          const aCountry = a.country || 'FR'
+          const bCountry = b.country || 'FR'
+          if (aCountry === targetCountry) return -1
+          if (bCountry === targetCountry) return 1
+          if (aCountry === 'ALL') return -1
+          if (bCountry === 'ALL') return 1
+          return 0
+        })[0]
+        console.log(`✅ Tarif ${shippingType} trouvé pour ${targetCountry}:`, prioritized)
+        return prioritized
+      }
+    } catch (countryError: any) {
+      // Si la colonne country n'existe pas, continuer avec la recherche normale
+      console.log('⚠️ Colonne country possiblement absente, recherche sans filtre pays')
+    }
+    
+    // 2. Fallback : chercher sans filtre country (rétrocompatibilité)
     const { data, error } = await supabase
       .from('shipping_prices')
       .select('*')
       .eq('active', true)
       .eq('shipping_type', shippingType)
-      // Important: on veut le plus récemment MODIFIÉ, pas le plus récemment CRÉÉ
       .order('updated_at', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1)
@@ -224,14 +259,16 @@ export async function getActiveShippingPrice(shippingType: 'home' | 'relay' = 'h
  * @param weight - Poids du colis
  * @param orderValue - Valeur de la commande
  * @param shippingType - Type d'envoi: 'home' pour livraison à domicile, 'relay' pour point relais
+ * @param country - Code pays: 'FR' (France), 'BE' (Belgique)
  */
 export async function calculateFinalShippingPrice(
   basePrice: number,
   weight: number,
   orderValue: number = 0,
-  shippingType: 'home' | 'relay' = 'home'
+  shippingType: 'home' | 'relay' = 'home',
+  country?: 'FR' | 'BE'
 ): Promise<number> {
-  const shippingPrice = await getActiveShippingPrice(shippingType)
+  const shippingPrice = await getActiveShippingPrice(shippingType, country)
 
   if (!shippingPrice) {
     // Pas de tarif personnalisé, utiliser le prix de base

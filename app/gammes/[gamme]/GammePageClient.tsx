@@ -263,10 +263,7 @@ export default function GammePageClient() {
   }
   
   const handleBouilletteQuantityChange = (newQuantity: number) => {
-    const availableStock = getBouilletteStock()
-    if (availableStock >= 0 && newQuantity > availableStock) {
-      return // Ne pas permettre de dépasser le stock
-    }
+    // Plus de limite de stock - on permet de commander plus que le stock disponible
     setBouilletteQuantity(Math.max(1, newQuantity))
   }
 
@@ -721,14 +718,11 @@ export default function GammePageClient() {
             { label: 'Conditionnement', value: bouilletteConditionnement },
             { label: 'Quantité', value: bouilletteQuantity.toString() }
           ]}
-          disabled={(() => {
-            const availableStock = getBouilletteStock()
-            return availableStock === 0 || (availableStock > 0 && availableStock < bouilletteQuantity)
-          })()}
+          disabled={false}
           buttonText={(() => {
             const availableStock = getBouilletteStock()
-            if (availableStock === 0) return 'Stock épuisé'
-            if (availableStock > 0 && availableStock < bouilletteQuantity) return 'Stock insuffisant'
+            if (availableStock === 0) return 'Ajouter (sur commande)'
+            if (availableStock > 0 && bouilletteQuantity > availableStock) return 'Ajouter (délai prolongé)'
             return 'Ajouter au panier'
           })()}
         >
@@ -789,11 +783,7 @@ export default function GammePageClient() {
               />
               <button
                 onClick={() => handleBouilletteQuantityChange(bouilletteQuantity + 1)}
-                disabled={(() => {
-                  const availableStock = getBouilletteStock()
-                  return availableStock >= 0 && availableStock < bouilletteQuantity + 1
-                })()}
-                className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors"
               >
                 +
               </button>
@@ -871,14 +861,11 @@ export default function GammePageClient() {
           onQuantityChange={setBouilletteQuantity}
           onAddToCart={handleAddBouillette}
           availableStock={getBouilletteStock()}
-          disabled={(() => {
-            const availableStock = getBouilletteStock()
-            return availableStock === 0 || (availableStock > 0 && availableStock < bouilletteQuantity)
-          })()}
+          disabled={false}
           buttonText={(() => {
             const availableStock = getBouilletteStock()
-            if (availableStock === 0) return 'Stock épuisé'
-            if (availableStock > 0 && availableStock < bouilletteQuantity) return 'Stock insuffisant'
+            if (availableStock === 0) return 'Ajouter (sur commande)'
+            if (availableStock > 0 && bouilletteQuantity > availableStock) return 'Ajouter (délai prolongé)'
             return 'Ajouter au panier'
           })()}
         >

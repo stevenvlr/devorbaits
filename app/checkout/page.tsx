@@ -48,6 +48,15 @@ export default function CheckoutPage() {
     return cleanCode.length === 4 || cleanCode.length === 5
   }
   
+  // Fonction pour détecter le pays selon le code postal
+  const detectCountryFromPostalCode = (postalCode: string): 'FR' | 'BE' => {
+    const cleanCode = postalCode.replace(/\D/g, '')
+    if (cleanCode.length === 4) {
+      return 'BE'
+    }
+    return 'FR'
+  }
+  
   // Fonction pour obtenir le prix avec promotion pour un item
   const getItemPrice = (item: typeof cartItems[0]) => {
     if (item.isGratuit) return 0
@@ -252,8 +261,12 @@ export default function CheckoutPage() {
           // Déterminer le type d'envoi selon le mode de retrait
           const shippingType = retraitMode === 'livraison' ? 'home' : 'relay'
           
-          // Récupérer le tarif actif selon le type d'envoi
-          const shippingPrice = await getActiveShippingPrice(shippingType)
+          // Détecter le pays selon le code postal
+          const country = detectCountryFromPostalCode(livraisonAddress.codePostal)
+          console.log('🌍 Pays détecté:', country, 'pour code postal:', livraisonAddress.codePostal)
+          
+          // Récupérer le tarif actif selon le type d'envoi et le pays
+          const shippingPrice = await getActiveShippingPrice(shippingType, country)
           
           if (shippingPrice) {
             console.log('📦 Tarif trouvé:', shippingPrice.name, 'Type:', shippingPrice.type)

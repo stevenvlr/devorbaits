@@ -152,27 +152,44 @@ export default function GammeProductModal({
                     value={quantity}
                     onChange={(e) => {
                       const newQty = Math.max(1, parseInt(e.target.value) || 1)
-                      if (availableStock === undefined || availableStock < 0 || newQty <= availableStock) {
-                        onQuantityChange(newQty)
-                      }
+                      // Plus de limite de stock - on permet de commander plus que le stock disponible
+                      onQuantityChange(newQty)
                     }}
                     className="w-20 text-center bg-noir-800 border border-noir-700 rounded-lg py-2"
                     min="1"
-                    max={availableStock !== undefined && availableStock >= 0 ? availableStock : undefined}
                   />
                   <button
-                    onClick={() => {
-                      if (availableStock === undefined || availableStock < 0 || quantity + 1 <= availableStock) {
-                        onQuantityChange(quantity + 1)
-                      }
-                    }}
-                    disabled={availableStock !== undefined && availableStock >= 0 && availableStock < quantity + 1}
-                    className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => onQuantityChange(quantity + 1)}
+                    className="px-4 py-2 bg-noir-800 border border-noir-700 rounded-lg hover:bg-noir-700 transition-colors"
                   >
                     +
                   </button>
                 </div>
               </div>
+
+              {/* Message d'avertissement si quantité dépasse le stock */}
+              {availableStock !== undefined && availableStock > 0 && quantity > availableStock && (
+                <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-3 text-sm">
+                  <p className="text-orange-400 font-medium">
+                    ⚠️ Délai de livraison prolongé
+                  </p>
+                  <p className="text-orange-300/80 mt-1">
+                    Seulement {availableStock} unité(s) en stock. Pour {quantity} unité(s), le délai de livraison sera de 8 à 10 jours ouvrés pour la totalité de la commande.
+                  </p>
+                </div>
+              )}
+
+              {/* Message si stock à 0 (sur commande) */}
+              {availableStock === 0 && (
+                <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-3 text-sm">
+                  <p className="text-blue-400 font-medium">
+                    ⏳ Produit sur commande
+                  </p>
+                  <p className="text-blue-300/80 mt-1">
+                    Ce produit est actuellement en rupture de stock. Délai de livraison : 8 à 10 jours ouvrés.
+                  </p>
+                </div>
+              )}
 
               {/* Bouton Ajouter au panier */}
               <button
@@ -181,7 +198,7 @@ export default function GammeProductModal({
                 className="w-full bg-yellow-500 text-noir-950 font-bold py-4 rounded-lg hover:bg-yellow-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-yellow-500"
               >
                 <ShoppingCart className="w-5 h-5" />
-                {buttonText || 'Ajouter au panier'}
+                {buttonText || (availableStock === 0 ? 'Ajouter (sur commande)' : (availableStock !== undefined && availableStock > 0 && quantity > availableStock ? 'Ajouter (délai prolongé)' : 'Ajouter au panier'))}
               </button>
             </div>
           </div>
