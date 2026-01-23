@@ -345,8 +345,28 @@ export default function BoxtalRelayMap({
       // Pré-remplir les champs de recherche avec les valeurs initiales
       setSearchPostalCode(initialPostalCode)
       setSearchCity(initialCity)
+      // Lancer la recherche automatique directement sans passer par handleSearchInternal
+      // pour éviter les problèmes de dépendances et ne pas bloquer les recherches manuelles
       setTimeout(() => {
-        handleSearchInternal(initialPostalCode, initialCity)
+        const map = mapInstanceRef.current
+        if (map && typeof map.searchParcelPoints === "function") {
+          const country = detectCountryFromPostalCode(initialPostalCode)
+          const address = { 
+            country: country, 
+            city: initialCity.trim(), 
+            zipCode: cleanCode 
+          }
+          // Ne pas mettre searching à true pour la recherche auto, pour ne pas bloquer les recherches manuelles
+          map.searchParcelPoints.call(map, address, (parcelPoints: any[]) => {
+            if (Array.isArray(parcelPoints) && parcelPoints.length > 0) {
+              const selectedPoint = parcelPoints[0]
+              setSelectedParcelPoint(selectedPoint)
+              onSelect?.(selectedPoint)
+            }
+            // S'assurer que searching est à false après la recherche auto
+            setSearching(false)
+          })
+        }
       }, 200)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -422,7 +442,12 @@ export default function BoxtalRelayMap({
   }, [mapReady, onSelect])
 
   const handleSearch = () => {
-    console.log('🔘 Bouton Rechercher cliqué:', { searchPostalCode, searchCity })
+    console.log('🔘 Bouton Rechercher cliqué:', { searchPostalCode, searchCity, mapReady, searching })
+    // Réinitialiser l'état de recherche si nécessaire
+    if (searching) {
+      console.log('⚠️ Recherche déjà en cours, annulation...')
+      return
+    }
     handleSearchInternal(searchPostalCode, searchCity)
   }
 
@@ -493,7 +518,20 @@ export default function BoxtalRelayMap({
         <div className="flex items-end">
           <button
             onClick={handleSearch}
-            disabled={!mapReady || !searchPostalCode || (searchPostalCode.replace(/\D/g, '').length !== 4 && searchPostalCode.replace(/\D/g, '').length !== 5) || searching}
+            disabled={(() => {
+              const cleanCode = searchPostalCode ? searchPostalCode.replace(/\D/g, '') : ''
+              const isValidCode = cleanCode.length === 4 || cleanCode.length === 5
+              const isDisabled = !mapReady || !searchPostalCode || !isValidCode || searching
+              console.log('🔘 État bouton recherche:', { 
+                mapReady, 
+                searchPostalCode, 
+                cleanCode, 
+                isValidCode, 
+                searching, 
+                isDisabled 
+              })
+              return isDisabled
+            })()}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             {searching ? 'Recherche...' : 'Rechercher'}
