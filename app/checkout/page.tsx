@@ -98,7 +98,8 @@ export default function CheckoutPage() {
     adresse: '',
     codePostal: '',
     ville: '',
-    telephone: ''
+    telephone: '',
+    pays: 'FR' as 'FR' | 'BE'
   })
   const [rdvDate, setRdvDate] = useState('')
   const [rdvTimeSlot, setRdvTimeSlot] = useState('')
@@ -128,14 +129,27 @@ export default function CheckoutPage() {
   // Charger l'adresse de l'utilisateur
   useEffect(() => {
     if (user) {
+      const codePostal = user.codePostal || ''
+      const detectedPays = codePostal ? detectCountryFromPostalCode(codePostal) : 'FR'
       setLivraisonAddress({
         adresse: user.adresse || '',
-        codePostal: user.codePostal || '',
+        codePostal: codePostal,
         ville: user.ville || '',
-        telephone: user.telephone || ''
+        telephone: user.telephone || '',
+        pays: detectedPays
       })
     }
   }, [user])
+
+  // Auto-détecter le pays quand le code postal change
+  useEffect(() => {
+    if (livraisonAddress.codePostal) {
+      const detectedPays = detectCountryFromPostalCode(livraisonAddress.codePostal)
+      if (detectedPays !== livraisonAddress.pays) {
+        setLivraisonAddress({ ...livraisonAddress, pays: detectedPays })
+      }
+    }
+  }, [livraisonAddress.codePostal])
 
   // Charger les dates disponibles pour Wavignies
   useEffect(() => {
@@ -261,9 +275,9 @@ export default function CheckoutPage() {
           // Déterminer le type d'envoi selon le mode de retrait
           const shippingType = retraitMode === 'livraison' ? 'home' : 'relay'
           
-          // Détecter le pays selon le code postal
-          const country = detectCountryFromPostalCode(livraisonAddress.codePostal)
-          console.log('🌍 Pays détecté:', country, 'pour code postal:', livraisonAddress.codePostal)
+          // Utiliser le pays sélectionné dans le formulaire
+          const country = livraisonAddress.pays || 'FR'
+          console.log('🌍 Pays sélectionné:', country, 'pour code postal:', livraisonAddress.codePostal)
           
           // Récupérer le tarif actif selon le type d'envoi et le pays
           const shippingPrice = await getActiveShippingPrice(shippingType, country)
@@ -1498,7 +1512,9 @@ export default function CheckoutPage() {
                         onChange={(e) => {
                           // Accepter jusqu'à 5 chiffres (France) ou 4 chiffres (Belgique)
                           const cleanValue = e.target.value.replace(/\D/g, '').slice(0, 5)
-                          setLivraisonAddress({ ...livraisonAddress, codePostal: cleanValue })
+                          // Auto-détecter le pays selon le code postal
+                          const detectedPays = cleanValue ? detectCountryFromPostalCode(cleanValue) : 'FR'
+                          setLivraisonAddress({ ...livraisonAddress, codePostal: cleanValue, pays: detectedPays })
                         }}
                         className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
                         style={{ color: '#000000', backgroundColor: '#ffffff' }}
@@ -1515,6 +1531,16 @@ export default function CheckoutPage() {
                         required
                       />
                     </div>
+                    <select
+                      value={livraisonAddress.pays || 'FR'}
+                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, pays: e.target.value as 'FR' | 'BE' })}
+                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                      required
+                    >
+                      <option value="FR">🇫🇷 France</option>
+                      <option value="BE">🇧🇪 Belgique</option>
+                    </select>
                     <input
                       type="tel"
                       placeholder="Téléphone"
