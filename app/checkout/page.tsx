@@ -232,10 +232,13 @@ export default function CheckoutPage() {
   // Calculer le prix d'expédition basé sur les tarifs configurés
   useEffect(() => {
     const calculateShippingCost = async () => {
-      if ((retraitMode === 'livraison' || retraitMode === 'chronopost-relais') && 
-          livraisonAddress.adresse && 
-          livraisonAddress.codePostal && 
-          livraisonAddress.ville) {
+      // Pour la livraison à domicile, on a besoin de l'adresse complète
+      // Pour les points relais, on a besoin du code postal OU du pays sélectionné manuellement
+      const hasRequiredData = retraitMode === 'livraison' 
+        ? (livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville)
+        : (livraisonAddress.codePostal || livraisonAddress.pays)
+      
+      if ((retraitMode === 'livraison' || retraitMode === 'chronopost-relais') && hasRequiredData) {
         
         // Utiliser le poids total calculé depuis la base de données
         // (déjà calculé dans le useEffect précédent)
@@ -275,9 +278,12 @@ export default function CheckoutPage() {
           // Déterminer le type d'envoi selon le mode de retrait
           const shippingType = retraitMode === 'livraison' ? 'home' : 'relay'
           
-          // Utiliser le pays sélectionné dans le formulaire
-          const country = livraisonAddress.pays || 'FR'
-          console.log('🌍 Pays sélectionné:', country, 'pour code postal:', livraisonAddress.codePostal)
+          // Utiliser le pays sélectionné dans le formulaire, ou détecter depuis le code postal
+          let country: 'FR' | 'BE' = livraisonAddress.pays || 'FR'
+          if (!country && livraisonAddress.codePostal) {
+            country = detectCountryFromPostalCode(livraisonAddress.codePostal)
+          }
+          console.log('🌍 Pays utilisé pour calcul:', country, 'code postal:', livraisonAddress.codePostal, 'pays sélectionné:', livraisonAddress.pays)
           
           // Récupérer le tarif actif selon le type d'envoi et le pays
           const shippingPrice = await getActiveShippingPrice(shippingType, country)
@@ -1560,6 +1566,35 @@ export default function CheckoutPage() {
                     <MapPin className="w-5 h-5 text-yellow-500" />
                     Point relais Boxtal
                   </h3>
+                  
+                  {/* Code postal et pays pour calculer les tarifs */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Code postal (4 ou 5 chiffres)"
+                      value={livraisonAddress.codePostal}
+                      onChange={(e) => {
+                        const cleanValue = e.target.value.replace(/\D/g, '').slice(0, 5)
+                        const detectedPays = cleanValue ? detectCountryFromPostalCode(cleanValue) : 'FR'
+                        setLivraisonAddress({ ...livraisonAddress, codePostal: cleanValue, pays: detectedPays })
+                      }}
+                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                      maxLength={5}
+                    />
+                    <select
+                      value={livraisonAddress.pays || 'FR'}
+                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, pays: e.target.value as 'FR' | 'BE' })}
+                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                    >
+                      <option value="FR">🇫🇷 France</option>
+                      <option value="BE">🇧🇪 Belgique</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Indiquez votre code postal et pays pour calculer les frais de port
+                  </p>
                   
                   <div 
                     style={{ 
