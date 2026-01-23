@@ -196,6 +196,7 @@ export async function POST(request: NextRequest) {
 
     // Log serveur temporaire avant génération du formulaire
     console.log('[MONETICO FINAL]', { fields, macString })
+    console.log('[MONETICO macString]', macString)
 
     // Logs temporaires pour la clé HMAC (sans afficher la valeur)
     const raw = process.env.MONETICO_CLE_HMAC

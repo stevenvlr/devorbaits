@@ -150,18 +150,21 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
   }
   
   // Log temporaire avant génération du formulaire
-  const macString = [
-    params.TPE,
-    params.date,
-    params.montant,
-    params.reference,
-    params.texte_libre || '',
-    params.version,
-    params.lgue,
-    params.societe,
-    params.mail,
-  ].join('*') + '*********'
-  console.log('[MONETICO] montant', { montant: params.montant, macString })
+  const macOrder = [
+    'TPE',
+    'date',
+    'lgue',
+    'mail',
+    'montant',
+    'reference',
+    'societe',
+    'url_retour',
+    'url_retour_err',
+    'url_retour_ok',
+    'version',
+  ]
+  const macString = macOrder.map((key) => `${key}=${(params as Record<string, string>)[key] ?? ''}`).join('*')
+  console.log('[MONETICO macString]', macString)
 
   // Créer un formulaire dynamique
   console.log('Monetico - Création du formulaire...')
