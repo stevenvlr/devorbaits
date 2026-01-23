@@ -337,6 +337,41 @@ export default function BoxtalRelayMap({
     }
   }, [active, scriptLoaded, token, mapId, onSelect])
 
+  // Fonction pour normaliser un point relais
+  const normalizeParcelPoint = useCallback((parcelPoint: any): BoxtalParcelPoint => {
+    // Normaliser l'adresse
+    let normalizedAddress: any = {}
+    
+    if (parcelPoint.address) {
+      normalizedAddress = {
+        street: parcelPoint.address.street || parcelPoint.address.address || parcelPoint.address.line1 || '',
+        postalCode: parcelPoint.address.postalCode || parcelPoint.address.postal_code || parcelPoint.address.zipCode || '',
+        city: parcelPoint.address.city || parcelPoint.address.ville || parcelPoint.address.locality || '',
+        country: parcelPoint.address.country || parcelPoint.address.countryCode || 'FR'
+      }
+    }
+    
+    if (!normalizedAddress.postalCode) {
+      normalizedAddress.postalCode = parcelPoint.postalCode || parcelPoint.postal_code || parcelPoint.zipCode || ''
+    }
+    if (!normalizedAddress.city) {
+      normalizedAddress.city = parcelPoint.city || parcelPoint.ville || parcelPoint.locality || ''
+    }
+    if (!normalizedAddress.street) {
+      normalizedAddress.street = parcelPoint.street || parcelPoint.address || parcelPoint.line1 || ''
+    }
+    
+    return {
+      code: parcelPoint.code || parcelPoint.id || '',
+      name: parcelPoint.name || parcelPoint.nom || '',
+      address: normalizedAddress,
+      coordinates: parcelPoint.coordinates || parcelPoint.coordonnees || {},
+      network: parcelPoint.network || parcelPoint.networkCode || '',
+      rawData: parcelPoint,
+      ...parcelPoint
+    }
+  }, [])
+
   // Recherche automatique si code postal pré-rempli (une seule fois au montage)
   useEffect(() => {
     const cleanCode = initialPostalCode ? initialPostalCode.replace(/\D/g, '') : ''
@@ -359,9 +394,10 @@ export default function BoxtalRelayMap({
           // Ne pas mettre searching à true pour la recherche auto, pour ne pas bloquer les recherches manuelles
           map.searchParcelPoints.call(map, address, (parcelPoints: any[]) => {
             if (Array.isArray(parcelPoints) && parcelPoints.length > 0) {
-              const selectedPoint = parcelPoints[0]
-              setSelectedParcelPoint(selectedPoint)
-              onSelect?.(selectedPoint)
+              // Normaliser le point comme dans la recherche manuelle
+              const normalizedPoint = normalizeParcelPoint(parcelPoints[0])
+              setSelectedParcelPoint(normalizedPoint)
+              onSelect?.(normalizedPoint)
             }
             // S'assurer que searching est à false après la recherche auto
             setSearching(false)
@@ -370,7 +406,7 @@ export default function BoxtalRelayMap({
       }, 200)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady]) // Ne dépendre que de mapReady pour ne se déclencher qu'une fois
+  }, [mapReady, normalizeParcelPoint, onSelect]) // Ajouter normalizeParcelPoint et onSelect dans les dépendances
 
   // Fonction de recherche
   const handleSearchInternal = useCallback((postalCode: string, city: string) => {
@@ -411,11 +447,11 @@ export default function BoxtalRelayMap({
           console.log('✅ Points relais reçus:', parcelPoints?.length || 0, parcelPoints)
           // searchParcelPoints retourne un tableau de points
           if (Array.isArray(parcelPoints) && parcelPoints.length > 0) {
-            // Prendre le premier point ou le plus proche
-            const selectedPoint = parcelPoints[0]
-            console.log('📍 Point sélectionné:', selectedPoint)
-            setSelectedParcelPoint(selectedPoint)
-            onSelect?.(selectedPoint)
+            // Normaliser le premier point
+            const normalizedPoint = normalizeParcelPoint(parcelPoints[0])
+            console.log('📍 Point normalisé:', normalizedPoint)
+            setSelectedParcelPoint(normalizedPoint)
+            onSelect?.(normalizedPoint)
           } else {
             console.log('⚠️ Aucun point relais trouvé')
             setError("Aucun point relais trouvé pour ce code postal")
@@ -439,7 +475,7 @@ export default function BoxtalRelayMap({
     }
 
     run()
-  }, [mapReady, onSelect])
+  }, [mapReady, onSelect, normalizeParcelPoint])
 
   const handleSearch = () => {
     console.log('🔘 Bouton Rechercher cliqué:', { searchPostalCode, searchCity, mapReady, searching })
