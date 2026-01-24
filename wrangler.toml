@@ -26,8 +26,8 @@ NEXT_PUBLIC_MONETICO_TPE = "0917217"
 NEXT_PUBLIC_MONETICO_KEY = "266032402DDAA6220573A5C5A523C114016926P6"
 MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
 NEXT_PUBLIC_MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
-# URL de test Monetico (pour production, utilisez: https://paiement.monetico.fr/paiement.cgi)
-NEXT_PUBLIC_MONETICO_URL = "https://p.monetico-services.com/test/paiement.cgi"
+# URL de production Monetico
+NEXT_PUBLIC_MONETICO_URL = "https://paiement.monetico.fr/paiement.cgi"
 NEXT_PUBLIC_MONETICO_URL_RETOUR = "https://devorbaits.com/payment/success/"
 NEXT_PUBLIC_MONETICO_URL_RETOUR_ERR = "https://devorbaits.com/payment/error/"
 
