@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     const date = formatDate()
     const reference = generateReference()
 
-    // Construire les champs du formulaire
+    // Construire les champs du formulaire (tous les champs obligatoires)
     const version = '3.0'
     const lgue = 'FR'
     const texteLibre = '' // Champ texte-libre (vide pour paiement simple)
@@ -178,9 +178,41 @@ export async function POST(request: NextRequest) {
       url_retour_err: URL_RETOUR_ERR,
     }
 
+    // Validation stricte : vérifier que tous les champs obligatoires sont présents et non vides
+    const requiredFields = [
+      { key: 'TPE', value: TPE },
+      { key: 'date', value: date },
+      { key: 'montant', value: montant },
+      { key: 'reference', value: reference },
+      { key: 'version', value: version },
+      { key: 'lgue', value: lgue },
+      { key: 'societe', value: SOCIETE },
+      { key: 'mail', value: mail },
+      { key: 'url_retour', value: URL_RETOUR },
+      { key: 'url_retour_err', value: URL_RETOUR_ERR },
+      { key: 'url_retour_ok', value: URL_RETOUR_OK },
+    ]
+
+    const missingFields = requiredFields
+      .filter(item => !item.value || item.value.trim() === '')
+      .map(item => item.key)
+
+    if (missingFields.length > 0) {
+      console.error('[MONETICO] Champs manquants:', missingFields)
+      return NextResponse.json(
+        { 
+          error: `Champs Monetico manquants ou vides: ${missingFields.join(', ')}`,
+          missingFields 
+        },
+        { status: 400 }
+      )
+    }
+
+    // Log des champs présents
+    console.log('[MONETICO fields]', Object.keys(fields))
+
     // Construire la chaîne à signer (macString) au format "key=value" séparé par "*"
     // Ordre exact Monetico : TPE, date, lgue, mail, montant, reference, societe, url_retour, url_retour_err, url_retour_ok, version
-    // Exclure les champs vides et les url_retour (non inclus dans la signature selon Monetico v3.0)
     const macOrder = [
       { key: 'TPE', value: TPE },
       { key: 'date', value: date },
@@ -189,22 +221,25 @@ export async function POST(request: NextRequest) {
       { key: 'montant', value: montant },
       { key: 'reference', value: reference },
       { key: 'societe', value: SOCIETE },
+      { key: 'url_retour', value: URL_RETOUR },
+      { key: 'url_retour_err', value: URL_RETOUR_ERR },
+      { key: 'url_retour_ok', value: URL_RETOUR_OK },
       { key: 'version', value: version },
     ] as const
     
-    // Filtrer les champs vides et construire macString
+    // Construire macString (tous les champs sont validés, donc pas de filtre)
     const macString = macOrder
-      .filter(item => item.value && item.value.trim() !== '')
       .map(item => `${item.key}=${item.value}`)
       .join('*')
 
     console.log('[MONETICO macString]', macString)
 
-    // Préparer la clé HMAC (server-only, pas NEXT_PUBLIC_*)
+    // Préparer la clé HMAC (server-only, UNIQUEMENT MONETICO_CLE_HMAC, pas de fallback)
     const raw = process.env.MONETICO_CLE_HMAC
     if (!raw) {
+      console.error('MONETICO_CLE_HMAC non configuré (server-only, pas de NEXT_PUBLIC_*)')
       return NextResponse.json(
-        { error: 'MONETICO_CLE_HMAC non configuré' },
+        { error: 'MONETICO_CLE_HMAC non configuré. Configurez MONETICO_CLE_HMAC dans Cloudflare Dashboard (Settings → Environment Variables → Secrets)' },
         { status: 500 }
       )
     }
