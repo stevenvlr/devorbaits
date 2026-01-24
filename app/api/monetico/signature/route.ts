@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHash, createHmac } from 'crypto'
 
 export const runtime = 'edge'
 
@@ -56,12 +55,33 @@ export async function POST(request: NextRequest) {
     const raw = process.env.MONETICO_CLE_HMAC
     if (!raw) throw new Error('MONETICO_CLE_HMAC manquante')
     const key = raw.trim()
+    console.log('[HMAC CHECK]', { present: true, len: raw.length, lenTrim: key.length })
 
-    const keyHash = createHash('sha256').update(key, 'utf8').digest('hex').slice(0, 12)
+    const encoder = new TextEncoder()
+    const keyBytes = encoder.encode(key)
+    const dataBytes = encoder.encode(toSign)
+
+    const toHexUpper = (buffer: ArrayBuffer) =>
+      Array.from(new Uint8Array(buffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+        .toUpperCase()
+
+    // SHA-256 du key pour log (tronqué)
+    const keyHashFull = await crypto.subtle.digest('SHA-256', keyBytes)
+    const keyHash = toHexUpper(keyHashFull).slice(0, 12)
     console.log('[HMAC HASH]', keyHash)
 
-    const macString = toSign
-    const mac = createHmac('sha1', key).update(macString, 'utf8').digest('hex').toUpperCase()
+    // HMAC-SHA1 pour Monetico
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      { name: 'HMAC', hash: 'SHA-1' },
+      false,
+      ['sign']
+    )
+    const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBytes)
+    const mac = toHexUpper(signature)
     console.log('[MAC CHECK]', { len: mac.length, prefix: mac.slice(0, 6), suffix: mac.slice(-6) })
 
     // Log pour débogage (à retirer en production)
