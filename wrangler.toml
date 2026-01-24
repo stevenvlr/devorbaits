@@ -23,7 +23,6 @@ NEXT_PUBLIC_SITE_URL = "https://devorbaits.com"
 
 # Monetico
 NEXT_PUBLIC_MONETICO_TPE = "0917217"
-NEXT_PUBLIC_MONETICO_KEY = "266032402DDAA6220573A5C5A523C114016926P6"
 MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
 NEXT_PUBLIC_MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
 # URL de production Monetico (Crédit Mutuel)

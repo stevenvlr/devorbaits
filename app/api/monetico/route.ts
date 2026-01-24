@@ -159,18 +159,15 @@ export async function POST(request: NextRequest) {
     const date = formatDate()
     const reference = generateReference()
 
-    // Construire les champs du formulaire (tous les champs obligatoires)
-    const version = '3.0'
-    const lgue = 'FR'
-    const texteLibre = '' // Champ texte-libre (vide pour paiement simple)
+    // Créer UN SEUL objet fields avec EXACTEMENT les clés requises
+    // Ordre : TPE, date, montant, reference, version, lgue, societe, mail, url_retour, url_retour_ok, url_retour_err
     const fields: Record<string, string> = {
       TPE,
       date,
       montant,
       reference,
-      'texte-libre': texteLibre, // Nom avec tiret selon Monetico v3.0
-      version,
-      lgue,
+      version: '3.0',
+      lgue: 'FR',
       societe: SOCIETE,
       mail,
       url_retour: URL_RETOUR,
@@ -178,27 +175,15 @@ export async function POST(request: NextRequest) {
       url_retour_err: URL_RETOUR_ERR,
     }
 
-    // Validation stricte : vérifier que tous les champs obligatoires sont présents et non vides
-    const requiredFields = [
-      { key: 'TPE', value: TPE },
-      { key: 'date', value: date },
-      { key: 'montant', value: montant },
-      { key: 'reference', value: reference },
-      { key: 'version', value: version },
-      { key: 'lgue', value: lgue },
-      { key: 'societe', value: SOCIETE },
-      { key: 'mail', value: mail },
-      { key: 'url_retour', value: URL_RETOUR },
-      { key: 'url_retour_err', value: URL_RETOUR_ERR },
-      { key: 'url_retour_ok', value: URL_RETOUR_OK },
-    ]
-
-    const missingFields = requiredFields
-      .filter(item => !item.value || item.value.trim() === '')
-      .map(item => item.key)
+    // Validation stricte : vérifier que tous les champs sont présents et non vides
+    const requiredKeys = ['TPE', 'date', 'montant', 'reference', 'version', 'lgue', 'societe', 'mail', 'url_retour', 'url_retour_ok', 'url_retour_err']
+    const missingFields = requiredKeys.filter(key => {
+      const value = fields[key]
+      return !value || (typeof value === 'string' && value.trim() === '')
+    })
 
     if (missingFields.length > 0) {
-      console.error('[MONETICO] Champs manquants:', missingFields)
+      console.error('[MONETICO] Champs manquants ou vides:', missingFields)
       return NextResponse.json(
         { 
           error: `Champs Monetico manquants ou vides: ${missingFields.join(', ')}`,
@@ -208,28 +193,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Log des champs présents
-    console.log('[MONETICO fields]', Object.keys(fields))
+    // Log des clés présentes
+    console.log('[MONETICO fieldsKeys]', Object.keys(fields))
 
-    // Construire la chaîne à signer (macString) au format "key=value" séparé par "*"
-    // Ordre exact Monetico : TPE, date, lgue, mail, montant, reference, societe, url_retour, url_retour_err, url_retour_ok, version
+    // Construire macString UNIQUEMENT depuis fields, dans l'ordre EXACT Monetico
+    // Ordre : TPE, date, lgue, mail, montant, reference, societe, url_retour, url_retour_err, url_retour_ok, version
     const macOrder = [
-      { key: 'TPE', value: TPE },
-      { key: 'date', value: date },
-      { key: 'lgue', value: lgue },
-      { key: 'mail', value: mail },
-      { key: 'montant', value: montant },
-      { key: 'reference', value: reference },
-      { key: 'societe', value: SOCIETE },
-      { key: 'url_retour', value: URL_RETOUR },
-      { key: 'url_retour_err', value: URL_RETOUR_ERR },
-      { key: 'url_retour_ok', value: URL_RETOUR_OK },
-      { key: 'version', value: version },
+      'TPE',
+      'date',
+      'lgue',
+      'mail',
+      'montant',
+      'reference',
+      'societe',
+      'url_retour',
+      'url_retour_err',
+      'url_retour_ok',
+      'version',
     ] as const
     
-    // Construire macString (tous les champs sont validés, donc pas de filtre)
+    // Construire macString uniquement depuis fields
     const macString = macOrder
-      .map(item => `${item.key}=${item.value}`)
+      .map(key => `${key}=${fields[key]}`)
       .join('*')
 
     console.log('[MONETICO macString]', macString)
@@ -285,8 +270,8 @@ export async function POST(request: NextRequest) {
       reference,
       referenceLength: reference.length,
       referenceValid: /^[A-Z0-9]{12}$/.test(reference),
-      societe: SOCIETE,
-      societeLength: SOCIETE.length,
+      societe: fields.societe,
+      societeLength: fields.societe.length,
       macLength: MAC.length,
       macPreview: MAC.substring(0, 20) + '...',
     })
