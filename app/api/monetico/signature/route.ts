@@ -22,8 +22,16 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
-    const key = raw.replace(/[\s\r\n\t]+/g, '')
-    console.log('[HMAC CHECK]', { present: true, len: raw.length, lenTrim: key.length })
+    const keyHex = raw.trim().replace(/[\s\r\n\t]+/g, '')
+    console.log('[HMAC CHECK]', { present: true, keyHexLen: keyHex.length })
+
+    if (!/^[0-9A-Fa-f]{40}$/.test(keyHex)) {
+      console.error('MONETICO_CLE_HMAC invalide: format attendu 40 hex')
+      return NextResponse.json(
+        { error: 'Clé HMAC Monetico invalide (attendu: 40 caractères hex)' },
+        { status: 500 }
+      )
+    }
 
     // Construire la chaîne à signer à partir des fields dans l'ordre exact
     // Format: key=value*key=value*...
@@ -49,7 +57,10 @@ export async function POST(request: NextRequest) {
 
     // --- Utils WebCrypto ---
     const encoder = new TextEncoder()
-    const keyBytes = encoder.encode(key)
+    const keyBytes = new Uint8Array(20)
+    for (let i = 0; i < 20; i++) {
+      keyBytes[i] = parseInt(keyHex.slice(i * 2, i * 2 + 2), 16)
+    }
     const dataBytes = encoder.encode(toSign)
 
     const toHexUpper = (buffer: ArrayBuffer) =>
