@@ -136,18 +136,19 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
   }
   
   // Log temporaire avant génération du formulaire
+  // Ordre attendu Monetico: TPE, date, lgue, mail, montant, reference, societe, url_retour, url_retour_err, url_retour_ok, version
   const macOrder = [
     'TPE',
     'date',
+    'lgue',
+    'mail',
     'montant',
     'reference',
-    'version',
-    'lgue',
     'societe',
-    'mail',
     'url_retour',
-    'url_retour_ok',
     'url_retour_err',
+    'url_retour_ok',
+    'version',
   ]
   const macString = macOrder.map((key) => `${key}=${(params as Record<string, string>)[key] ?? ''}`).join('*')
   console.log('[MONETICO macString]', macString)

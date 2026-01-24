@@ -33,27 +33,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Construire la chaîne à signer à partir des fields dans l'ordre exact
-    // Format: key=value*key=value*...
+    // Construire la chaîne à signer à partir des fields dans l'ordre EXACT Monetico
+    // Ordre attendu: TPE, date, lgue, mail, montant, reference, societe, url_retour, url_retour_err, url_retour_ok, version
     const macOrder = [
       'TPE',
       'date',
+      'lgue',
+      'mail',
       'montant',
       'reference',
-      'version',
-      'lgue',
       'societe',
-      'mail',
       'url_retour',
-      'url_retour_ok',
       'url_retour_err',
+      'url_retour_ok',
+      'version',
     ] as const
 
     const toSign = macOrder.map((k) => `${k}=${params[k] ?? ''}`).join('*')
 
-    // Logs debug (à retirer quand OK)
-    console.log('Monetico - Chaîne à signer:', toSign)
-    console.log('Monetico - Paramètres reçus:', JSON.stringify(params, null, 2))
+    // Logs debug
+    console.log('[MONETICO macString]', toSign)
 
     // --- Utils WebCrypto ---
     const encoder = new TextEncoder()
@@ -81,8 +80,7 @@ export async function POST(request: NextRequest) {
     const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBytes)
     const mac = toHexUpper(signature)
 
-    console.log('[MAC CHECK]', { len: mac.length, prefix: mac.slice(0, 6), suffix: mac.slice(-6) })
-    console.log('Monetico - MAC généré:', mac.slice(0, 20) + '...')
+    console.log('[MAC CHECK]', { prefix: mac.slice(0, 6), suffix: mac.slice(-6) })
 
     return NextResponse.json({ MAC: mac })
   } catch (error) {
