@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
-    const key = raw.trim()
+    const key = raw.replace(/[\s\r\n\t]+/g, '')
     console.log('[HMAC CHECK]', { present: true, len: raw.length, lenTrim: key.length })
 
     // Construire la chaîne à signer à partir des fields dans l'ordre exact
