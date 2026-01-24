@@ -165,17 +165,20 @@ function PaymentSuccessContent() {
       const returnData = parseMoneticoReturn(params)
       
       if (returnData.success) {
-        setOrderReference(returnData.reference || '')
+        const moneticoReference = returnData.reference || ''
+        setOrderReference(moneticoReference)
         setMontant(returnData.montant || '')
-        
-        // Récupérer la commande en attente
-        const pendingOrderKey = `pending-order-${returnData.reference}`
+
+        // Récupérer la commande en attente (clé Monetico)
+        const pendingOrderKey = `pending-order-${moneticoReference}`
         const pendingOrderData = localStorage.getItem(pendingOrderKey)
-        
-        if (pendingOrderData && returnData.reference) {
+
+        if (pendingOrderData && moneticoReference) {
           try {
             const pendingOrder = JSON.parse(pendingOrderData)
             const total = parseFloat(returnData.montant || '0')
+            const internalReference = pendingOrder?.reference || moneticoReference
+            setOrderReference(internalReference)
             
             // Créer les items de commande avec toutes les informations de variante
             const orderItems = pendingOrder.cartItems.map((item: any) => ({
@@ -195,11 +198,13 @@ function PaymentSuccessContent() {
             // Créer la commande dans Supabase ou localStorage
             const order = await createOrder(
               user?.id,
-              returnData.reference,
+              internalReference,
               total,
               orderItems,
               'monetico',
-              typeof pendingOrder?.shippingCost === 'number' ? pendingOrder.shippingCost : undefined
+              typeof pendingOrder?.shippingCost === 'number' ? pendingOrder.shippingCost : undefined,
+              undefined,
+              moneticoReference
             )
 
             // Enregistrer l'utilisation du code promo APRÈS création de la commande
@@ -384,7 +389,7 @@ function PaymentSuccessContent() {
               // Envoyer notification Telegram
               try {
                 await sendNewOrderNotification({
-                  reference: returnData.reference || '',
+                  reference: internalReference,
                   total: total,
                   itemCount: orderItems.length,
                   customerName: user?.nom || user?.email,
@@ -416,12 +421,12 @@ function PaymentSuccessContent() {
             
             // Récupérer la commande créée avec ses items
             // Si la commande n'est pas trouvée immédiatement, utiliser les données du panier en attente
-            let createdOrder = await getOrderByReference(returnData.reference)
+            let createdOrder = await getOrderByReference(internalReference)
             
             // Si la commande n'est pas trouvée, réessayer après un court délai (pour Supabase)
             if (!createdOrder) {
               await new Promise(resolve => setTimeout(resolve, 500))
-              createdOrder = await getOrderByReference(returnData.reference)
+              createdOrder = await getOrderByReference(internalReference)
             }
             
             // Si toujours pas trouvée, utiliser les données du panier en attente
@@ -443,6 +448,9 @@ function PaymentSuccessContent() {
             
             // Supprimer la commande en attente
             localStorage.removeItem(pendingOrderKey)
+            if (pendingOrder?.reference) {
+              localStorage.removeItem(`pending-order-${pendingOrder.reference}`)
+            }
             
             setLoading(false)
           } catch (error) {

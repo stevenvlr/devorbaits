@@ -5,6 +5,7 @@ export interface Order {
   id: string
   user_id?: string
   reference: string
+  monetico_reference?: string
   total: number
   status: 'pending' | 'preparing' | 'shipped' | 'completed' | 'cancelled'
   payment_method?: string
@@ -48,7 +49,8 @@ export async function createOrder(
   items: Omit<OrderItem, 'id' | 'order_id' | 'created_at'>[],
   paymentMethod?: string,
   shippingCost?: number,
-  comment?: string
+  comment?: string,
+  moneticoReference?: string
 ): Promise<Order> {
   // Pour Supabase, on ne fournit pas l'ID (il sera généré automatiquement)
   // Pour localStorage, on génère un ID
@@ -89,6 +91,9 @@ export async function createOrder(
 
         // Ajouter shipping_cost et comment si fournis (et valides)
         let orderDataToInsert: any = orderDataToInsertBase
+        if (moneticoReference && typeof moneticoReference === 'string') {
+          orderDataToInsert = { ...orderDataToInsert, monetico_reference: moneticoReference }
+        }
         if (typeof shippingCost === 'number' && Number.isFinite(shippingCost)) {
           orderDataToInsert = { ...orderDataToInsert, shipping_cost: shippingCost }
         }
@@ -112,10 +117,11 @@ export async function createOrder(
           orderError &&
           typeof orderError.message === 'string' &&
           (orderError.message.toLowerCase().includes('shipping_cost') ||
-           orderError.message.toLowerCase().includes('comment')) &&
+           orderError.message.toLowerCase().includes('comment') ||
+           orderError.message.toLowerCase().includes('monetico_reference')) &&
           orderError.message.toLowerCase().includes('does not exist')
         ) {
-          console.warn('⚠️ Colonne shipping_cost ou comment absente dans orders, retry sans ces colonnes')
+          console.warn('⚠️ Colonne shipping_cost, comment ou monetico_reference absente dans orders, retry sans ces colonnes')
           const retry = await supabase
             .from('orders')
             .insert(orderDataToInsertBase as any)
@@ -176,6 +182,7 @@ export async function createOrder(
     id: orderIdForLocalStorage,
     user_id: userId,
     reference,
+    monetico_reference: moneticoReference,
     total,
     shipping_cost: typeof shippingCost === 'number' && Number.isFinite(shippingCost) ? shippingCost : undefined,
     status: 'pending',

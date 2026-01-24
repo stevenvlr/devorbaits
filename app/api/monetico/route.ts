@@ -6,7 +6,6 @@ export const runtime = 'edge'
 interface MoneticoRequest {
   montant: string // Montant au format "95.25EUR" (euros avec devise)
   mail: string
-  texteLibre?: string
 }
 
 /**
@@ -116,7 +115,7 @@ export async function POST(request: NextRequest) {
 
     // Lire les données de la requête
     const body: MoneticoRequest = await request.json()
-    let { montant, mail, texteLibre = '' } = body
+    let { montant, mail } = body
 
     if (!montant || !mail) {
       return NextResponse.json(
@@ -158,39 +157,36 @@ export async function POST(request: NextRequest) {
     const reference = generateReference()
 
     // Construire les champs du formulaire
-    // IMPORTANT : Utiliser "texte-libre" (avec tiret) comme nom de champ
     const version = '3.0'
     const lgue = 'FR'
-    const texteLibreClean = texteLibre || ''
     const fields: Record<string, string> = {
       TPE,
-      societe: SOCIETE,
-      version,
       date,
       montant,
       reference,
-      'texte-libre': texteLibreClean, // Nom du champ avec tiret, pas underscore
+      version,
       lgue,
+      societe: SOCIETE,
       mail,
       url_retour: URL_RETOUR,
-      url_retour_err: URL_RETOUR_ERR,
       url_retour_ok: URL_RETOUR_OK,
+      url_retour_err: URL_RETOUR_ERR,
     }
 
     // Construire la chaîne à signer depuis fields dans l'ordre EXACT demandé
-    // Format: TPE*date*lgue*mail*montant*reference*societe*url_retour*url_retour_err*url_retour_ok*version
+    // Format: TPE*date*montant*reference*version*lgue*societe*mail*url_retour*url_retour_ok*url_retour_err
     const macOrder = [
       'TPE',
       'date',
-      'lgue',
-      'mail',
       'montant',
       'reference',
-      'societe',
-      'url_retour',
-      'url_retour_err',
-      'url_retour_ok',
       'version',
+      'lgue',
+      'societe',
+      'mail',
+      'url_retour',
+      'url_retour_ok',
+      'url_retour_err',
     ] as const
     const macString = macOrder.map(key => `${key}=${fields[key] ?? ''}`).join('*')
 
@@ -226,7 +222,6 @@ export async function POST(request: NextRequest) {
       referenceValid: /^[A-Z0-9]{12}$/.test(reference),
       societe: SOCIETE,
       societeLength: SOCIETE.length,
-      texteLibre: texteLibreClean,
       macLength: MAC.length,
       macPreview: MAC.substring(0, 20) + '...',
       macString: macString.substring(0, 100) + '...',

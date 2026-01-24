@@ -38,15 +38,15 @@ export async function POST(request: NextRequest) {
     const macOrder = [
       'TPE',
       'date',
-      'lgue',
-      'mail',
       'montant',
       'reference',
-      'societe',
-      'url_retour',
-      'url_retour_err',
-      'url_retour_ok',
       'version',
+      'lgue',
+      'societe',
+      'mail',
+      'url_retour',
+      'url_retour_ok',
+      'url_retour_err',
     ] as const
 
     const toSign = macOrder.map((k) => `${k}=${params[k] ?? ''}`).join('*')

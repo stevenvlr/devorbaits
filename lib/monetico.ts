@@ -16,7 +16,6 @@ export interface MoneticoOrderData {
   montant: string // Montant au format "95.25EUR" (euros avec devise)
   reference: string
   email: string
-  texteLibre?: string
   retraitMode?: string
   rdvDate?: string
   rdvTimeSlot?: string
@@ -45,26 +44,12 @@ export function prepareMoneticoPayment(orderData: MoneticoOrderData) {
   // Le montant est déjà au format "95.25EUR" (string)
   const montant = orderData.montant
   
-  // Préparer le texte libre avec les infos de commande
-  // Important : Le texte libre ne doit pas contenir de caractères spéciaux qui pourraient casser le format
-  const texteLibreData: any = {}
-  if (orderData.retraitMode) texteLibreData.retraitMode = orderData.retraitMode
-  if (orderData.rdvDate) texteLibreData.rdvDate = orderData.rdvDate
-  if (orderData.rdvTimeSlot) texteLibreData.rdvTimeSlot = orderData.rdvTimeSlot
-  if (orderData.livraisonAddress) texteLibreData.livraisonAddress = orderData.livraisonAddress
-  
-  // Convertir en JSON et nettoyer (pas d'espaces, format compact)
-  const texteLibre = Object.keys(texteLibreData).length > 0 
-    ? JSON.stringify(texteLibreData).replace(/\s+/g, '')
-    : ''
-  
   // Construire les paramètres dans l'ordre requis par Monetico
   const params: Record<string, string> = {
     TPE: MONETICO_CONFIG.TPE,
     date: date,
     montant: montant,
     reference: orderData.reference,
-    texte_libre: texteLibre.substring(0, 32000), // Limite Monetico
     version: '3.0', // Version obligatoire
     lgue: 'FR',
     societe: MONETICO_CONFIG.SOCIETE || '', // Peut être vide mais doit être présent
@@ -91,7 +76,6 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
       date: params.date,
       montant: params.montant,
       reference: params.reference,
-      texte_libre: params.texte_libre || '(vide)',
       version: params.version,
       lgue: params.lgue,
       societe: params.societe || '(vide)',
@@ -155,15 +139,15 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
   const macOrder = [
     'TPE',
     'date',
-    'lgue',
-    'mail',
     'montant',
     'reference',
-    'societe',
-    'url_retour',
-    'url_retour_err',
-    'url_retour_ok',
     'version',
+    'lgue',
+    'societe',
+    'mail',
+    'url_retour',
+    'url_retour_ok',
+    'url_retour_err',
   ]
   const macString = macOrder.map((key) => `${key}=${(params as Record<string, string>)[key] ?? ''}`).join('*')
   console.log('[MONETICO macString]', macString)
@@ -195,6 +179,8 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
   
   // Ajouter le formulaire au DOM et le soumettre
   document.body.appendChild(form)
+  console.log('[MONETICO FORM KEYS]', Object.keys(params))
+  console.log('[MONETICO REF]', params.reference)
   console.log('Monetico - Soumission du formulaire vers Monetico...')
   form.submit()
 }
@@ -224,6 +210,14 @@ export function generateOrderReference(): string {
   return `CMD-${timestamp}-${random}`
 }
 
+// Générer une référence Monetico (A-Z0-9, 12 caractères)
+export function generateMoneticoReference(): string {
+  const base = `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
+  const cleaned = base.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (cleaned.length >= 12) return cleaned.slice(0, 12)
+  return cleaned.padEnd(12, '0').slice(0, 12)
+}
+
 /**
  * Fonction client pour démarrer un paiement Monetico
  * Appelle l'API /api/monetico et soumet automatiquement le formulaire
@@ -231,7 +225,6 @@ export function generateOrderReference(): string {
 export async function startMoneticoPayment(data: {
   montant: string // Format: "20.99EUR"
   mail: string
-  texteLibre?: string
 }) {
   try {
     console.log('Monetico - Démarrage paiement avec:', data)
@@ -288,7 +281,6 @@ export async function startMoneticoPayment(data: {
       date: fields.date,
       montant: fields.montant,
       reference: fields.reference,
-      'texte-libre': fields['texte-libre'],
       lgue: fields.lgue,
       mail: fields.mail,
       MAC: fields.MAC.substring(0, 20) + '...',
@@ -304,11 +296,11 @@ export async function startMoneticoPayment(data: {
     form.style.display = 'none'
 
     // Ajouter tous les champs comme inputs cachés
-    // IMPORTANT : Utiliser le nom exact du champ (texte-libre avec tiret)
+    // IMPORTANT : Utiliser le nom exact du champ
     Object.entries(fields).forEach(([key, value]) => {
       const input = document.createElement('input')
       input.type = 'hidden'
-      input.name = key // Le nom exact (texte-libre, pas texte_libre)
+      input.name = key
       input.value = String(value)
       form.appendChild(input)
     })

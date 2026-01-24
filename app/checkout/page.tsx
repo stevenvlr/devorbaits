@@ -21,7 +21,7 @@ import {
   AVAILABLE_TIME_SLOTS,
   MAX_BOOKINGS_PER_SLOT
 } from '@/lib/appointments-manager'
-import { submitMoneticoPayment, generateOrderReference } from '@/lib/monetico'
+import { submitMoneticoPayment, generateOrderReference, generateMoneticoReference } from '@/lib/monetico'
 import { createOrder, updateOrderStatus } from '@/lib/revenue-supabase'
 import { getActiveShippingPrice, getSponsorShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
@@ -712,8 +712,9 @@ export default function CheckoutPage() {
       return
     }
 
-    // Générer une référence de commande unique
+    // Générer une référence de commande unique + une référence Monetico (12 chars A-Z0-9)
     const orderReference = generateOrderReference()
+    const moneticoReference = generateMoneticoReference()
 
     // Calculer le montant en euros pour Monetico (string avec devise)
     // IMPORTANT : totalWithDiscount inclut déjà la remise promo, ne pas la soustraire une seconde fois
@@ -755,7 +756,7 @@ export default function CheckoutPage() {
     // Préparer les données de commande
     const orderData = {
       montant: montant, // Montant au format "95.25EUR"
-      reference: orderReference,
+      reference: moneticoReference,
       email: user.email,
       retraitMode,
       rdvDate: retraitMode === 'wavignies-rdv' ? rdvDate : undefined,
@@ -770,6 +771,7 @@ export default function CheckoutPage() {
     // Sauvegarder temporairement la commande avant paiement
     const pendingOrder = {
       reference: orderReference,
+      moneticoReference: moneticoReference,
       cartItems,
       total: finalTotal, // Sauvegarder le total final avec expédition
       originalTotal: total,
@@ -786,6 +788,9 @@ export default function CheckoutPage() {
       createdAt: new Date().toISOString(),
     }
     localStorage.setItem(`pending-order-${orderReference}`, JSON.stringify(pendingOrder))
+    if (paymentMethod === 'card') {
+      localStorage.setItem(`pending-order-${moneticoReference}`, JSON.stringify(pendingOrder))
+    }
 
     // Mode test : créer directement la commande sans passer par Monetico
     if (TEST_PAYMENT_MODE) {
@@ -816,7 +821,8 @@ export default function CheckoutPage() {
               orderItems,
               'test',
               calculatedShippingCost,
-              commentValue
+              commentValue,
+              undefined
             )
           : await createOrder(
               user?.id || '',
@@ -824,7 +830,9 @@ export default function CheckoutPage() {
               finalTotal,
               orderItems,
               'test',
-              calculatedShippingCost
+              calculatedShippingCost,
+              undefined,
+              undefined
             )
 
         // Enregistrer l'utilisation du code promo APRÈS création de la commande
@@ -2126,7 +2134,8 @@ export default function CheckoutPage() {
                                 orderItems,
                                 'paypal',
                                 calculatedShippingCost,
-                                commentValue
+                                commentValue,
+                                undefined
                               )
                             : await createOrder(
                                 user?.id || '',
@@ -2134,7 +2143,9 @@ export default function CheckoutPage() {
                                 finalTotal,
                                 orderItems,
                                 'paypal',
-                                calculatedShippingCost
+                                calculatedShippingCost,
+                                undefined,
+                                undefined
                               )
 
                           if (order.id) {

@@ -16,7 +16,19 @@ function PaymentErrorContent() {
     const params = new URLSearchParams(searchParams.toString())
     const returnData = parseMoneticoReturn(params)
     setErrorCode(returnData.codeRetour || '')
-    setReference(returnData.reference || '')
+    const moneticoReference = returnData.reference || ''
+    const pendingOrderKey = `pending-order-${moneticoReference}`
+    const pendingOrderData = localStorage.getItem(pendingOrderKey)
+    if (pendingOrderData) {
+      try {
+        const pendingOrder = JSON.parse(pendingOrderData)
+        setReference(pendingOrder?.reference || moneticoReference)
+      } catch {
+        setReference(moneticoReference)
+      }
+    } else {
+      setReference(moneticoReference)
+    }
   }, [searchParams])
 
   const getErrorMessage = (code: string) => {
