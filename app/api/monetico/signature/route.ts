@@ -33,26 +33,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Construire la chaîne à signer à partir des fields dans l'ordre EXACT Monetico
-    // Ordre attendu: TPE, date, lgue, mail, montant, reference, societe, url_retour, url_retour_err, url_retour_ok, version
-    const macOrder = [
-      'TPE',
-      'date',
-      'lgue',
-      'mail',
-      'montant',
-      'reference',
-      'societe',
-      'url_retour',
-      'url_retour_err',
-      'url_retour_ok',
-      'version',
-    ] as const
-
-    const toSign = macOrder.map((k) => `${k}=${params[k] ?? ''}`).join('*')
+    // Construire la chaîne à signer selon Monetico v3.0 (VALEURS uniquement, pas key=value)
+    // Format: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*nbrech*dateech1*montantech1*dateech2*montantech2*dateech3*montantech3*dateech4*montantech4*options*
+    // Les url_retour ne sont PAS inclus dans la signature
+    const texteLibre = params['texte-libre'] || params['texte_libre'] || ''
+    const toSign = [
+      params.TPE || '',
+      params.date || '',
+      params.montant || '',
+      params.reference || '',
+      texteLibre,
+      params.version || '3.0',
+      params.lgue || 'FR',
+      params.societe || '',
+      params.mail || '',
+      '', // nbrech (vide pour paiement simple)
+      '', // dateech1
+      '', // montantech1
+      '', // dateech2
+      '', // montantech2
+      '', // dateech3
+      '', // montantech3
+      '', // dateech4
+      '', // montantech4
+      '', // options
+    ].join('*') + '*' // Ajouter le * final
 
     // Logs debug
-    console.log('[MONETICO macString]', toSign)
+    console.log('[MONETICO toSign]', toSign)
 
     // --- Utils WebCrypto ---
     const encoder = new TextEncoder()
@@ -80,7 +88,7 @@ export async function POST(request: NextRequest) {
     const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBytes)
     const mac = toHexUpper(signature)
 
-    console.log('[MAC CHECK]', { prefix: mac.slice(0, 6), suffix: mac.slice(-6) })
+    console.log('[MAC CHECK]', { len: mac.length, prefix: mac.slice(0, 6), suffix: mac.slice(-6) })
 
     return NextResponse.json({ MAC: mac })
   } catch (error) {

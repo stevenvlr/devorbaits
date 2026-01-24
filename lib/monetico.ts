@@ -45,11 +45,14 @@ export function prepareMoneticoPayment(orderData: MoneticoOrderData) {
   const montant = orderData.montant
   
   // Construire les paramètres dans l'ordre requis par Monetico
+  // Le champ texte-libre doit s'appeler "texte-libre" (avec tiret) selon Monetico v3.0
+  const texteLibre = '' // Vide pour paiement simple (peut être rempli plus tard si besoin)
   const params: Record<string, string> = {
     TPE: MONETICO_CONFIG.TPE,
     date: date,
     montant: montant,
     reference: orderData.reference,
+    'texte-libre': texteLibre, // Nom avec tiret selon Monetico v3.0
     version: '3.0', // Version obligatoire
     lgue: 'FR',
     societe: MONETICO_CONFIG.SOCIETE || '', // Peut être vide mais doit être présent
@@ -135,23 +138,8 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
     return
   }
   
-  // Log temporaire avant génération du formulaire
-  // Ordre attendu Monetico: TPE, date, lgue, mail, montant, reference, societe, url_retour, url_retour_err, url_retour_ok, version
-  const macOrder = [
-    'TPE',
-    'date',
-    'lgue',
-    'mail',
-    'montant',
-    'reference',
-    'societe',
-    'url_retour',
-    'url_retour_err',
-    'url_retour_ok',
-    'version',
-  ]
-  const macString = macOrder.map((key) => `${key}=${(params as Record<string, string>)[key] ?? ''}`).join('*')
-  console.log('[MONETICO macString]', macString)
+  // Note: Le MAC est calculé côté serveur dans /api/monetico/signature
+  // avec les valeurs uniquement (pas key=value) et sans les url_retour
 
   // Créer un formulaire dynamique
   console.log('Monetico - Création du formulaire...')

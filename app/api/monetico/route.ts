@@ -38,20 +38,19 @@ function formatDate(): string {
 /**
  * Calcule le MAC HMAC-SHA1 en hexadécimal majuscules
  * Compatible Edge Runtime avec WebCrypto
+ * La clé doit être en bytes (Uint8Array), pas en string
  */
 async function calculateMAC(
-  key: string,
+  keyBytes: Uint8Array,
   message: string
 ): Promise<string> {
-  // Convertir la clé en ArrayBuffer
   const encoder = new TextEncoder()
-  const keyData = encoder.encode(key)
   const messageData = encoder.encode(message)
 
   // Importer la clé pour HMAC
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    keyData,
+    keyBytes,
     { name: 'HMAC', hash: 'SHA-1' },
     false,
     ['sign']
@@ -159,11 +158,13 @@ export async function POST(request: NextRequest) {
     // Construire les champs du formulaire
     const version = '3.0'
     const lgue = 'FR'
+    const texteLibre = '' // Champ texte-libre (vide pour paiement simple)
     const fields: Record<string, string> = {
       TPE,
       date,
       montant,
       reference,
+      'texte-libre': texteLibre, // Nom avec tiret selon Monetico v3.0
       version,
       lgue,
       societe: SOCIETE,
@@ -173,36 +174,62 @@ export async function POST(request: NextRequest) {
       url_retour_err: URL_RETOUR_ERR,
     }
 
-    // Construire la chaîne à signer depuis fields dans l'ordre EXACT Monetico
-    // Ordre attendu: TPE, date, lgue, mail, montant, reference, societe, url_retour, url_retour_err, url_retour_ok, version
-    const macOrder = [
-      'TPE',
-      'date',
-      'lgue',
-      'mail',
-      'montant',
-      'reference',
-      'societe',
-      'url_retour',
-      'url_retour_err',
-      'url_retour_ok',
-      'version',
-    ] as const
-    const macString = macOrder.map(key => `${key}=${fields[key] ?? ''}`).join('*')
+    // Construire la chaîne à signer selon Monetico v3.0 (VALEURS uniquement, pas key=value)
+    // Format: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*nbrech*dateech1*montantech1*dateech2*montantech2*dateech3*montantech3*dateech4*montantech4*options*
+    // Les url_retour ne sont PAS inclus dans la signature
+    const toSign = [
+      TPE,
+      date,
+      montant,
+      reference,
+      texteLibre,
+      version,
+      lgue,
+      SOCIETE,
+      mail,
+      '', // nbrech (vide pour paiement simple)
+      '', // dateech1
+      '', // montantech1
+      '', // dateech2
+      '', // montantech2
+      '', // dateech3
+      '', // montantech3
+      '', // dateech4
+      '', // montantech4
+      '', // options
+    ].join('*') + '*' // Ajouter le * final
 
-    // Log serveur temporaire avant génération du formulaire
-    console.log('[MONETICO FINAL]', { fields, macString })
-    console.log('[MONETICO macString]', macString)
+    console.log('[MONETICO toSign]', toSign)
 
-    // Logs temporaires pour la clé HMAC (sans afficher la valeur)
-    const raw = process.env.MONETICO_CLE_HMAC
-    console.log('[HMAC]', { present: !!raw, len: raw?.length })
-    if (!raw) throw new Error('MONETICO_CLE_HMAC manquante')
-    const key = raw.trim()
-    console.log('[HMAC trim]', { lenTrim: key.length })
+    // Préparer la clé HMAC (hex -> bytes)
+    const raw = process.env.MONETICO_CLE_HMAC || CLE_HMAC
+    if (!raw) {
+      return NextResponse.json(
+        { error: 'MONETICO_CLE_HMAC non configuré' },
+        { status: 500 }
+      )
+    }
+    const keyHex = raw.trim().replace(/[\s\r\n\t]+/g, '')
+    if (!/^[0-9A-Fa-f]{40}$/.test(keyHex)) {
+      return NextResponse.json(
+        { error: 'Clé HMAC Monetico invalide (attendu: 40 caractères hex)' },
+        { status: 500 }
+      )
+    }
+
+    const keyBytes = new Uint8Array(20)
+    for (let i = 0; i < 20; i++) {
+      keyBytes[i] = parseInt(keyHex.slice(i * 2, i * 2 + 2), 16)
+    }
+
+    // SHA-256(key) tronqué pour log (sans exposer la clé)
+    const keyHashFull = await crypto.subtle.digest('SHA-256', keyBytes)
+    const keyHashArray = Array.from(new Uint8Array(keyHashFull))
+    const keyHash = keyHashArray.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('').slice(0, 12)
+    console.log('[HMAC HASH]', keyHash)
 
     // Calculer le MAC
-    const MAC = await calculateMAC(key, macString)
+    const MAC = await calculateMAC(keyBytes, toSign)
 
     // Vérifier que le MAC fait bien 40 caractères
     if (MAC.length !== 40) {
@@ -212,6 +239,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
+
+    console.log('[MAC CHECK]', { len: MAC.length, prefix: MAC.slice(0, 6), suffix: MAC.slice(-6) })
 
     fields.MAC = MAC
 
