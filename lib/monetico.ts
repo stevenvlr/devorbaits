@@ -72,7 +72,7 @@ export function prepareMoneticoPayment(orderData: MoneticoOrderData) {
 export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
   try {
     // Appeler l'API serveur pour obtenir fields + MAC
-    const response = await fetch('/api/monetico', {
+    const response = await fetch('/api/monetico/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -185,7 +185,7 @@ export function generateMoneticoReference(): string {
 
 /**
  * Fonction client pour démarrer un paiement Monetico
- * Appelle l'API /api/monetico et soumet automatiquement le formulaire
+ * Appelle l'API /api/monetico/ et soumet automatiquement le formulaire
  */
 export async function startMoneticoPayment(data: {
   montant: string // Format: "20.99EUR"
@@ -195,7 +195,7 @@ export async function startMoneticoPayment(data: {
     console.log('Monetico - Démarrage paiement avec:', data)
 
     // Appeler l'API pour générer les champs et le MAC
-    const response = await fetch('/api/monetico', {
+    const response = await fetch('/api/monetico/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
