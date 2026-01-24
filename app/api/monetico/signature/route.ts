@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'edge'
 
+/**
+ * Convertit un Uint8Array en ArrayBuffer réel (copie)
+ * Nécessaire pour WebCrypto qui attend un BufferSource
+ */
+function u8ToArrayBuffer(u8: Uint8Array): ArrayBuffer {
+  const ab = new ArrayBuffer(u8.byteLength)
+  new Uint8Array(ab).set(u8)
+  return ab
+}
+
 // Cette route génère la signature (MAC) Monetico côté serveur (Edge) avec WebCrypto
 export async function POST(request: NextRequest) {
   try {
@@ -63,16 +73,6 @@ export async function POST(request: NextRequest) {
     console.log('[MONETICO toSign]', toSign)
 
     // --- Utils WebCrypto ---
-    /**
-     * Convertit un Uint8Array en ArrayBuffer réel (copie)
-     * Nécessaire pour WebCrypto qui attend un BufferSource
-     */
-    function u8ToArrayBuffer(u8: Uint8Array): ArrayBuffer {
-      const ab = new ArrayBuffer(u8.byteLength)
-      new Uint8Array(ab).set(u8)
-      return ab
-    }
-
     const encoder = new TextEncoder()
     const keyBytes = new Uint8Array(20)
     for (let i = 0; i < 20; i++) {
