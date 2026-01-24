@@ -36,6 +36,16 @@ function formatDate(): string {
 }
 
 /**
+ * Convertit un Uint8Array en ArrayBuffer réel (copie)
+ * Nécessaire pour WebCrypto qui attend un BufferSource
+ */
+function u8ToArrayBuffer(u8: Uint8Array): ArrayBuffer {
+  const ab = new ArrayBuffer(u8.byteLength)
+  new Uint8Array(ab).set(u8)
+  return ab
+}
+
+/**
  * Calcule le MAC HMAC-SHA1 en hexadécimal majuscules
  * Compatible Edge Runtime avec WebCrypto
  * La clé doit être en bytes (Uint8Array), pas en string
@@ -46,18 +56,20 @@ async function calculateMAC(
 ): Promise<string> {
   const encoder = new TextEncoder()
   const messageData = encoder.encode(message)
+  const keyBuffer = u8ToArrayBuffer(keyBytes)
+  const dataBuffer = u8ToArrayBuffer(messageData)
 
   // Importer la clé pour HMAC
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    keyBytes,
+    keyBuffer,
     { name: 'HMAC', hash: 'SHA-1' },
     false,
     ['sign']
   )
 
   // Calculer la signature
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData)
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBuffer)
 
   // Convertir en hexadécimal majuscules (40 caractères)
   const hashArray = Array.from(new Uint8Array(signature))
@@ -223,7 +235,8 @@ export async function POST(request: NextRequest) {
     }
 
     // SHA-256(key) tronqué pour log (sans exposer la clé)
-    const keyHashFull = await crypto.subtle.digest('SHA-256', keyBytes)
+    const keyBuffer = u8ToArrayBuffer(keyBytes)
+    const keyHashFull = await crypto.subtle.digest('SHA-256', keyBuffer)
     const keyHashArray = Array.from(new Uint8Array(keyHashFull))
     const keyHash = keyHashArray.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('').slice(0, 12)
     console.log('[HMAC HASH]', keyHash)

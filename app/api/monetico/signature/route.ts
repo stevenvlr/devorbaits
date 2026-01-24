@@ -63,6 +63,16 @@ export async function POST(request: NextRequest) {
     console.log('[MONETICO toSign]', toSign)
 
     // --- Utils WebCrypto ---
+    /**
+     * Convertit un Uint8Array en ArrayBuffer réel (copie)
+     * Nécessaire pour WebCrypto qui attend un BufferSource
+     */
+    function u8ToArrayBuffer(u8: Uint8Array): ArrayBuffer {
+      const ab = new ArrayBuffer(u8.byteLength)
+      new Uint8Array(ab).set(u8)
+      return ab
+    }
+
     const encoder = new TextEncoder()
     const keyBytes = new Uint8Array(20)
     for (let i = 0; i < 20; i++) {
@@ -76,16 +86,20 @@ export async function POST(request: NextRequest) {
         .join('')
         .toUpperCase()
 
+    // Convertir en ArrayBuffer pour WebCrypto
+    const keyBuffer = u8ToArrayBuffer(keyBytes)
+    const dataBuffer = u8ToArrayBuffer(dataBytes)
+
     // SHA-256(key) tronqué -> preuve que la clé a changé (sans l'exposer)
-    const keyHashFull = await crypto.subtle.digest('SHA-256', keyBytes)
+    const keyHashFull = await crypto.subtle.digest('SHA-256', keyBuffer)
     const keyHash = toHexUpper(keyHashFull).slice(0, 12)
     console.log('[HMAC HASH]', keyHash)
 
     // HMAC-SHA1(toSign) -> MAC Monetico (HEX uppercase, 40 chars)
-    const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, [
+    const cryptoKey = await crypto.subtle.importKey('raw', keyBuffer, { name: 'HMAC', hash: 'SHA-1' }, false, [
       'sign',
     ])
-    const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBytes)
+    const signature = await crypto.subtle.sign('HMAC', cryptoKey, dataBuffer)
     const mac = toHexUpper(signature)
 
     console.log('[MAC CHECK]', { len: mac.length, prefix: mac.slice(0, 6), suffix: mac.slice(-6) })
