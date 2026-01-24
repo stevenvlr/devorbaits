@@ -266,7 +266,7 @@ export async function POST(request: NextRequest) {
       societeLength: SOCIETE.length,
       macLength: MAC.length,
       macPreview: MAC.substring(0, 20) + '...',
-      macString: macString.substring(0, 100) + '...',
+      toSign: toSign.substring(0, 100) + '...',
     })
 
     return NextResponse.json({
