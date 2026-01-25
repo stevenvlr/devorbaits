@@ -316,12 +316,13 @@ export default function PayPalButton({
       <PayPalScriptProvider options={scriptOptions}>
         <PayPalCardFieldsProvider
           style={{
-            fontSize: '16px',
-            color: '#ffffff',
-            background: '#1a1a1a',
-            border: '1px solid #374151',
-            borderRadius: '6px',
-            padding: '12px',
+            input: {
+              'font-size': '16px',
+              color: '#ffffff',
+              border: '1px solid #374151',
+              'border-radius': '6px',
+              padding: '12px',
+            },
           }}
           createOrder={async () => {
             try {
