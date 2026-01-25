@@ -209,38 +209,28 @@ export async function POST(request: NextRequest) {
     console.log('[MONETICO fieldsKeys]', Object.keys(fields))
 
     // Construire macString selon doc Monetico v3.0 :
-    // - Prendre toutes les clés de fields SAUF "MAC" et les champs d'URL de retour
-    // - EXCLURE les champs vides optionnels (texte-libre, options, nbrech, etc. si vides)
-    // - Trier en ordre ASCII strict (case-sensitive)
-    // - Produire "key=value" joint par "*"
-    const keysForMac = Object.keys(fields).filter(key => {
-      // Exclure MAC et les URLs de retour du calcul MAC
-      if (key === 'MAC' || key.startsWith('url_retour')) return false
-      // Exclure les champs optionnels vides (selon doc Monetico v3.0)
-      const value = fields[key]
-      if (value === '' || value === null || value === undefined) {
-        // Les champs optionnels vides ne doivent pas être inclus
-        const optionalFields = ['texte-libre', 'options', 'nbrech', 'dateech1', 'dateech2', 'dateech3', 'dateech4', 'montantech1', 'montantech2', 'montantech3', 'montantech4']
-        return !optionalFields.includes(key)
-      }
-      return true
-    })
+    // FORMAT: VALEURS uniquement (pas key=value), séparées par *
+    // ORDRE EXACT: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*nbrech*dateech1*montantech1*dateech2*montantech2*dateech3*montantech3*dateech4*montantech4*options*
+    // Les URLs de retour (url_retour, url_retour_ok, url_retour_err) sont EXCLUES du calcul MAC
     
-    // Tri ASCII strict (case-sensitive, charCodeAt)
-    keysForMac.sort((a, b) => {
-      const minLen = Math.min(a.length, b.length)
-      for (let i = 0; i < minLen; i++) {
-        const diff = a.charCodeAt(i) - b.charCodeAt(i)
-        if (diff !== 0) return diff
-      }
-      return a.length - b.length
-    })
-
-    // Construire macString au format "key=value" joint par "*"
-    // IMPORTANT: Utiliser les valeurs exactes (pas d'encodage URL)
-    const macString = keysForMac
-      .map(key => `${key}=${String(fields[key])}`)
-      .join('*')
+    // Ordre exact des champs pour le MAC (selon documentation Monetico v3.0)
+    // Format: VALEURS uniquement, séparées par *
+    const macOrder = [
+      'TPE', 'date', 'montant', 'reference', 'texte-libre', 'version', 'lgue', 'societe', 'mail',
+      'nbrech', 'dateech1', 'montantech1', 'dateech2', 'montantech2', 
+      'dateech3', 'montantech3', 'dateech4', 'montantech4', 'options'
+    ]
+    
+    // Construire macString avec les VALEURS uniquement (pas key=value)
+    const macParts: string[] = []
+    for (const key of macOrder) {
+      const value = fields[key]
+      // Utiliser la valeur (même vide) ou chaîne vide si absente
+      macParts.push(value !== null && value !== undefined ? String(value) : '')
+    }
+    
+    // Joindre avec "*" et ajouter le * final
+    const macString = macParts.join('*') + '*'
 
     console.log('[MONETICO macString]', macString)
 

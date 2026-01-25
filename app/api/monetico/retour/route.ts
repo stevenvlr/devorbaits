@@ -104,31 +104,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Construire la chaîne pour vérifier le MAC (même format que l'envoi)
-    // Exclure MAC et URLs de retour, exclure champs optionnels vides
-    const fieldsForMac: Record<string, string> = {}
-    for (const [key, value] of Object.entries(params)) {
-      if (key === 'MAC' || key.startsWith('url_retour')) continue
-      if (value === '' || value === null || value === undefined) {
-        const optionalFields = ['texte-libre', 'options', 'nbrech', 'dateech1', 'dateech2', 'dateech3', 'dateech4', 'montantech1', 'montantech2', 'montantech3', 'montantech4']
-        if (optionalFields.includes(key)) continue
-      }
-      fieldsForMac[key] = String(value)
+    // FORMAT: VALEURS uniquement (pas key=value), dans l'ordre exact Monetico v3.0
+    // ORDRE: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*nbrech*dateech1*montantech1*dateech2*montantech2*dateech3*montantech3*dateech4*montantech4*options*
+    const macOrder = [
+      'TPE', 'date', 'montant', 'reference', 'texte-libre', 'version', 'lgue', 'societe', 'mail',
+      'nbrech', 'dateech1', 'montantech1', 'dateech2', 'montantech2', 
+      'dateech3', 'montantech3', 'dateech4', 'montantech4', 'options'
+    ]
+    
+    // Construire macString avec les VALEURS uniquement (pas key=value)
+    const macParts: string[] = []
+    for (const key of macOrder) {
+      const value = params[key]
+      // Utiliser la valeur (même vide) ou chaîne vide si absente
+      macParts.push(value !== null && value !== undefined ? String(value) : '')
     }
-
-    // Trier par ordre ASCII
-    const keysForMac = Object.keys(fieldsForMac).sort((a, b) => {
-      const minLen = Math.min(a.length, b.length)
-      for (let i = 0; i < minLen; i++) {
-        const diff = a.charCodeAt(i) - b.charCodeAt(i)
-        if (diff !== 0) return diff
-      }
-      return a.length - b.length
-    })
-
-    // Construire macString
-    const macString = keysForMac
-      .map(key => `${key}=${fieldsForMac[key]}`)
-      .join('*')
+    
+    // Joindre avec "*" et ajouter le * final
+    const macString = macParts.join('*') + '*'
 
     // Calculer le MAC attendu
     const macCalculated = await calculateMAC(keyBytes, macString)
