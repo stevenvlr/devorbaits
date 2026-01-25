@@ -49,11 +49,13 @@ function u8ToArrayBuffer(u8: Uint8Array): ArrayBuffer {
  * Calcule le MAC HMAC-SHA1 en hexadécimal majuscules
  * Compatible Edge Runtime avec WebCrypto
  * La clé doit être en bytes (Uint8Array), pas en string
+ * IMPORTANT: Le message doit être encodé en UTF-8
  */
 async function calculateMAC(
   keyBytes: Uint8Array,
   message: string
 ): Promise<string> {
+  // Encoder le message en UTF-8 (TextEncoder utilise UTF-8 par défaut)
   const encoder = new TextEncoder()
   const messageData = encoder.encode(message)
   const keyBuffer = u8ToArrayBuffer(keyBytes)
@@ -73,7 +75,14 @@ async function calculateMAC(
 
   // Convertir en hexadécimal majuscules (40 caractères)
   const hashArray = Array.from(new Uint8Array(signature))
-  return hashArray.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('')
+  const mac = hashArray.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('')
+  
+  // Vérification: le MAC doit faire exactement 40 caractères (HMAC-SHA1 = 20 bytes = 40 hex chars)
+  if (mac.length !== 40) {
+    throw new Error(`MAC length incorrect: ${mac.length} (expected 40)`)
+  }
+  
+  return mac
 }
 
 export async function POST(request: NextRequest) {
@@ -226,13 +235,20 @@ export async function POST(request: NextRequest) {
     for (const key of macOrder) {
       const value = fields[key]
       // Utiliser la valeur (même vide) ou chaîne vide si absente
-      macParts.push(value !== null && value !== undefined ? String(value) : '')
+      const val = value !== null && value !== undefined ? String(value) : ''
+      macParts.push(val)
     }
     
     // Joindre avec "*" et ajouter le * final
     const macString = macParts.join('*') + '*'
 
+    // Log détaillé pour debug
     console.log('[MONETICO macString]', macString)
+    console.log('[MONETICO macParts]', {
+      count: macParts.length,
+      expected: macOrder.length,
+      parts: macParts.map((v, i) => ({ key: macOrder[i], value: v, isEmpty: v === '' }))
+    })
 
     // Préparer la clé HMAC (server-only, UNIQUEMENT MONETICO_CLE_HMAC, pas de fallback)
     const raw = process.env.MONETICO_CLE_HMAC
