@@ -2032,18 +2032,17 @@ export default function CheckoutPage() {
                   <div className="space-y-4">
                     {/* Bouton PayPal */}
                     <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-3 mb-4">
                       <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#0070BA">
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0070BA">
                           <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
                         </svg>
                       </div>
-                      <div>
-                        <span className="font-bold text-lg text-white">PayPal</span>
+                      <div className="flex-1">
+                        <span className="font-bold text-base text-white">PayPal</span>
                         <p className="text-xs text-gray-400 mt-0.5">Paiement sécurisé avec votre compte PayPal</p>
                       </div>
-                    </div>
-                    <PayPalButton
+                      <div className="flex-1 max-w-xs">
+                        <PayPalButton
                       amount={paypalTotal}
                       itemTotal={paypalItemTotal}
                       shippingTotal={paypalShippingTotal}
@@ -2322,29 +2321,29 @@ export default function CheckoutPage() {
                           alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
                         }
                       }}
-                      onError={(error) => {
-                        alert(`Erreur PayPal: ${error}`)
-                      }}
-                    />
-                  </div>
+                        onError={(error) => {
+                          alert(`Erreur PayPal: ${error}`)
+                        }}
+                      />
+                      </div>
+                      </div>
 
-                  {/* Bouton PayPal 4x */}
-                  <div className="group relative p-5 rounded-xl border-2 border-noir-700 bg-gradient-to-br from-noir-900/80 to-noir-800/60 hover:border-yellow-500/50 transition-all duration-300 shadow-lg hover:shadow-yellow-500/10">
-                    <div className="flex items-center gap-3 mb-4">
+                    {/* Bouton PayPal 4x */}
+                    <div className="flex items-center gap-3">
                       <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#FFC439">
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#FFC439">
                           <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
                         </svg>
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-lg text-white">PayPal 4x sans frais</span>
+                          <span className="font-bold text-base text-white">PayPal 4x sans frais</span>
                           <span className="px-2 py-0.5 text-xs font-semibold bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">0%</span>
                         </div>
                         <p className="text-xs text-gray-400 mt-0.5">Paiement en 4 fois sans frais ni intérêts</p>
                       </div>
-                    </div>
-                    <PayPalButton
+                      <div className="flex-1 max-w-xs">
+                        <PayPalButton
                       amount={paypalTotal}
                       itemTotal={paypalItemTotal}
                       shippingTotal={paypalShippingTotal}
@@ -2849,11 +2848,12 @@ export default function CheckoutPage() {
                           alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
                         }
                       }}
-                      onError={(error) => {
-                        alert(`Erreur paiement carte: ${error}`)
-                      }}
-                    />
-                  </div>
+                        onError={(error) => {
+                          alert(`Erreur paiement carte: ${error}`)
+                        }}
+                      />
+                      </div>
+                    </div>
 
                   {!isFormValid() && (
                     <p className="text-sm text-gray-400 text-center mt-2">
