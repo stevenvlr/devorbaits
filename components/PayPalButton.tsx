@@ -275,14 +275,14 @@ export default function PayPalButton({
                      !process.env.NEXT_PUBLIC_PAYPAL_BASE_URL
 
   // Configuration différente selon le type de paiement
-  // Pour cardOnly, activer uniquement les cartes et désactiver PayPal
+  // Pour cardOnly, activer les cartes mais garder PayPal activé (nécessaire pour le fonctionnement)
   const scriptOptions = cardOnly
     ? {
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'card', // Activer uniquement les cartes
-        'disable-funding': 'paypal,paylater,venmo,credit', // Désactiver PayPal et autres
+        'enable-funding': 'card', // Activer les cartes
+        'disable-funding': 'paylater,venmo,credit', // Désactiver 4x et autres (mais garder PayPal)
         ...(isTestMode && { 'data-client-token': undefined }),
       }
     : paylaterOnly
