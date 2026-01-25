@@ -43,22 +43,29 @@ export default function PayPalButton({
   const isTestMode = process.env.NEXT_PUBLIC_PAYPAL_BASE_URL?.includes('sandbox') || 
                      !process.env.NEXT_PUBLIC_PAYPAL_BASE_URL
 
-  return (
-    <PayPalScriptProvider
-      options={{
+  // Configuration différente selon cardOnly
+  const scriptOptions = cardOnly
+    ? {
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        // Si cardOnly, uniquement carte (désactiver PayPal et paylater). Sinon, PayPal + carte + 4x
-        'enable-funding': cardOnly ? 'card' : 'card,paylater',
-        'disable-funding': cardOnly ? 'paylater,venmo,paylater' : '',
+        'enable-funding': 'card', // Uniquement carte
+        'disable-funding': 'paylater,venmo,credit', // Désactiver tout sauf carte
         ...(isTestMode && { 'data-client-token': undefined }),
-      }}
-    >
+      }
+    : {
+        clientId: clientId,
+        currency: 'EUR',
+        intent: 'capture',
+        'enable-funding': 'card,paylater', // PayPal + carte + 4x
+        ...(isTestMode && { 'data-client-token': undefined }),
+      }
+
+  return (
+    <PayPalScriptProvider options={scriptOptions}>
       <div className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}>
         <PayPalButtons
           disabled={disabled || isProcessing}
-          forceReRender={cardOnly ? ['card'] : undefined} // Forcer le rendu uniquement carte si cardOnly
           createOrder={async () => {
             try {
               setIsProcessing(true)
@@ -160,6 +167,7 @@ export default function PayPalButton({
             shape: 'rect',
             label: cardOnly ? 'checkout' : 'paypal', // "Debit or Credit Card" si cardOnly, sinon PayPal
             tagline: false, // Désactiver le tagline
+            height: 50, // Hauteur fixe
           }}
         />
       </div>
