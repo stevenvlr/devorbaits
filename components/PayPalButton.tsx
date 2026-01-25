@@ -155,7 +155,7 @@ export default function PayPalButton({
             layout: 'vertical',
             color: 'blue', // Couleur bleue pour carte (au lieu de gold pour PayPal)
             shape: 'rect',
-            label: 'checkout', // Afficher "Debit or Credit Card" directement
+            label: 'pay', // Afficher "Pay with Debit or Credit Card" directement
           }}
         />
       </div>
