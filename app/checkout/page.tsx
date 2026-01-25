@@ -2022,83 +2022,28 @@ export default function CheckoutPage() {
               </div>
 
               {/* Choix du mode de paiement */}
+              {/* Boutons de paiement - Affichage direct */}
               <div className="space-y-4 border-t border-noir-700 pt-4">
-                <h3 className="font-semibold flex items-center gap-2">
+                <h3 className="font-semibold flex items-center gap-2 mb-4">
                   <Wallet className="w-5 h-5 text-yellow-500" />
                   Mode de paiement
                 </h3>
                 <div className="space-y-3">
-                  {/* Option PayPal */}
-                  <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
-                    style={{
-                      borderColor: paymentMethod === 'paypal' ? '#EAB308' : '#374151',
-                      backgroundColor: paymentMethod === 'paypal' ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
-                    }}>
-                    <input
-                      type="radio"
-                      name="payment-method"
-                      value="paypal"
-                      checked={paymentMethod === 'paypal'}
-                      onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0070BA">
-                          <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
-                        </svg>
-                        <span className="font-semibold text-lg">PayPal</span>
-                      </div>
-                      <p className="text-sm text-gray-400">Paiement sécurisé via PayPal</p>
+                  {/* Bouton PayPal */}
+                  <div className="p-4 rounded-lg border-2 border-noir-700 bg-noir-900/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0070BA">
+                        <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
+                      </svg>
+                      <span className="font-semibold text-lg">PayPal</span>
                     </div>
-                  </label>
-
-                  {/* Option Carte bleue */}
-                  <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-noir-900/50"
-                    style={{
-                      borderColor: paymentMethod === 'card' ? '#EAB308' : '#374151',
-                      backgroundColor: paymentMethod === 'card' ? 'rgba(234, 179, 8, 0.1)' : 'transparent'
-                    }}>
-                    <input
-                      type="radio"
-                      name="payment-method"
-                      value="card"
-                      checked={paymentMethod === 'card'}
-                      onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <CreditCard className="w-5 h-5 text-yellow-500" />
-                        <span className="font-semibold text-lg">Carte bleue</span>
-                      </div>
-                      <p className="text-sm text-gray-400">Paiement sécurisé par carte bancaire</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Bouton de paiement */}
-              <div 
-                className="mt-6" 
-                style={{ 
-                  position: 'relative', 
-                  zIndex: 10000,
-                  isolation: 'isolate',
-                  pointerEvents: 'auto'
-                }}
-              >
-                {(paymentMethod === 'paypal' || paymentMethod === 'card') ? (
-                  <div>
                     <PayPalButton
                       amount={paypalTotal}
                       itemTotal={paypalItemTotal}
                       shippingTotal={paypalShippingTotal}
                       reference={orderReference || paypalReference}
                       disabled={!isFormValid()}
-                      cardOnly={paymentMethod === 'card'} // Forcer carte uniquement si "Carte bleue" sélectionné
                       onBeforePayment={() => {
-                        // Générer la référence si pas encore fait
                         if (!orderReference) {
                           setOrderReference(paypalReference)
                         }
@@ -2375,17 +2320,190 @@ export default function CheckoutPage() {
                         alert(`Erreur PayPal: ${error}`)
                       }}
                     />
-                    {!isFormValid() && (
-                      <p className="text-sm text-gray-400 text-center mt-2">
-                        {!cgvAccepted
-                          ? 'Veuillez accepter les CGV'
-                          : retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
-                          ? 'Veuillez sélectionner un créneau'
-                          : 'Veuillez compléter les informations requises'}
-                      </p>
-                    )}
                   </div>
-                ) : null}
+
+                  {/* Bouton PayPal 4x */}
+                  <div className="p-4 rounded-lg border-2 border-noir-700 bg-noir-900/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#0070BA">
+                        <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
+                      </svg>
+                      <span className="font-semibold text-lg">PayPal 4x sans frais</span>
+                    </div>
+                    <PayPalButton
+                      amount={paypalTotal}
+                      itemTotal={paypalItemTotal}
+                      shippingTotal={paypalShippingTotal}
+                      reference={orderReference || paypalReference}
+                      disabled={!isFormValid()}
+                      paylaterOnly={true}
+                      onBeforePayment={() => {
+                        if (!orderReference) {
+                          setOrderReference(paypalReference)
+                        }
+                      }}
+                      onSuccess={async (orderId, paymentId) => {
+                        try {
+                          const orderItems = cartItems.map((item) => ({
+                            product_id: item.productId || item.produit || `product-${item.id}`,
+                            variant_id: item.variantId || undefined,
+                            quantity: item.quantite,
+                            price: getItemPrice(item),
+                            arome: item.arome,
+                            taille: item.taille,
+                            couleur: item.couleur,
+                            diametre: item.diametre,
+                            conditionnement: item.conditionnement,
+                            produit: item.produit
+                          }))
+
+                          const currentRef = orderReference || paypalReference
+                          const commentValue = orderComment.trim() || undefined
+                          
+                          const order = commentValue
+                            ? await createOrder(
+                                user?.id || '',
+                                currentRef,
+                                finalTotal,
+                                orderItems,
+                                'paypal',
+                                calculatedShippingCost,
+                                commentValue,
+                                undefined
+                              )
+                            : await createOrder(
+                                user?.id || '',
+                                currentRef,
+                                finalTotal,
+                                orderItems,
+                                'paypal',
+                                calculatedShippingCost,
+                                undefined,
+                                undefined
+                              )
+
+                          if (order.id) {
+                            if (promoValidation && promoValidation.valid && promoCode && user?.id) {
+                              const promoCodeObj = await getPromoCodeByCode(promoCode)
+                              if (promoCodeObj) {
+                                await recordPromoCodeUsageAsync(
+                                  promoCodeObj.id,
+                                  user.id,
+                                  order.id,
+                                  promoValidation.discount || 0
+                                )
+                              }
+                            }
+                          }
+
+                          clearCart()
+                          router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal`)
+                        } catch (error) {
+                          console.error('Erreur création commande:', error)
+                          alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
+                        }
+                      }}
+                      onError={(error) => {
+                        alert(`Erreur PayPal 4x: ${error}`)
+                      }}
+                    />
+                  </div>
+
+                  {/* Bouton Carte bancaire */}
+                  <div className="p-4 rounded-lg border-2 border-noir-700 bg-noir-900/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CreditCard className="w-5 h-5 text-yellow-500" />
+                      <span className="font-semibold text-lg">Carte bancaire</span>
+                    </div>
+                    <PayPalButton
+                      amount={paypalTotal}
+                      itemTotal={paypalItemTotal}
+                      shippingTotal={paypalShippingTotal}
+                      reference={orderReference || paypalReference}
+                      disabled={!isFormValid()}
+                      cardOnly={true}
+                      onBeforePayment={() => {
+                        if (!orderReference) {
+                          setOrderReference(paypalReference)
+                        }
+                      }}
+                      onSuccess={async (orderId, paymentId) => {
+                        try {
+                          const orderItems = cartItems.map((item) => ({
+                            product_id: item.productId || item.produit || `product-${item.id}`,
+                            variant_id: item.variantId || undefined,
+                            quantity: item.quantite,
+                            price: getItemPrice(item),
+                            arome: item.arome,
+                            taille: item.taille,
+                            couleur: item.couleur,
+                            diametre: item.diametre,
+                            conditionnement: item.conditionnement,
+                            produit: item.produit
+                          }))
+
+                          const currentRef = orderReference || paypalReference
+                          const commentValue = orderComment.trim() || undefined
+                          
+                          const order = commentValue
+                            ? await createOrder(
+                                user?.id || '',
+                                currentRef,
+                                finalTotal,
+                                orderItems,
+                                'card',
+                                calculatedShippingCost,
+                                commentValue,
+                                undefined
+                              )
+                            : await createOrder(
+                                user?.id || '',
+                                currentRef,
+                                finalTotal,
+                                orderItems,
+                                'card',
+                                calculatedShippingCost,
+                                undefined,
+                                undefined
+                              )
+
+                          if (order.id) {
+                            if (promoValidation && promoValidation.valid && promoCode && user?.id) {
+                              const promoCodeObj = await getPromoCodeByCode(promoCode)
+                              if (promoCodeObj) {
+                                await recordPromoCodeUsageAsync(
+                                  promoCodeObj.id,
+                                  user.id,
+                                  order.id,
+                                  promoValidation.discount || 0
+                                )
+                              }
+                            }
+                          }
+
+                          clearCart()
+                          router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=card`)
+                        } catch (error) {
+                          console.error('Erreur création commande:', error)
+                          alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
+                        }
+                      }}
+                      onError={(error) => {
+                        alert(`Erreur paiement carte: ${error}`)
+                      }}
+                    />
+                  </div>
+
+                  {!isFormValid() && (
+                    <p className="text-sm text-gray-400 text-center mt-2">
+                      {!cgvAccepted
+                        ? 'Veuillez accepter les CGV'
+                        : retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
+                        ? 'Veuillez sélectionner un créneau'
+                        : 'Veuillez compléter les informations requises'}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -14,6 +14,7 @@ interface PayPalButtonProps {
   disabled?: boolean
   onBeforePayment?: () => void
   cardOnly?: boolean // Si true, afficher uniquement le formulaire de carte
+  paylaterOnly?: boolean // Si true, afficher uniquement PayPal 4x
 }
 
 export default function PayPalButton({
@@ -26,6 +27,7 @@ export default function PayPalButton({
   disabled,
   onBeforePayment,
   cardOnly = false,
+  paylaterOnly = false,
 }: PayPalButtonProps) {
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -43,8 +45,7 @@ export default function PayPalButton({
   const isTestMode = process.env.NEXT_PUBLIC_PAYPAL_BASE_URL?.includes('sandbox') || 
                      !process.env.NEXT_PUBLIC_PAYPAL_BASE_URL
 
-  // Configuration différente selon cardOnly
-  // Pour cardOnly, on utilise une URL de script différente qui force uniquement la carte
+  // Configuration différente selon le type de paiement
   const scriptOptions = cardOnly
     ? {
         clientId: clientId,
@@ -54,11 +55,21 @@ export default function PayPalButton({
         'disable-funding': 'paylater,venmo,credit,paypal', // Désactiver PayPal et toutes autres options
         ...(isTestMode && { 'data-client-token': undefined }),
       }
+    : paylaterOnly
+    ? {
+        clientId: clientId,
+        currency: 'EUR',
+        intent: 'capture',
+        'enable-funding': 'paylater', // Uniquement PayPal 4x
+        'disable-funding': 'card,venmo,credit,paypal', // Désactiver tout sauf paylater
+        ...(isTestMode && { 'data-client-token': undefined }),
+      }
     : {
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'card,paylater', // PayPal + carte + 4x
+        'enable-funding': 'paypal', // Uniquement PayPal (compte)
+        'disable-funding': 'card,paylater,venmo,credit', // Désactiver carte et 4x
         ...(isTestMode && { 'data-client-token': undefined }),
       }
 
@@ -164,9 +175,9 @@ export default function PayPalButton({
           }}
           style={{
             layout: 'vertical',
-            color: cardOnly ? 'blue' : 'gold', // Bleu pour carte uniquement, gold pour PayPal
+            color: cardOnly ? 'blue' : paylaterOnly ? 'gold' : 'gold', // Bleu pour carte, gold pour PayPal/4x
             shape: 'rect',
-            label: cardOnly ? 'checkout' : 'paypal', // "Debit or Credit Card" si cardOnly, sinon PayPal
+            label: cardOnly ? 'checkout' : paylaterOnly ? 'paylater' : 'paypal', // Label selon le type
             tagline: false, // Désactiver le tagline
             height: 50, // Hauteur fixe
           }}
