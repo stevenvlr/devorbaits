@@ -320,7 +320,7 @@ export default function PayPalButton({
               'font-size': '16px',
               color: '#ffffff',
               border: '1px solid #374151',
-              'border-radius': '6px',
+              borderRadius: '6px',
               padding: '12px',
             },
           }}
