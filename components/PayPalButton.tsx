@@ -47,8 +47,7 @@ export default function PayPalButton({
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'card', // Activer le paiement par carte
-        'disable-funding': 'paylater', // Désactiver paylater
+        'enable-funding': 'card,paylater', // Activer carte et paylater (4x) dans les options
         ...(isTestMode && { 'data-client-token': undefined }),
       }}
     >
@@ -152,9 +151,9 @@ export default function PayPalButton({
           }}
           style={{
             layout: 'vertical',
-            color: 'blue', // Couleur bleue pour carte (au lieu de gold pour PayPal)
+            color: 'gold', // Couleur gold pour PayPal (avec options carte et 4x)
             shape: 'rect',
-            label: 'pay', // Afficher "Pay with Debit or Credit Card" directement
+            label: 'paypal', // Afficher les options PayPal, 4x et carte
           }}
         />
       </div>

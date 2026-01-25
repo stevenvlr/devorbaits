@@ -2049,7 +2049,7 @@ export default function CheckoutPage() {
                         </svg>
                         <span className="font-semibold text-lg">PayPal</span>
                       </div>
-                      <p className="text-sm text-gray-400">Paiement sécurisé via PayPal • Paiement en 4 fois disponible</p>
+                      <p className="text-sm text-gray-400">Paiement sécurisé via PayPal</p>
                     </div>
                   </label>
 
