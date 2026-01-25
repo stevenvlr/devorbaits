@@ -2383,6 +2383,7 @@ export default function CheckoutPage() {
                               )
 
                           if (order.id) {
+                            // Enregistrer l'utilisation du code promo
                             if (promoValidation && promoValidation.valid && promoCode && user?.id) {
                               const promoCodeObj = await getPromoCodeByCode(promoCode)
                               if (promoCodeObj) {
@@ -2393,6 +2394,176 @@ export default function CheckoutPage() {
                                   promoValidation.discount || 0
                                 )
                               }
+                            }
+
+                            // Créer le rendez-vous pour Wavignies si nécessaire
+                            if (retraitMode === 'wavignies-rdv' && rdvDate && rdvTimeSlot && user) {
+                              try {
+                                const { createAppointment } = await import('@/lib/appointments-manager')
+                                const appointmentResult = createAppointment(
+                                  rdvDate,
+                                  rdvTimeSlot,
+                                  user.id || user.email,
+                                  user.nom || user.email,
+                                  user.email,
+                                  livraisonAddress.telephone,
+                                  order.id
+                                )
+                                if (appointmentResult.success) {
+                                  console.log('✅ Rendez-vous créé pour Wavignies')
+                                }
+                              } catch (appointmentError) {
+                                console.warn('⚠️ Erreur création rendez-vous:', appointmentError)
+                              }
+                            }
+                            
+                            // Sauvegarder l'adresse de livraison
+                            if (retraitMode === 'livraison' && order.id) {
+                              try {
+                                const { getSupabaseClient } = await import('@/lib/supabase')
+                                const supabase = getSupabaseClient()
+                                if (supabase && livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville) {
+                                  await supabase
+                                    .from('orders')
+                                    .update({
+                                      shipping_address: {
+                                        adresse: livraisonAddress.adresse,
+                                        codePostal: livraisonAddress.codePostal,
+                                        ville: livraisonAddress.ville,
+                                        telephone: livraisonAddress.telephone
+                                      }
+                                    })
+                                    .eq('id', order.id)
+                                }
+                              } catch (addressError) {
+                                console.warn('⚠️ Erreur sauvegarde adresse:', addressError)
+                              }
+                            }
+
+                            // Sauvegarder le point relais
+                            if (retraitMode === 'chronopost-relais' && order.id) {
+                              try {
+                                const { getSupabaseClient } = await import('@/lib/supabase')
+                                const supabase = getSupabaseClient()
+                                if (supabase) {
+                                  if (boxtalParcelPoint) {
+                                    const pointAddress = boxtalParcelPoint.address || {} as any
+                                    const rawData = (boxtalParcelPoint as any).rawData || boxtalParcelPoint
+                                    const postalCode = pointAddress.postalCode || pointAddress.postal_code || rawData.address?.postalCode || rawData.postalCode || ''
+                                    const city = pointAddress.city || pointAddress.ville || rawData.address?.city || rawData.city || ''
+                                    const street = pointAddress.street || pointAddress.address || rawData.address?.street || rawData.street || ''
+                                    const fullAddress = [street, postalCode, city].filter(Boolean).join(', ')
+                                    
+                                    await supabase
+                                      .from('orders')
+                                      .update({
+                                        shipping_address: {
+                                          type: 'boxtal-relais',
+                                          identifiant: boxtalParcelPoint.code || '',
+                                          nom: boxtalParcelPoint.name || '',
+                                          adresseComplete: fullAddress,
+                                          adresse: street,
+                                          codePostal: postalCode,
+                                          ville: city,
+                                          pays: pointAddress.country || pointAddress.countryCode || 'FR',
+                                          coordonnees: boxtalParcelPoint.coordinates || {},
+                                          network: boxtalParcelPoint.network || '',
+                                          telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
+                                          pointRelais: boxtalParcelPoint
+                                        }
+                                      })
+                                      .eq('id', order.id)
+                                  } else if (chronopostRelaisPoint) {
+                                    await supabase
+                                      .from('orders')
+                                      .update({
+                                        shipping_address: {
+                                          type: 'chronopost-relais',
+                                          identifiant: chronopostRelaisPoint.identifiant,
+                                          nom: chronopostRelaisPoint.nom,
+                                          adresse: chronopostRelaisPoint.adresse,
+                                          codePostal: chronopostRelaisPoint.codePostal,
+                                          ville: chronopostRelaisPoint.ville,
+                                          horaires: chronopostRelaisPoint.horaires,
+                                          coordonnees: chronopostRelaisPoint.coordonnees,
+                                          telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
+                                        }
+                                      })
+                                      .eq('id', order.id)
+                                  }
+                                }
+                              } catch (relaisError) {
+                                console.warn('⚠️ Erreur sauvegarde point relais:', relaisError)
+                              }
+                            }
+
+                            // Sauvegarder retrait Wavignies
+                            if (retraitMode === 'wavignies-rdv' && order.id && rdvDate && rdvTimeSlot) {
+                              try {
+                                const { getSupabaseClient } = await import('@/lib/supabase')
+                                const supabase = getSupabaseClient()
+                                if (supabase) {
+                                  await supabase
+                                    .from('orders')
+                                    .update({
+                                      shipping_address: {
+                                        type: 'wavignies-rdv',
+                                        rdvDate: rdvDate,
+                                        rdvTimeSlot: rdvTimeSlot,
+                                        adresse: 'Retrait sur rendez-vous à Wavignies (60130)',
+                                        ville: 'Wavignies',
+                                        codePostal: '60130',
+                                        telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
+                                      }
+                                    })
+                                    .eq('id', order.id)
+                                }
+                              } catch (wavigniesError) {
+                                console.warn('⚠️ Erreur sauvegarde retrait Wavignies:', wavigniesError)
+                              }
+                            }
+
+                            // Générer facture et email
+                            try {
+                              const invoiceResponse = await fetch('/api/auto-invoice', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ orderId: order.id }),
+                              })
+                              const invoiceResult = await invoiceResponse.json()
+                              if (invoiceResult.ok) {
+                                console.log('✅ Facture générée et email envoyé')
+                              }
+                            } catch (invoiceError) {
+                              console.warn('⚠️ Erreur génération facture:', invoiceError)
+                            }
+                            
+                            // Notification Telegram
+                            try {
+                              await sendNewOrderNotification({
+                                reference: currentRef,
+                                total: finalTotal,
+                                itemCount: cartItems.length,
+                                customerName: user?.nom || user?.email,
+                                customerEmail: user?.email,
+                                shippingCost: calculatedShippingCost,
+                                retraitMode: retraitMode,
+                                items: cartItems.map(item => ({
+                                  produit: item.produit,
+                                  quantity: item.quantite,
+                                  price: item.prix,
+                                  arome: item.arome,
+                                  taille: item.taille,
+                                  couleur: item.couleur,
+                                  diametre: item.diametre,
+                                  conditionnement: item.conditionnement,
+                                  forme: item.format,
+                                  saveur: item.arome,
+                                  gamme: item.gamme,
+                                }))
+                              })
+                            } catch (telegramError) {
+                              console.warn('⚠️ Erreur notification Telegram:', telegramError)
                             }
                           }
 
@@ -2468,6 +2639,7 @@ export default function CheckoutPage() {
                               )
 
                           if (order.id) {
+                            // Enregistrer l'utilisation du code promo
                             if (promoValidation && promoValidation.valid && promoCode && user?.id) {
                               const promoCodeObj = await getPromoCodeByCode(promoCode)
                               if (promoCodeObj) {
@@ -2478,6 +2650,176 @@ export default function CheckoutPage() {
                                   promoValidation.discount || 0
                                 )
                               }
+                            }
+
+                            // Créer le rendez-vous pour Wavignies si nécessaire
+                            if (retraitMode === 'wavignies-rdv' && rdvDate && rdvTimeSlot && user) {
+                              try {
+                                const { createAppointment } = await import('@/lib/appointments-manager')
+                                const appointmentResult = createAppointment(
+                                  rdvDate,
+                                  rdvTimeSlot,
+                                  user.id || user.email,
+                                  user.nom || user.email,
+                                  user.email,
+                                  livraisonAddress.telephone,
+                                  order.id
+                                )
+                                if (appointmentResult.success) {
+                                  console.log('✅ Rendez-vous créé pour Wavignies')
+                                }
+                              } catch (appointmentError) {
+                                console.warn('⚠️ Erreur création rendez-vous:', appointmentError)
+                              }
+                            }
+                            
+                            // Sauvegarder l'adresse de livraison
+                            if (retraitMode === 'livraison' && order.id) {
+                              try {
+                                const { getSupabaseClient } = await import('@/lib/supabase')
+                                const supabase = getSupabaseClient()
+                                if (supabase && livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville) {
+                                  await supabase
+                                    .from('orders')
+                                    .update({
+                                      shipping_address: {
+                                        adresse: livraisonAddress.adresse,
+                                        codePostal: livraisonAddress.codePostal,
+                                        ville: livraisonAddress.ville,
+                                        telephone: livraisonAddress.telephone
+                                      }
+                                    })
+                                    .eq('id', order.id)
+                                }
+                              } catch (addressError) {
+                                console.warn('⚠️ Erreur sauvegarde adresse:', addressError)
+                              }
+                            }
+
+                            // Sauvegarder le point relais
+                            if (retraitMode === 'chronopost-relais' && order.id) {
+                              try {
+                                const { getSupabaseClient } = await import('@/lib/supabase')
+                                const supabase = getSupabaseClient()
+                                if (supabase) {
+                                  if (boxtalParcelPoint) {
+                                    const pointAddress = boxtalParcelPoint.address || {} as any
+                                    const rawData = (boxtalParcelPoint as any).rawData || boxtalParcelPoint
+                                    const postalCode = pointAddress.postalCode || pointAddress.postal_code || rawData.address?.postalCode || rawData.postalCode || ''
+                                    const city = pointAddress.city || pointAddress.ville || rawData.address?.city || rawData.city || ''
+                                    const street = pointAddress.street || pointAddress.address || rawData.address?.street || rawData.street || ''
+                                    const fullAddress = [street, postalCode, city].filter(Boolean).join(', ')
+                                    
+                                    await supabase
+                                      .from('orders')
+                                      .update({
+                                        shipping_address: {
+                                          type: 'boxtal-relais',
+                                          identifiant: boxtalParcelPoint.code || '',
+                                          nom: boxtalParcelPoint.name || '',
+                                          adresseComplete: fullAddress,
+                                          adresse: street,
+                                          codePostal: postalCode,
+                                          ville: city,
+                                          pays: pointAddress.country || pointAddress.countryCode || 'FR',
+                                          coordonnees: boxtalParcelPoint.coordinates || {},
+                                          network: boxtalParcelPoint.network || '',
+                                          telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
+                                          pointRelais: boxtalParcelPoint
+                                        }
+                                      })
+                                      .eq('id', order.id)
+                                  } else if (chronopostRelaisPoint) {
+                                    await supabase
+                                      .from('orders')
+                                      .update({
+                                        shipping_address: {
+                                          type: 'chronopost-relais',
+                                          identifiant: chronopostRelaisPoint.identifiant,
+                                          nom: chronopostRelaisPoint.nom,
+                                          adresse: chronopostRelaisPoint.adresse,
+                                          codePostal: chronopostRelaisPoint.codePostal,
+                                          ville: chronopostRelaisPoint.ville,
+                                          horaires: chronopostRelaisPoint.horaires,
+                                          coordonnees: chronopostRelaisPoint.coordonnees,
+                                          telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
+                                        }
+                                      })
+                                      .eq('id', order.id)
+                                  }
+                                }
+                              } catch (relaisError) {
+                                console.warn('⚠️ Erreur sauvegarde point relais:', relaisError)
+                              }
+                            }
+
+                            // Sauvegarder retrait Wavignies
+                            if (retraitMode === 'wavignies-rdv' && order.id && rdvDate && rdvTimeSlot) {
+                              try {
+                                const { getSupabaseClient } = await import('@/lib/supabase')
+                                const supabase = getSupabaseClient()
+                                if (supabase) {
+                                  await supabase
+                                    .from('orders')
+                                    .update({
+                                      shipping_address: {
+                                        type: 'wavignies-rdv',
+                                        rdvDate: rdvDate,
+                                        rdvTimeSlot: rdvTimeSlot,
+                                        adresse: 'Retrait sur rendez-vous à Wavignies (60130)',
+                                        ville: 'Wavignies',
+                                        codePostal: '60130',
+                                        telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
+                                      }
+                                    })
+                                    .eq('id', order.id)
+                                }
+                              } catch (wavigniesError) {
+                                console.warn('⚠️ Erreur sauvegarde retrait Wavignies:', wavigniesError)
+                              }
+                            }
+
+                            // Générer facture et email
+                            try {
+                              const invoiceResponse = await fetch('/api/auto-invoice', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ orderId: order.id }),
+                              })
+                              const invoiceResult = await invoiceResponse.json()
+                              if (invoiceResult.ok) {
+                                console.log('✅ Facture générée et email envoyé')
+                              }
+                            } catch (invoiceError) {
+                              console.warn('⚠️ Erreur génération facture:', invoiceError)
+                            }
+                            
+                            // Notification Telegram
+                            try {
+                              await sendNewOrderNotification({
+                                reference: currentRef,
+                                total: finalTotal,
+                                itemCount: cartItems.length,
+                                customerName: user?.nom || user?.email,
+                                customerEmail: user?.email,
+                                shippingCost: calculatedShippingCost,
+                                retraitMode: retraitMode,
+                                items: cartItems.map(item => ({
+                                  produit: item.produit,
+                                  quantity: item.quantite,
+                                  price: item.prix,
+                                  arome: item.arome,
+                                  taille: item.taille,
+                                  couleur: item.couleur,
+                                  diametre: item.diametre,
+                                  conditionnement: item.conditionnement,
+                                  forme: item.format,
+                                  saveur: item.arome,
+                                  gamme: item.gamme,
+                                }))
+                              })
+                            } catch (telegramError) {
+                              console.warn('⚠️ Erreur notification Telegram:', telegramError)
                             }
                           }
 
