@@ -176,7 +176,7 @@ function PayPalButtonContent({
           layout: 'vertical',
           color: cardOnly ? 'blue' : paylaterOnly ? 'gold' : 'gold',
           shape: 'rect',
-          label: cardOnly ? 'checkout' : 'paypal',
+          label: cardOnly ? 'pay' : 'paypal', // Utiliser 'pay' pour forcer l'affichage direct du formulaire carte
           tagline: false,
           height: 50,
         }}
@@ -214,15 +214,15 @@ export default function PayPalButton({
                      !process.env.NEXT_PUBLIC_PAYPAL_BASE_URL
 
   // Configuration différente selon le type de paiement
-  // IMPORTANT: PayPal nécessite toujours PayPal activé pour fonctionner
-  // Pour cardOnly et paylaterOnly, on active aussi PayPal mais on utilise le label pour forcer l'affichage
+  // IMPORTANT: Pour cardOnly, on force uniquement la carte et on désactive PayPal pour éviter la redirection
   const scriptOptions = cardOnly
     ? {
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'card', // Activer carte
-        'disable-funding': 'paylater,venmo,credit', // Désactiver 4x et autres (PayPal reste disponible)
+        'enable-funding': 'card', // Activer uniquement carte
+        'disable-funding': 'paylater,venmo,credit,paypal', // Désactiver PayPal et toutes autres options
+        'data-namespace': 'paypal_sdk',
         ...(isTestMode && { 'data-client-token': undefined }),
       }
     : paylaterOnly
