@@ -45,14 +45,12 @@ export function prepareMoneticoPayment(orderData: MoneticoOrderData) {
   const montant = orderData.montant
   
   // Construire les paramètres dans l'ordre requis par Monetico
-  // Le champ texte-libre doit s'appeler "texte-libre" (avec tiret) selon Monetico v3.0
-  const texteLibre = '' // Vide pour paiement simple (peut être rempli plus tard si besoin)
+  // NOTE: texte-libre n'est plus utilisé (supprimé pour éviter les divergences)
   const params: Record<string, string> = {
     TPE: MONETICO_CONFIG.TPE,
     date: date,
     montant: montant,
     reference: orderData.reference,
-    'texte-libre': texteLibre, // Nom avec tiret selon Monetico v3.0
     version: '3.0', // Version obligatoire
     lgue: 'FR',
     societe: MONETICO_CONFIG.SOCIETE || '', // Peut être vide mais doit être présent
@@ -115,7 +113,6 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
       date: fields.date,
       montant: fields.montant,
       reference: fields.reference,
-      'texte-libre': fields['texte-libre'],
       lgue: fields.lgue,
       mail: fields.mail,
       MAC: fields.MAC.substring(0, 20) + '...',
@@ -125,19 +122,35 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
     })
 
     // Créer le formulaire avec les fields EXACTEMENT tels que reçus du serveur
+    // IMPORTANT: Filtrer texte-libre/texte_libre pour éviter toute divergence
     const form = document.createElement('form')
     form.method = 'POST'
     form.action = action
     form.style.display = 'none'
 
-    // Ajouter tous les champs comme inputs cachés (sans modification)
+    // Ajouter tous les champs comme inputs cachés, en EXCLUANT texte-libre/texte_libre
+    const postKeys: string[] = []
     Object.entries(fields).forEach(([key, value]) => {
+      // Exclure texte-libre et texte_libre (ne doit pas être envoyé)
+      if (key === 'texte-libre' || key === 'texte_libre') {
+        console.warn('[MONETICO] ⚠️ texte-libre/texte_libre détecté dans fields, ignoré:', key)
+        return
+      }
       const input = document.createElement('input')
       input.type = 'hidden'
       input.name = key
       input.value = String(value)
       form.appendChild(input)
+      postKeys.push(key)
     })
+
+    // Log des clés qui seront envoyées (vérification finale)
+    console.log('[MONETICO postKeys]', postKeys)
+    if (postKeys.includes('texte-libre') || postKeys.includes('texte_libre')) {
+      console.error('[MONETICO] ❌ ERREUR: texte-libre/texte_libre présent dans postKeys!')
+    } else {
+      console.log('[MONETICO] ✅ texte-libre/texte_libre absent de postKeys (OK)')
+    }
 
     // Ajouter le formulaire au DOM et le soumettre
     document.body.appendChild(form)
@@ -261,14 +274,29 @@ export async function startMoneticoPayment(data: {
     form.style.display = 'none'
 
     // Ajouter tous les champs comme inputs cachés
-    // IMPORTANT : Utiliser le nom exact du champ
+    // IMPORTANT: Exclure texte-libre/texte_libre pour éviter toute divergence
+    const postKeys: string[] = []
     Object.entries(fields).forEach(([key, value]) => {
+      // Exclure texte-libre et texte_libre (ne doit pas être envoyé)
+      if (key === 'texte-libre' || key === 'texte_libre') {
+        console.warn('[MONETICO] ⚠️ texte-libre/texte_libre détecté dans fields, ignoré:', key)
+        return
+      }
       const input = document.createElement('input')
       input.type = 'hidden'
       input.name = key
       input.value = String(value)
       form.appendChild(input)
+      postKeys.push(key)
     })
+
+    // Log des clés qui seront envoyées (vérification finale)
+    console.log('[MONETICO postKeys]', postKeys)
+    if (postKeys.includes('texte-libre') || postKeys.includes('texte_libre')) {
+      console.error('[MONETICO] ❌ ERREUR: texte-libre/texte_libre présent dans postKeys!')
+    } else {
+      console.log('[MONETICO] ✅ texte-libre/texte_libre absent de postKeys (OK)')
+    }
 
     // Ajouter le formulaire au DOM et le soumettre
     document.body.appendChild(form)
