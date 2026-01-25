@@ -44,13 +44,14 @@ export default function PayPalButton({
                      !process.env.NEXT_PUBLIC_PAYPAL_BASE_URL
 
   // Configuration différente selon cardOnly
+  // Pour cardOnly, on utilise une URL de script différente qui force uniquement la carte
   const scriptOptions = cardOnly
     ? {
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
         'enable-funding': 'card', // Uniquement carte
-        'disable-funding': 'paylater,venmo,credit', // Désactiver tout sauf carte
+        'disable-funding': 'paylater,venmo,credit,paypal', // Désactiver PayPal et toutes autres options
         ...(isTestMode && { 'data-client-token': undefined }),
       }
     : {
