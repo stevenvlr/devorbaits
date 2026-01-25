@@ -47,7 +47,7 @@ export default function PayPalButton({
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'card', // Uniquement paiement par carte (pas PayPal)
+        'enable-funding': 'card', // Activer le paiement par carte
         'disable-funding': 'paylater', // Désactiver paylater
         ...(isTestMode && { 'data-client-token': undefined }),
       }}
@@ -55,7 +55,6 @@ export default function PayPalButton({
       <div className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}>
         <PayPalButtons
           disabled={disabled || isProcessing}
-          fundingSource="card" // Forcer l'affichage direct du formulaire de carte
           createOrder={async () => {
             try {
               setIsProcessing(true)
