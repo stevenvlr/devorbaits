@@ -219,22 +219,22 @@ export async function POST(request: NextRequest) {
 
     // Construire macString selon doc Monetico v3.0 :
     // FORMAT: VALEURS uniquement (pas key=value), séparées par *
-    // ORDRE EXACT: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*nbrech*dateech1*montantech1*dateech2*montantech2*dateech3*montantech3*dateech4*montantech4*options*
+    // ORDRE EXACT: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*
+    // NOTE: Les champs d'échéance (nbrech, dateech*, montantech*) et options sont EXCLUS si vides
     // Les URLs de retour (url_retour, url_retour_ok, url_retour_err) sont EXCLUES du calcul MAC
     
-    // Ordre exact des champs pour le MAC (selon documentation Monetico v3.0)
+    // Ordre exact des champs OBLIGATOIRES pour le MAC (selon documentation Monetico v3.0)
     // Format: VALEURS uniquement, séparées par *
+    // IMPORTANT: Seuls les champs obligatoires sont inclus (pas les champs d'échéance vides)
     const macOrder = [
-      'TPE', 'date', 'montant', 'reference', 'texte-libre', 'version', 'lgue', 'societe', 'mail',
-      'nbrech', 'dateech1', 'montantech1', 'dateech2', 'montantech2', 
-      'dateech3', 'montantech3', 'dateech4', 'montantech4', 'options'
+      'TPE', 'date', 'montant', 'reference', 'texte-libre', 'version', 'lgue', 'societe', 'mail'
     ]
     
     // Construire macString avec les VALEURS uniquement (pas key=value)
     const macParts: string[] = []
     for (const key of macOrder) {
       const value = fields[key]
-      // Utiliser la valeur (même vide) ou chaîne vide si absente
+      // Utiliser la valeur (même vide pour texte-libre) ou chaîne vide si absente
       const val = value !== null && value !== undefined ? String(value) : ''
       macParts.push(val)
     }
