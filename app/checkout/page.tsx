@@ -2072,7 +2072,7 @@ export default function CheckoutPage() {
                         <CreditCard className="w-5 h-5 text-yellow-500" />
                         <span className="font-semibold text-lg">Carte bleue</span>
                       </div>
-                      <p className="text-sm text-gray-400">Paiement sécurisé par PayPal</p>
+                      <p className="text-sm text-gray-400">Paiement sécurisé par carte bancaire</p>
                     </div>
                   </label>
                 </div>
