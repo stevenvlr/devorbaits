@@ -1,6 +1,6 @@
 'use client'
 
-import { PayPalButtons, PayPalScriptProvider, usePayPalScriptReducer, PayPalCardFieldsProvider, PayPalCardFieldsForm } from '@paypal/react-paypal-js'
+import { PayPalButtons, PayPalScriptProvider, usePayPalScriptReducer, PayPalCardFieldsProvider, PayPalCardFieldsForm, usePayPalCardFields } from '@paypal/react-paypal-js'
 import { useState, useEffect, useRef } from 'react'
 import { getPayPalClientId, isPayPalConfigured } from '@/lib/paypal'
 
@@ -105,9 +105,11 @@ function PayPalButtonContent({
     )
   }
 
-  // Si cardOnly, utiliser PayPalCardFieldsForm pour afficher directement les champs de carte
-  // Note: PayPalCardFieldsProvider est géré au niveau parent
-  if (cardOnly && isResolved) {
+  // Si cardOnly, on ne devrait pas arriver ici car PayPalCardFieldsProvider gère ça différemment
+  // Cette condition est pour les cas où cardOnly est false mais on est dans un contexte CardFields
+  if (cardOnly) {
+    // Si on est dans un PayPalCardFieldsProvider, utiliser usePayPalCardFields
+    // Sinon, attendre que le script soit résolu
     return (
       <div className="space-y-4">
         <PayPalCardFieldsForm />
@@ -413,7 +415,7 @@ export default function PayPalButton({
             setIsProcessing(false)
           }}
         >
-          <PayPalButtonContent
+          <CardFieldsContent
             amount={amount}
             itemTotal={itemTotal}
             shippingTotal={shippingTotal}
@@ -422,8 +424,6 @@ export default function PayPalButton({
             onError={onError}
             disabled={disabled}
             onBeforePayment={onBeforePayment}
-            cardOnly={cardOnly}
-            paylaterOnly={paylaterOnly}
             isProcessing={isProcessing}
             setIsProcessing={setIsProcessing}
           />
