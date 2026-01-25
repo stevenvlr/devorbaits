@@ -2855,21 +2855,24 @@ export default function CheckoutPage() {
                       </div>
                     </div>
 
-                  {!isFormValid() && (
-                    <p className="text-sm text-gray-400 text-center mt-2">
-                      {!cgvAccepted
-                        ? 'Veuillez accepter les CGV'
-                        : retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
-                        ? 'Veuillez sélectionner un créneau'
-                        : 'Veuillez compléter les informations requises'}
-                    </p>
-                  )}
+                    {!isFormValid() && (
+                      <p className="text-sm text-gray-400 text-center mt-2">
+                        {!cgvAccepted
+                          ? 'Veuillez accepter les CGV'
+                          : retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
+                          ? 'Veuillez sélectionner un créneau'
+                          : 'Veuillez compléter les informations requises'}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+          </div>
         </div>
       </div>
+    </div>
 
       {/* Widget Monetico iframe */}
       {moneticoWidget && (
