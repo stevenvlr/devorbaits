@@ -106,30 +106,32 @@ function PayPalButtonContent({
   }
 
   return (
-    <div 
-      ref={containerRef}
-      className={disabled || isProcessing ? 'opacity-50' : 'opacity-100'}
-      style={{ 
-        position: 'relative', 
-        zIndex: 10, 
-        minHeight: '55px',
-        pointerEvents: disabled || isProcessing ? 'none' : 'auto',
-        isolation: 'isolate',
-        transition: 'opacity 0.2s ease-in-out'
-      }}
-    >
-      <style jsx>{`
-        div :global([data-funding-source]:not(:first-child)),
-        div :global(button:not(:first-child)),
-        div :global([role="button"]:not(:first-child)) {
+    <>
+      <style>{`
+        [data-paypal-button-container] [data-funding-source]:not(:first-child),
+        [data-paypal-button-container] button:not(:first-child),
+        [data-paypal-button-container] [role="button"]:not(:first-child) {
           display: none !important;
         }
-        div :global(*[class*="paypal-button-label"]),
-        div :global(*[class*="paypal-button-text"]) {
+        [data-paypal-button-container] *[class*="paypal-button-label"],
+        [data-paypal-button-container] *[class*="paypal-button-text"] {
           display: none !important;
         }
       `}</style>
-      <PayPalButtons
+      <div 
+        ref={containerRef}
+        data-paypal-button-container
+        className={disabled || isProcessing ? 'opacity-50' : 'opacity-100'}
+        style={{ 
+          position: 'relative', 
+          zIndex: 10, 
+          minHeight: '55px',
+          pointerEvents: disabled || isProcessing ? 'none' : 'auto',
+          isolation: 'isolate',
+          transition: 'opacity 0.2s ease-in-out'
+        }}
+      >
+        <PayPalButtons
         disabled={disabled || isProcessing}
         createOrder={async () => {
           try {
@@ -235,7 +237,8 @@ function PayPalButtonContent({
           height: 50,
         }}
       />
-    </div>
+      </div>
+    </>
   )
 }
 
