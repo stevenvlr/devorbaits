@@ -2022,15 +2022,16 @@ export default function CheckoutPage() {
               </div>
 
               {/* Choix du mode de paiement */}
-              {/* Boutons de paiement - Affichage direct */}
-              <div className="space-y-4 border-t border-noir-700 pt-6">
+              {/* Bloc unique de paiement PayPal */}
+              <div className="border-t border-noir-700 pt-6">
                 <h3 className="font-semibold flex items-center gap-2 mb-6 text-xl">
                   <Wallet className="w-6 h-6 text-yellow-500" />
                   Mode de paiement
                 </h3>
-                <div className="space-y-4">
-                  {/* Bouton PayPal */}
-                  <div className="group relative p-5 rounded-xl border-2 border-noir-700 bg-gradient-to-br from-noir-900/80 to-noir-800/60 hover:border-yellow-500/50 transition-all duration-300 shadow-lg hover:shadow-yellow-500/10">
+                <div className="group relative p-6 rounded-xl border-2 border-noir-700 bg-gradient-to-br from-noir-900/80 to-noir-800/60 hover:border-yellow-500/50 transition-all duration-300 shadow-lg hover:shadow-yellow-500/10">
+                  <div className="space-y-4">
+                    {/* Bouton PayPal */}
+                    <div className="flex items-center gap-3">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
                         <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#0070BA">
@@ -2589,22 +2590,22 @@ export default function CheckoutPage() {
                       }}
                       onError={(error) => {
                         alert(`Erreur PayPal 4x: ${error}`)
-                      }}
-                    />
-                  </div>
-
-                  {/* Bouton Carte bancaire */}
-                  <div className="group relative p-5 rounded-xl border-2 border-noir-700 bg-gradient-to-br from-noir-900/80 to-noir-800/60 hover:border-yellow-500/50 transition-all duration-300 shadow-lg hover:shadow-yellow-500/10">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                        <CreditCard className="w-6 h-6 text-blue-400" />
-                      </div>
-                      <div>
-                        <span className="font-bold text-lg text-white">Carte bancaire</span>
-                        <p className="text-xs text-gray-400 mt-0.5">Visa, Mastercard, CB - Paiement sécurisé</p>
+                        }}
+                      />
                       </div>
                     </div>
-                    <PayPalButton
+
+                    {/* Bouton Carte bancaire */}
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                        <CreditCard className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <div className="flex-1">
+                        <span className="font-bold text-base text-white">Carte bancaire</span>
+                        <p className="text-xs text-gray-400 mt-0.5">Visa, Mastercard, CB - Paiement sécurisé</p>
+                      </div>
+                      <div className="flex-1 max-w-xs">
+                        <PayPalButton
                       amount={paypalTotal}
                       itemTotal={paypalItemTotal}
                       shippingTotal={paypalShippingTotal}
