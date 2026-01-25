@@ -46,13 +46,15 @@ export default function PayPalButton({
                      !process.env.NEXT_PUBLIC_PAYPAL_BASE_URL
 
   // Configuration différente selon le type de paiement
+  // IMPORTANT: PayPal peut ne pas afficher de bouton si l'option n'est pas éligible
+  // On active toutes les options mais on force l'affichage via le style
   const scriptOptions = cardOnly
     ? {
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'card', // Uniquement carte
-        'disable-funding': 'paylater,venmo,credit,paypal', // Désactiver PayPal et toutes autres options
+        'enable-funding': 'card', // Activer carte
+        'disable-funding': 'paylater,venmo,credit', // Désactiver autres options (mais pas PayPal car nécessaire pour carte)
         ...(isTestMode && { 'data-client-token': undefined }),
       }
     : paylaterOnly
@@ -60,24 +62,28 @@ export default function PayPalButton({
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'paylater', // Uniquement PayPal 4x
-        'disable-funding': 'card,venmo,credit,paypal', // Désactiver tout sauf paylater
+        'enable-funding': 'paylater', // Activer 4x
+        'disable-funding': 'venmo,credit', // Désactiver autres options (mais garder card et paypal pour compatibilité)
         ...(isTestMode && { 'data-client-token': undefined }),
       }
     : {
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'paypal', // Uniquement PayPal (compte)
-        'disable-funding': 'card,paylater,venmo,credit', // Désactiver carte et 4x
+        'enable-funding': 'paypal', // Activer PayPal
+        'disable-funding': 'venmo,credit', // Désactiver autres options (mais garder card et paylater pour compatibilité)
         ...(isTestMode && { 'data-client-token': undefined }),
       }
 
   return (
     <PayPalScriptProvider options={scriptOptions}>
-      <div className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}>
+      <div 
+        className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}
+        style={{ position: 'relative', zIndex: 1 }}
+      >
         <PayPalButtons
           disabled={disabled || isProcessing}
+          forceReRender={[cardOnly ? 'card' : paylaterOnly ? 'paylater' : 'paypal']} // Forcer le rendu du bon type
           createOrder={async () => {
             try {
               setIsProcessing(true)
