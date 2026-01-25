@@ -21,7 +21,8 @@ import {
   AVAILABLE_TIME_SLOTS,
   MAX_BOOKINGS_PER_SLOT
 } from '@/lib/appointments-manager'
-import { submitMoneticoPayment, generateOrderReference, generateMoneticoReference } from '@/lib/monetico'
+import { startMoneticoPayment, generateOrderReference, generateMoneticoReference } from '@/lib/monetico'
+import MoneticoWidget from '@/components/MoneticoWidget'
 import { createOrder, updateOrderStatus } from '@/lib/revenue-supabase'
 import { getActiveShippingPrice, getSponsorShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
@@ -134,6 +135,7 @@ export default function CheckoutPage() {
   const [boxtalParcelPoint, setBoxtalParcelPoint] = useState<BoxtalParcelPoint | null>(null)
   const [orderComment, setOrderComment] = useState('')
   const [totalWeight, setTotalWeight] = useState<number>(0)
+  const [moneticoWidget, setMoneticoWidget] = useState<{ action: string; fields: Record<string, string> } | null>(null)
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -1052,13 +1054,24 @@ export default function CheckoutPage() {
       }
     }
 
-    // Paiement par carte bleue (Monetico)
+    // Paiement par carte bleue (Monetico) - Mode iframe/widget
     try {
       moneticoStarted = true
-      await submitMoneticoPayment(orderData)
+      const moneticoData = await startMoneticoPayment({
+        montant: orderData.montant,
+        mail: orderData.email,
+      })
+      
+      if (moneticoData) {
+        // Afficher le widget iframe
+        setMoneticoWidget(moneticoData)
+        setIsSubmitting(false)
+      } else {
+        setIsSubmitting(false)
+      }
     } catch (error) {
-      console.error('Erreur lors de la redirection vers Monetico:', error)
-      alert('Erreur lors de la redirection vers le paiement. Veuillez réessayer.')
+      console.error('Erreur lors de l\'initialisation du paiement Monetico:', error)
+      alert('Erreur lors de l\'initialisation du paiement. Veuillez réessayer.')
       setIsSubmitting(false)
     }
     if (!moneticoStarted) {
@@ -2420,6 +2433,29 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      {/* Widget Monetico iframe */}
+      {moneticoWidget && (
+        <MoneticoWidget
+          action={moneticoWidget.action}
+          fields={moneticoWidget.fields}
+          onClose={() => {
+            setMoneticoWidget(null)
+            setIsSubmitting(false)
+          }}
+          onSuccess={(reference) => {
+            console.log('[MONETICO] Paiement réussi, référence:', reference)
+            setMoneticoWidget(null)
+            // Rediriger vers la page de succès
+            router.push(`/payment/success?reference=${reference}&code-retour=paiement`)
+          }}
+          onError={(error) => {
+            console.error('[MONETICO] Erreur paiement:', error)
+            setMoneticoWidget(null)
+            alert(`Erreur de paiement: ${error}`)
+          }}
+        />
+      )}
     </div>
   )
 }

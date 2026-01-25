@@ -27,7 +27,9 @@ MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
 NEXT_PUBLIC_MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
 # URL de production Monetico (Crédit Mutuel)
 NEXT_PUBLIC_MONETICO_URL = "https://paiement.creditmutuel.fr/paiement.cgi"
-NEXT_PUBLIC_MONETICO_URL_RETOUR = "https://devorbaits.com/payment/success/"
+# URLs de retour : d'abord vers l'API pour vérifier le MAC, puis redirection
+NEXT_PUBLIC_MONETICO_URL_RETOUR = "https://devorbaits.com/api/monetico/retour"
+NEXT_PUBLIC_MONETICO_URL_RETOUR_OK = "https://devorbaits.com/payment/success/"
 NEXT_PUBLIC_MONETICO_URL_RETOUR_ERR = "https://devorbaits.com/payment/error/"
 
 # Boxtal : L'URL du script est récupérée depuis Supabase (table boxtal_config, colonne map_script_url)

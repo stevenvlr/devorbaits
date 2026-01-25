@@ -208,12 +208,25 @@ export async function POST(request: NextRequest) {
     // Log des clés présentes
     console.log('[MONETICO fieldsKeys]', Object.keys(fields))
 
-    // Construire macString selon doc Monetico v2.0 oct 2025 §9.3 :
-    // - Prendre toutes les clés de fields SAUF "MAC"
-    // - Trier en ordre ASCII (case-sensitive, charCodeAt)
+    // Construire macString selon doc Monetico v3.0 :
+    // - Prendre toutes les clés de fields SAUF "MAC" et les champs d'URL de retour
+    // - EXCLURE les champs vides optionnels (texte-libre, options, nbrech, etc. si vides)
+    // - Trier en ordre ASCII strict (case-sensitive)
     // - Produire "key=value" joint par "*"
-    const keysForMac = Object.keys(fields).filter(key => key !== 'MAC')
-    // Tri ASCII case-sensitive (charCodeAt)
+    const keysForMac = Object.keys(fields).filter(key => {
+      // Exclure MAC et les URLs de retour du calcul MAC
+      if (key === 'MAC' || key.startsWith('url_retour')) return false
+      // Exclure les champs optionnels vides (selon doc Monetico v3.0)
+      const value = fields[key]
+      if (value === '' || value === null || value === undefined) {
+        // Les champs optionnels vides ne doivent pas être inclus
+        const optionalFields = ['texte-libre', 'options', 'nbrech', 'dateech1', 'dateech2', 'dateech3', 'dateech4', 'montantech1', 'montantech2', 'montantech3', 'montantech4']
+        return !optionalFields.includes(key)
+      }
+      return true
+    })
+    
+    // Tri ASCII strict (case-sensitive, charCodeAt)
     keysForMac.sort((a, b) => {
       const minLen = Math.min(a.length, b.length)
       for (let i = 0; i < minLen; i++) {
@@ -224,8 +237,9 @@ export async function POST(request: NextRequest) {
     })
 
     // Construire macString au format "key=value" joint par "*"
+    // IMPORTANT: Utiliser les valeurs exactes (pas d'encodage URL)
     const macString = keysForMac
-      .map(key => `${key}=${fields[key]}`)
+      .map(key => `${key}=${String(fields[key])}`)
       .join('*')
 
     console.log('[MONETICO macString]', macString)
@@ -281,15 +295,22 @@ export async function POST(request: NextRequest) {
 
     fields.MAC = MAC
 
-    // Logs de debug
-    console.log('Monetico - Paiement généré:', {
+    // Logs de debug sécurisés (sans exposer la clé complète)
+    console.log('[MONETICO INIT] Paiement généré:', {
       reference,
       referenceLength: reference.length,
       referenceValid: /^[A-Z0-9]{12}$/.test(reference),
       societe: fields.societe,
       societeLength: fields.societe.length,
+      montant: fields.montant,
+      date: fields.date,
       macLength: MAC.length,
-      macPreview: MAC.substring(0, 20) + '...',
+      macPreview: MAC.substring(0, 8) + '...' + MAC.substring(MAC.length - 8),
+      actionUrl: ACTION_URL,
+      urlRetour: URL_RETOUR,
+      urlRetourOk: URL_RETOUR_OK,
+      urlRetourErr: URL_RETOUR_ERR,
+      fieldsCount: Object.keys(fields).length,
     })
 
     return NextResponse.json({

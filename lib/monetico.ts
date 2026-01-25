@@ -195,13 +195,13 @@ export function generateMoneticoReference(): string {
 }
 
 /**
- * Fonction client pour démarrer un paiement Monetico
- * Appelle l'API /api/monetico/ et soumet automatiquement le formulaire
+ * Fonction client pour démarrer un paiement Monetico en mode iframe/widget
+ * Appelle l'API /api/monetico/ et retourne les données pour afficher dans un widget
  */
 export async function startMoneticoPayment(data: {
   montant: string // Format: "20.99EUR"
   mail: string
-}) {
+}): Promise<{ action: string; fields: Record<string, string> } | null> {
   try {
     console.log('Monetico - Démarrage paiement avec:', data)
 
@@ -224,32 +224,32 @@ export async function startMoneticoPayment(data: {
       } else {
         alert(`Erreur lors du paiement Monetico: ${errorData.error || 'Erreur inconnue'}`)
       }
-      return
+      return null
     }
 
     const { action, fields } = await response.json()
 
-    // Vérifications de sécurité avant d'envoyer
+    // Vérifications de sécurité
     if (!fields.MAC || fields.MAC.length !== 40) {
       console.error('Monetico - MAC invalide:', fields.MAC)
       alert('Erreur: MAC invalide. Le paiement ne peut pas être effectué.')
-      return
+      return null
     }
 
     if (!fields.reference || fields.reference.length > 12 || !/^[A-Z0-9]+$/.test(fields.reference)) {
       console.error('Monetico - Référence invalide:', fields.reference)
       alert('Erreur: Référence invalide. Le paiement ne peut pas être effectué.')
-      return
+      return null
     }
 
     if (!fields.societe || fields.societe.trim() === '') {
       console.error('Monetico - societe est vide')
       alert('Erreur: societe est vide. Le paiement ne peut pas être effectué.')
-      return
+      return null
     }
 
-    // Log des champs envoyés pour debug
-    console.log('Monetico - FIELDS envoyés Monetico:', {
+    // Log des champs pour debug (sans exposer la clé complète)
+    console.log('Monetico - FIELDS générés:', {
       action,
       TPE: fields.TPE,
       societe: fields.societe,
@@ -259,48 +259,18 @@ export async function startMoneticoPayment(data: {
       reference: fields.reference,
       lgue: fields.lgue,
       mail: fields.mail,
-      MAC: fields.MAC.substring(0, 20) + '...',
+      MAC: fields.MAC.substring(0, 10) + '...',
       MACLength: fields.MAC.length,
       referenceLength: fields.reference.length,
       referenceValid: /^[A-Z0-9]{12}$/.test(fields.reference),
     })
 
-    // Créer le formulaire
-    const form = document.createElement('form')
-    form.method = 'POST'
-    form.action = action
-    form.style.display = 'none'
-
-    // Ajouter tous les champs comme inputs cachés
-    // IMPORTANT: texte-libre et options DOIVENT être envoyés (même vides) selon Monetico v3.0
-    const postKeys: string[] = []
-    Object.entries(fields).forEach(([key, value]) => {
-      const input = document.createElement('input')
-      input.type = 'hidden'
-      input.name = key
-      input.value = String(value)
-      form.appendChild(input)
-      postKeys.push(key)
-    })
-
-    // Log des clés qui seront envoyées (vérification finale)
-    console.log('[MONETICO postKeys]', postKeys)
-    // Vérifier que tous les champs Monetico requis sont présents (selon doc v2.0 oct 2025 §9.3)
-    const requiredMoneticoFields = ['texte-libre', 'options', 'nbrech', 'dateech1', 'dateech2', 'dateech3', 'dateech4', 'montantech1', 'montantech2', 'montantech3', 'montantech4']
-    const missingMoneticoFields = requiredMoneticoFields.filter(field => !postKeys.includes(field))
-    if (missingMoneticoFields.length > 0) {
-      console.warn('[MONETICO] ⚠️ Champs Monetico absents de postKeys:', missingMoneticoFields)
-    } else {
-      console.log('[MONETICO] ✅ Tous les champs Monetico requis sont présents dans postKeys')
-    }
-
-    // Ajouter le formulaire au DOM et le soumettre
-    document.body.appendChild(form)
-    console.log('Monetico - Soumission du formulaire vers:', action)
-    form.submit()
+    // Retourner les données pour le widget
+    return { action, fields }
   } catch (error: any) {
     console.error('Monetico - Erreur:', error)
     alert(`Erreur lors du paiement Monetico: ${error.message}`)
+    return null
   }
 }
 
