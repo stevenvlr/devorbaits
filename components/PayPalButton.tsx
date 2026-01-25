@@ -13,6 +13,7 @@ interface PayPalButtonProps {
   onError: (error: string) => void
   disabled?: boolean
   onBeforePayment?: () => void
+  cardOnly?: boolean // Si true, afficher uniquement le formulaire de carte
 }
 
 export default function PayPalButton({
@@ -24,6 +25,7 @@ export default function PayPalButton({
   onError,
   disabled,
   onBeforePayment,
+  cardOnly = false,
 }: PayPalButtonProps) {
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -47,7 +49,9 @@ export default function PayPalButton({
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'card,paylater', // Activer carte et paylater (4x) dans les options
+        // Si cardOnly, uniquement carte. Sinon, PayPal + carte + 4x
+        'enable-funding': cardOnly ? 'card' : 'card,paylater',
+        'disable-funding': cardOnly ? 'paylater' : '',
         ...(isTestMode && { 'data-client-token': undefined }),
       }}
     >
@@ -151,9 +155,9 @@ export default function PayPalButton({
           }}
           style={{
             layout: 'vertical',
-            color: 'gold', // Couleur gold pour PayPal (avec options carte et 4x)
+            color: cardOnly ? 'blue' : 'gold', // Bleu pour carte uniquement, gold pour PayPal
             shape: 'rect',
-            label: 'paypal', // Afficher les options PayPal, 4x et carte
+            label: cardOnly ? 'pay' : 'paypal', // "Pay with Debit or Credit Card" si cardOnly, sinon PayPal
           }}
         />
       </div>

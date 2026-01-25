@@ -2096,6 +2096,7 @@ export default function CheckoutPage() {
                       shippingTotal={paypalShippingTotal}
                       reference={orderReference || paypalReference}
                       disabled={!isFormValid()}
+                      cardOnly={paymentMethod === 'card'} // Forcer carte uniquement si "Carte bleue" sélectionné
                       onBeforePayment={() => {
                         // Générer la référence si pas encore fait
                         if (!orderReference) {
