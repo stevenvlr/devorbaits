@@ -141,12 +141,13 @@ export async function submitMoneticoPayment(orderData: MoneticoOrderData) {
 
     // Log des clés qui seront envoyées (vérification finale)
     console.log('[MONETICO postKeys]', postKeys)
-    // Vérifier que texte-libre et options sont présents (requis par Monetico v3.0)
-    if (!postKeys.includes('texte-libre')) {
-      console.warn('[MONETICO] ⚠️ texte-libre absent de postKeys (devrait être présent)')
-    }
-    if (!postKeys.includes('options')) {
-      console.warn('[MONETICO] ⚠️ options absent de postKeys (devrait être présent)')
+    // Vérifier que tous les champs Monetico requis sont présents (selon doc v2.0 oct 2025 §9.3)
+    const requiredMoneticoFields = ['texte-libre', 'options', 'nbrech', 'dateech1', 'dateech2', 'dateech3', 'dateech4', 'montantech1', 'montantech2', 'montantech3', 'montantech4']
+    const missingMoneticoFields = requiredMoneticoFields.filter(field => !postKeys.includes(field))
+    if (missingMoneticoFields.length > 0) {
+      console.warn('[MONETICO] ⚠️ Champs Monetico absents de postKeys:', missingMoneticoFields)
+    } else {
+      console.log('[MONETICO] ✅ Tous les champs Monetico requis sont présents dans postKeys')
     }
 
     // Ajouter le formulaire au DOM et le soumettre
@@ -284,12 +285,13 @@ export async function startMoneticoPayment(data: {
 
     // Log des clés qui seront envoyées (vérification finale)
     console.log('[MONETICO postKeys]', postKeys)
-    // Vérifier que texte-libre et options sont présents (requis par Monetico v3.0)
-    if (!postKeys.includes('texte-libre')) {
-      console.warn('[MONETICO] ⚠️ texte-libre absent de postKeys (devrait être présent)')
-    }
-    if (!postKeys.includes('options')) {
-      console.warn('[MONETICO] ⚠️ options absent de postKeys (devrait être présent)')
+    // Vérifier que tous les champs Monetico requis sont présents (selon doc v2.0 oct 2025 §9.3)
+    const requiredMoneticoFields = ['texte-libre', 'options', 'nbrech', 'dateech1', 'dateech2', 'dateech3', 'dateech4', 'montantech1', 'montantech2', 'montantech3', 'montantech4']
+    const missingMoneticoFields = requiredMoneticoFields.filter(field => !postKeys.includes(field))
+    if (missingMoneticoFields.length > 0) {
+      console.warn('[MONETICO] ⚠️ Champs Monetico absents de postKeys:', missingMoneticoFields)
+    } else {
+      console.log('[MONETICO] ✅ Tous les champs Monetico requis sont présents dans postKeys')
     }
 
     // Ajouter le formulaire au DOM et le soumettre
