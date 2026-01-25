@@ -110,24 +110,7 @@ function PayPalButtonContent({
   if (cardOnly && isResolved) {
     return (
       <div className="space-y-4">
-        <PayPalCardFieldsForm
-          style={{
-            input: {
-              fontSize: '16px',
-              color: '#ffffff',
-              backgroundColor: '#1a1a1a',
-              border: '1px solid #374151',
-              borderRadius: '6px',
-              padding: '12px',
-            },
-            '.invalid': {
-              color: '#ef4444',
-            },
-            '.valid': {
-              color: '#10b981',
-            },
-          }}
-        />
+        <PayPalCardFieldsForm />
       </div>
     )
   }
@@ -332,6 +315,14 @@ export default function PayPalButton({
     return (
       <PayPalScriptProvider options={scriptOptions}>
         <PayPalCardFieldsProvider
+          style={{
+            fontSize: '16px',
+            color: '#ffffff',
+            background: '#1a1a1a',
+            border: '1px solid #374151',
+            borderRadius: '6px',
+            padding: '12px',
+          }}
           createOrder={async () => {
             try {
               setIsProcessing(true)
