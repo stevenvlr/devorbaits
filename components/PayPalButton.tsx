@@ -49,15 +49,16 @@ export default function PayPalButton({
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        // Si cardOnly, uniquement carte. Sinon, PayPal + carte + 4x
+        // Si cardOnly, uniquement carte (désactiver PayPal et paylater). Sinon, PayPal + carte + 4x
         'enable-funding': cardOnly ? 'card' : 'card,paylater',
-        'disable-funding': cardOnly ? 'paylater' : '',
+        'disable-funding': cardOnly ? 'paylater,venmo,paylater' : '',
         ...(isTestMode && { 'data-client-token': undefined }),
       }}
     >
       <div className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}>
         <PayPalButtons
           disabled={disabled || isProcessing}
+          forceReRender={cardOnly ? ['card'] : undefined} // Forcer le rendu uniquement carte si cardOnly
           createOrder={async () => {
             try {
               setIsProcessing(true)
@@ -157,7 +158,8 @@ export default function PayPalButton({
             layout: 'vertical',
             color: cardOnly ? 'blue' : 'gold', // Bleu pour carte uniquement, gold pour PayPal
             shape: 'rect',
-            label: cardOnly ? 'pay' : 'paypal', // "Pay with Debit or Credit Card" si cardOnly, sinon PayPal
+            label: cardOnly ? 'checkout' : 'paypal', // "Debit or Credit Card" si cardOnly, sinon PayPal
+            tagline: false, // Désactiver le tagline
           }}
         />
       </div>
