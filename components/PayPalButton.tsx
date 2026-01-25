@@ -79,7 +79,12 @@ export default function PayPalButton({
     <PayPalScriptProvider options={scriptOptions}>
       <div 
         className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}
-        style={{ position: 'relative', zIndex: 1, minHeight: '50px' }}
+        style={{ 
+          position: 'relative', 
+          zIndex: 1, 
+          minHeight: '50px',
+          pointerEvents: disabled || isProcessing ? 'none' : 'auto' // S'assurer que les clics fonctionnent
+        }}
       >
         <PayPalButtons
           disabled={disabled || isProcessing}
