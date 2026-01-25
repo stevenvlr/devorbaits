@@ -1,6 +1,6 @@
 'use client'
 
-import { PayPalButtons, PayPalScriptProvider, usePayPalScriptReducer } from '@paypal/react-paypal-js'
+import { PayPalButtons, PayPalScriptProvider, usePayPalScriptReducer, CardFields } from '@paypal/react-paypal-js'
 import { useState, useEffect, useRef } from 'react'
 import { getPayPalClientId, isPayPalConfigured } from '@/lib/paypal'
 
@@ -105,19 +105,9 @@ function PayPalButtonContent({
     )
   }
 
-  return (
-    <>
-      <style>{`
-        [data-paypal-button-container] [data-funding-source]:not(:first-child),
-        [data-paypal-button-container] button:not(:first-child),
-        [data-paypal-button-container] [role="button"]:not(:first-child) {
-          display: none !important;
-        }
-        [data-paypal-button-container] *[class*="paypal-button-label"],
-        [data-paypal-button-container] *[class*="paypal-button-text"] {
-          display: none !important;
-        }
-      `}</style>
+  // Si cardOnly, utiliser CardFields pour afficher directement les champs de carte
+  if (cardOnly && isResolved) {
+    return (
       <div 
         ref={containerRef}
         data-paypal-button-container
@@ -125,15 +115,13 @@ function PayPalButtonContent({
         style={{ 
           position: 'relative', 
           zIndex: 10, 
-          minHeight: '55px',
           pointerEvents: disabled || isProcessing ? 'none' : 'auto',
           isolation: 'isolate',
           transition: 'opacity 0.2s ease-in-out'
         }}
       >
-        <PayPalButtons
-        disabled={disabled || isProcessing}
-        createOrder={async () => {
+        <CardFields
+          createOrder={async () => {
           try {
             setIsProcessing(true)
             // Appeler onBeforePayment si fourni
@@ -241,6 +229,146 @@ function PayPalButtonContent({
     </>
   )
 }
+
+  // Pour cardOnly, utiliser CardFields au lieu de PayPalButtons
+  if (cardOnly && isResolved) {
+    return (
+      <div 
+        ref={containerRef}
+        data-paypal-button-container
+        className={disabled || isProcessing ? 'opacity-50' : 'opacity-100'}
+        style={{ 
+          position: 'relative', 
+          zIndex: 10, 
+          pointerEvents: disabled || isProcessing ? 'none' : 'auto',
+          isolation: 'isolate',
+          transition: 'opacity 0.2s ease-in-out'
+        }}
+      >
+        <CardFields
+          createOrder={async () => {
+            try {
+              setIsProcessing(true)
+              if (onBeforePayment) {
+                onBeforePayment()
+              }
+              const response = await fetch('/api/paypal/create-order', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  amount,
+                  itemTotal,
+                  shippingTotal,
+                  reference,
+                  currency: 'EUR',
+                }),
+              })
+
+              if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.error || 'Erreur lors de la création de la commande PayPal')
+              }
+
+              const data = await response.json()
+              return data.id
+            } catch (error: any) {
+              console.error('Erreur création commande PayPal:', error)
+              onError(error?.message || 'Erreur lors de la création de la commande PayPal')
+              throw error
+            } finally {
+              setIsProcessing(false)
+            }
+          }}
+          onApprove={async (data: { orderID: string }) => {
+            try {
+              setIsProcessing(true)
+              console.log('🔄 Capture PayPal Card - Order ID:', data.orderID)
+              
+              const response = await fetch('/api/paypal/capture-order', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  orderId: data.orderID,
+                  expectedTotal: amount,
+                  expectedItemTotal: itemTotal,
+                  expectedShippingTotal: shippingTotal,
+                }),
+              })
+
+              const captureData = await response.json()
+              
+              console.log('📦 Capture PayPal Card - Réponse:', captureData)
+
+              if (!response.ok) {
+                console.error('❌ Erreur capture PayPal Card - Response not OK:', captureData)
+                throw new Error(captureData.error || 'Erreur lors de la capture du paiement')
+              }
+              
+              if (captureData.success) {
+                console.log('✅ Capture PayPal Card réussie - Payment ID:', captureData.paymentId)
+                onSuccess(data.orderID, captureData.paymentId || data.orderID)
+              } else {
+                const hasPayment = captureData.paymentId || captureData.order?.purchase_units?.[0]?.payments?.captures?.[0]
+                
+                if (hasPayment) {
+                  console.warn('⚠️ Capture PayPal Card - Success false mais paiement existe:', captureData)
+                  onSuccess(data.orderID, captureData.paymentId || data.orderID)
+                } else {
+                  console.error('❌ Capture PayPal Card - Aucun paiement trouvé:', captureData)
+                  throw new Error('Le paiement n\'a pas pu être capturé. Statut: ' + (captureData.status || 'inconnu'))
+                }
+              }
+            } catch (error: any) {
+              console.error('❌ Erreur capture PayPal Card:', error)
+              onError(error?.message || 'Erreur lors de la capture du paiement PayPal')
+            } finally {
+              setIsProcessing(false)
+            }
+          }}
+          onError={(err: unknown) => {
+            console.error('Erreur PayPal Card:', err)
+            onError('Une erreur est survenue lors du paiement par carte')
+            setIsProcessing(false)
+          }}
+        />
+      </div>
+    )
+  }
+
+  // Pour les autres cas (PayPal standard et 4x), utiliser PayPalButtons
+  return (
+    <>
+      <style>{`
+        [data-paypal-button-container] [data-funding-source]:not(:first-child),
+        [data-paypal-button-container] button:not(:first-child),
+        [data-paypal-button-container] [role="button"]:not(:first-child) {
+          display: none !important;
+        }
+        [data-paypal-button-container] *[class*="paypal-button-label"],
+        [data-paypal-button-container] *[class*="paypal-button-text"] {
+          display: none !important;
+        }
+      `}</style>
+      <div 
+        ref={containerRef}
+        data-paypal-button-container
+        className={disabled || isProcessing ? 'opacity-50' : 'opacity-100'}
+        style={{ 
+          position: 'relative', 
+          zIndex: 10, 
+          minHeight: '55px',
+          pointerEvents: disabled || isProcessing ? 'none' : 'auto',
+          isolation: 'isolate',
+          transition: 'opacity 0.2s ease-in-out'
+        }}
+      >
+        <PayPalButtons
+        disabled={disabled || isProcessing}
+        createOrder={async () => {
 
 export default function PayPalButton({
   amount,
