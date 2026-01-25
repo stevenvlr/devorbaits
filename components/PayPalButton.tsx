@@ -54,21 +54,25 @@ function PayPalButtonContent({
 
   if (!isResolved) {
     return (
-      <div className="bg-gray-500/10 border border-gray-500/50 rounded-lg p-4">
-        <p className="text-sm text-gray-400">Chargement du bouton PayPal...</p>
+      <div className="bg-gray-500/10 border border-gray-500/50 rounded-lg p-4 animate-pulse">
+        <div className="flex items-center gap-3">
+          <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm text-gray-400">Chargement du bouton PayPal...</p>
+        </div>
       </div>
     )
   }
 
   return (
     <div 
-      className={disabled || isProcessing ? 'opacity-50' : ''}
+      className={disabled || isProcessing ? 'opacity-50' : 'opacity-100'}
       style={{ 
         position: 'relative', 
         zIndex: 10, 
-        minHeight: '50px',
+        minHeight: '55px',
         pointerEvents: disabled || isProcessing ? 'none' : 'auto',
-        isolation: 'isolate'
+        isolation: 'isolate',
+        transition: 'opacity 0.2s ease-in-out'
       }}
     >
       <PayPalButtons
