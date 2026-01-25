@@ -105,17 +105,7 @@ function PayPalButtonContent({
     )
   }
 
-  // Si cardOnly, on ne devrait pas arriver ici car PayPalCardFieldsProvider gère ça différemment
-  // Cette condition est pour les cas où cardOnly est false mais on est dans un contexte CardFields
-  if (cardOnly) {
-    // Si on est dans un PayPalCardFieldsProvider, utiliser usePayPalCardFields
-    // Sinon, attendre que le script soit résolu
-    return (
-      <div className="space-y-4">
-        <PayPalCardFieldsForm />
-      </div>
-    )
-  }
+  // Pour cardOnly, utiliser PayPalButtons avec les options pour forcer l'affichage carte
 
   // Pour les autres cas (PayPal standard et 4x), utiliser PayPalButtons
   return (
