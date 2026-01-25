@@ -55,7 +55,6 @@ export default function PayPalButton({
       <div className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}>
         <PayPalButtons
           disabled={disabled || isProcessing}
-          fundingSource="card" // Forcer l'affichage du paiement par carte
           createOrder={async () => {
             try {
               setIsProcessing(true)
