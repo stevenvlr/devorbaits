@@ -177,7 +177,7 @@ export default function PayPalButton({
             layout: 'vertical',
             color: cardOnly ? 'blue' : paylaterOnly ? 'gold' : 'gold', // Bleu pour carte, gold pour PayPal/4x
             shape: 'rect',
-            label: cardOnly ? 'checkout' : paylaterOnly ? 'paylater' : 'paypal', // Label selon le type
+            label: cardOnly ? 'checkout' : 'paypal', // Label selon le type (paylater n'est pas un label valide, utiliser paypal)
             tagline: false, // Désactiver le tagline
             height: 50, // Hauteur fixe
           }}
