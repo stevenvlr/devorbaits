@@ -159,13 +159,14 @@ export async function POST(request: NextRequest) {
     const date = formatDate()
     const reference = generateReference()
 
-    // Créer UN SEUL objet fields avec EXACTEMENT les clés requises
-    // Ordre : TPE, date, montant, reference, version, lgue, societe, mail, url_retour, url_retour_ok, url_retour_err
+    // Créer UN SEUL objet fields avec EXACTEMENT les clés requises selon Monetico v3.0
+    // Inclut texte-libre et options (même vides) pour le formulaire
     const fields: Record<string, string> = {
       TPE,
       date,
       montant,
       reference,
+      'texte-libre': '', // Vide pour paiement simple, mais doit être présent
       version: '3.0',
       lgue: 'FR',
       societe: SOCIETE,
@@ -173,9 +174,11 @@ export async function POST(request: NextRequest) {
       url_retour: URL_RETOUR,
       url_retour_ok: URL_RETOUR_OK,
       url_retour_err: URL_RETOUR_ERR,
+      options: '', // Vide pour paiement simple, mais doit être présent
     }
 
-    // Validation stricte : vérifier que tous les champs sont présents et non vides
+    // Validation stricte : vérifier que tous les champs obligatoires sont présents et non vides
+    // Note: texte-libre et options peuvent être vides, mais doivent être présents
     const requiredKeys = ['TPE', 'date', 'montant', 'reference', 'version', 'lgue', 'societe', 'mail', 'url_retour', 'url_retour_ok', 'url_retour_err']
     const missingFields = requiredKeys.filter(key => {
       const value = fields[key]
@@ -196,28 +199,37 @@ export async function POST(request: NextRequest) {
     // Log des clés présentes
     console.log('[MONETICO fieldsKeys]', Object.keys(fields))
 
-    // Construire macString UNIQUEMENT depuis fields, dans l'ordre EXACT Monetico
-    // Ordre : TPE, date, lgue, mail, montant, reference, societe, url_retour, url_retour_err, url_retour_ok, version
-    const macOrder = [
-      'TPE',
-      'date',
-      'lgue',
-      'mail',
-      'montant',
-      'reference',
-      'societe',
-      'url_retour',
-      'url_retour_err',
-      'url_retour_ok',
-      'version',
-    ] as const
-    
-    // Construire macString uniquement depuis fields
-    const macString = macOrder
-      .map(key => `${key}=${fields[key]}`)
-      .join('*')
+    // Construire toSignValues selon Monetico v3.0 : VALEURS UNIQUEMENT (pas key=value)
+    // Ordre exact doc Monetico v3.0:
+    // <TPE>*<date>*<montant>*<reference>*<texte-libre>*<version>*<lgue>*<societe>*<mail>*<nbrech>*<dateech1>*<montantech1>*<dateech2>*<montantech2>*<dateech3>*<montantech3>*<dateech4>*<montantech4>*<options>
+    // IMPORTANT: url_retour/url_retour_ok/url_retour_err NE SONT PAS dans la chaîne signée
+    const toSignValues = [
+      fields.TPE || '',
+      fields.date || '',
+      fields.montant || '',
+      fields.reference || '',
+      fields['texte-libre'] || '', // Peut être vide
+      fields.version || '3.0',
+      fields.lgue || 'FR',
+      fields.societe || '',
+      fields.mail || '',
+      '', // nbrech (vide pour paiement simple)
+      '', // dateech1
+      '', // montantech1
+      '', // dateech2
+      '', // montantech2
+      '', // dateech3
+      '', // montantech3
+      '', // dateech4
+      '', // montantech4
+      fields.options || '', // Peut être vide
+    ]
 
-    console.log('[MONETICO macString]', macString)
+    // Construire toSign en joignant les valeurs avec '*'
+    // Doit finir par '*' si options est vide (selon doc Monetico)
+    const toSign = toSignValues.join('*') + '*'
+
+    console.log('[MONETICO toSign]', toSign)
 
     // Préparer la clé HMAC (server-only, UNIQUEMENT MONETICO_CLE_HMAC, pas de fallback)
     const raw = process.env.MONETICO_CLE_HMAC
@@ -249,8 +261,8 @@ export async function POST(request: NextRequest) {
     const keyHash = keyHashArray.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('').slice(0, 12)
     console.log('[HMAC HASH]', keyHash)
 
-    // Calculer le MAC HMAC-SHA1
-    const MAC = await calculateMAC(keyBytes, macString)
+    // Calculer le MAC HMAC-SHA1 sur toSign (valeurs uniquement, selon Monetico v3.0)
+    const MAC = await calculateMAC(keyBytes, toSign)
 
     // Vérifier que le MAC fait bien 40 caractères
     if (MAC.length !== 40) {
@@ -261,7 +273,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('[MAC CHECK]', { prefix: MAC.slice(0, 6), suffix: MAC.slice(-6) })
+    console.log('[MAC CHECK]', { len: MAC.length, prefix: MAC.slice(0, 6), suffix: MAC.slice(-6) })
 
     fields.MAC = MAC
 
