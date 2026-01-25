@@ -173,7 +173,7 @@ function PayPalButtonContent({
           setIsProcessing(false)
         }}
         style={{
-          layout: 'horizontal', // Horizontal pour n'afficher qu'un seul bouton
+          layout: 'vertical',
           color: cardOnly ? 'blue' : paylaterOnly ? 'gold' : 'gold',
           shape: 'rect',
           label: cardOnly ? 'checkout' : 'paypal',
@@ -214,14 +214,15 @@ export default function PayPalButton({
                      !process.env.NEXT_PUBLIC_PAYPAL_BASE_URL
 
   // Configuration différente selon le type de paiement
-  // IMPORTANT: Pour forcer un seul bouton, on désactive toutes les autres options de funding
+  // IMPORTANT: PayPal nécessite toujours PayPal activé pour fonctionner
+  // Pour cardOnly et paylaterOnly, on active aussi PayPal mais on utilise le label pour forcer l'affichage
   const scriptOptions = cardOnly
     ? {
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'card', // Uniquement carte
-        'disable-funding': 'paylater,venmo,credit,paypal', // Désactiver PayPal et toutes autres options
+        'enable-funding': 'card', // Activer carte
+        'disable-funding': 'paylater,venmo,credit', // Désactiver 4x et autres (PayPal reste disponible)
         ...(isTestMode && { 'data-client-token': undefined }),
       }
     : paylaterOnly
@@ -229,16 +230,16 @@ export default function PayPalButton({
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'paylater', // Uniquement 4x
-        'disable-funding': 'venmo,credit,card,paypal', // Désactiver PayPal, carte et autres
+        'enable-funding': 'paylater', // Activer 4x
+        'disable-funding': 'venmo,credit', // Désactiver autres (PayPal et card restent disponibles)
         ...(isTestMode && { 'data-client-token': undefined }),
       }
     : {
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'paypal', // Uniquement PayPal
-        'disable-funding': 'venmo,credit,card,paylater', // Désactiver carte, 4x et autres
+        'enable-funding': 'paypal', // Activer PayPal
+        'disable-funding': 'venmo,credit', // Désactiver autres (card et paylater restent disponibles)
         ...(isTestMode && { 'data-client-token': undefined }),
       }
 
