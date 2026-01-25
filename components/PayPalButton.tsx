@@ -1,7 +1,7 @@
 'use client'
 
 import { PayPalButtons, PayPalScriptProvider, usePayPalScriptReducer } from '@paypal/react-paypal-js'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getPayPalClientId, isPayPalConfigured } from '@/lib/paypal'
 
 interface PayPalButtonProps {
@@ -33,12 +33,54 @@ function PayPalButtonContent({
   setIsProcessing,
 }: PayPalButtonProps & { isProcessing: boolean; setIsProcessing: (val: boolean) => void }) {
   const [{ isResolved, isRejected }] = usePayPalScriptReducer()
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (isRejected) {
       console.error('❌ PayPal script failed to load')
     } else if (isResolved) {
       console.log('✅ PayPal script loaded successfully', { cardOnly, paylaterOnly })
+      
+      // Masquer les boutons secondaires et le texte "Optimisé par PayPal"
+      if (containerRef.current) {
+        const hideSecondaryElements = () => {
+          // Masquer tous les boutons sauf le premier
+          const buttons = containerRef.current?.querySelectorAll('[data-funding-source], button, [role="button"]')
+          if (buttons && buttons.length > 1) {
+            Array.from(buttons).forEach((btn, index) => {
+              if (index > 0) {
+                (btn as HTMLElement).style.display = 'none'
+              }
+            })
+          }
+          
+          // Masquer le texte "Optimisé par PayPal"
+          const allElements = containerRef.current?.querySelectorAll('*')
+          allElements?.forEach(el => {
+            const text = el.textContent
+            if (text && (text.includes('Optimisé par PayPal') || text.includes('Powered by PayPal'))) {
+              (el as HTMLElement).style.display = 'none'
+            }
+          })
+        }
+        
+        // Exécuter immédiatement
+        hideSecondaryElements()
+        
+        // Observer les changements dans le DOM
+        const observer = new MutationObserver(() => {
+          hideSecondaryElements()
+        })
+        
+        observer.observe(containerRef.current, { 
+          childList: true, 
+          subtree: true,
+          attributes: true
+        })
+        
+        // Nettoyer après 10 secondes
+        setTimeout(() => observer.disconnect(), 10000)
+      }
     }
   }, [isResolved, isRejected, cardOnly, paylaterOnly])
 
@@ -65,6 +107,7 @@ function PayPalButtonContent({
 
   return (
     <div 
+      ref={containerRef}
       className={disabled || isProcessing ? 'opacity-50' : 'opacity-100'}
       style={{ 
         position: 'relative', 
@@ -75,6 +118,17 @@ function PayPalButtonContent({
         transition: 'opacity 0.2s ease-in-out'
       }}
     >
+      <style jsx>{`
+        div :global([data-funding-source]:not(:first-child)),
+        div :global(button:not(:first-child)),
+        div :global([role="button"]:not(:first-child)) {
+          display: none !important;
+        }
+        div :global(*[class*="paypal-button-label"]),
+        div :global(*[class*="paypal-button-text"]) {
+          display: none !important;
+        }
+      `}</style>
       <PayPalButtons
         disabled={disabled || isProcessing}
         createOrder={async () => {
@@ -173,10 +227,10 @@ function PayPalButtonContent({
           setIsProcessing(false)
         }}
         style={{
-          layout: 'vertical',
+          layout: 'horizontal', // Horizontal pour éviter l'empilement vertical
           color: cardOnly ? 'blue' : paylaterOnly ? 'gold' : 'gold',
           shape: 'rect',
-          label: cardOnly ? 'checkout' : 'paypal', // 'checkout' pour afficher directement le formulaire carte
+          label: cardOnly ? 'checkout' : 'paypal',
           tagline: false,
           height: 50,
         }}
