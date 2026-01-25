@@ -1054,29 +1054,12 @@ export default function CheckoutPage() {
       }
     }
 
-    // Paiement par carte bleue (Monetico) - Mode iframe/widget
-    try {
-      moneticoStarted = true
-      const moneticoData = await startMoneticoPayment({
-        montant: orderData.montant,
-        mail: orderData.email,
-      })
-      
-      if (moneticoData) {
-        // Afficher le widget iframe
-        setMoneticoWidget(moneticoData)
-        setIsSubmitting(false)
-      } else {
-        setIsSubmitting(false)
-      }
-    } catch (error) {
-      console.error('Erreur lors de l\'initialisation du paiement Monetico:', error)
-      alert('Erreur lors de l\'initialisation du paiement. Veuillez réessayer.')
-      setIsSubmitting(false)
-    }
-    if (!moneticoStarted) {
-      setIsSubmitting(false)
-    }
+    // Paiement par carte bleue - Utilise PayPal (temporairement, en attendant résolution Monetico)
+    // PayPal permet le paiement par carte directement via son widget
+    setPaymentMethod('paypal')
+    setIsSubmitting(false)
+    // Le composant PayPalButton se chargera automatiquement du paiement
+    console.log('[PAYMENT] Paiement par carte redirigé vers PayPal')
   }
 
 
@@ -2089,7 +2072,7 @@ export default function CheckoutPage() {
                         <CreditCard className="w-5 h-5 text-yellow-500" />
                         <span className="font-semibold text-lg">Carte bleue</span>
                       </div>
-                      <p className="text-sm text-gray-400">Paiement sécurisé par Monetico</p>
+                      <p className="text-sm text-gray-400">Paiement sécurisé par PayPal</p>
                     </div>
                   </label>
                 </div>
@@ -2105,7 +2088,7 @@ export default function CheckoutPage() {
                   pointerEvents: 'auto'
                 }}
               >
-                {paymentMethod === 'paypal' ? (
+                {(paymentMethod === 'paypal' || paymentMethod === 'card') ? (
                   <div>
                     <PayPalButton
                       amount={paypalTotal}
@@ -2401,33 +2384,7 @@ export default function CheckoutPage() {
                       </p>
                     )}
                   </div>
-                ) : (
-                  <>
-                    <button
-                      onClick={handleSubmit}
-                      disabled={!isFormValid() || isSubmitting}
-                      style={{ 
-                        position: 'relative', 
-                        zIndex: 10000,
-                        pointerEvents: 'auto'
-                      }}
-                      className={`w-full font-bold py-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg ${
-                        isFormValid() && !isSubmitting
-                          ? 'bg-yellow-500 text-noir-950 hover:bg-yellow-400 cursor-pointer'
-                          : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      <CreditCard className="w-5 h-5" />
-                      {isSubmitting
-                        ? 'Redirection en cours...'
-                        : !cgvAccepted
-                        ? 'Acceptez les CGV'
-                        : retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
-                        ? 'Sélectionnez un créneau'
-                        : 'Paiement par carte'}
-                    </button>
-                  </>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
