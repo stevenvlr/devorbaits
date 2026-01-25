@@ -47,8 +47,9 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const params: Record<string, string> = {}
     
-    // Convertir FormData en objet
-    for (const [key, value] of formData.entries()) {
+    // Convertir FormData en objet (compatible avec tous les targets TypeScript)
+    const entries = Array.from(formData.entries())
+    for (const [key, value] of entries) {
       params[key] = String(value)
     }
 
