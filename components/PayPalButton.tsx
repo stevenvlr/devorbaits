@@ -47,13 +47,15 @@ export default function PayPalButton({
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'paylater',
+        'enable-funding': 'paylater,card', // Activer le paiement par carte
+        'disable-funding': '', // Ne pas désactiver de méthodes de paiement
         ...(isTestMode && { 'data-client-token': undefined }),
       }}
     >
       <div className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}>
         <PayPalButtons
           disabled={disabled || isProcessing}
+          fundingSource="card" // Forcer l'affichage du paiement par carte
           createOrder={async () => {
             try {
               setIsProcessing(true)
@@ -153,7 +155,7 @@ export default function PayPalButton({
             layout: 'vertical',
             color: 'gold',
             shape: 'rect',
-            label: 'paypal',
+            label: 'pay', // Afficher "Pay with Debit or Credit Card" au lieu de "PayPal"
           }}
         />
       </div>
