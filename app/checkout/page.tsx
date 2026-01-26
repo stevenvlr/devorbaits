@@ -2686,7 +2686,6 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
-    </div>
 
       {/* Widget Monetico iframe */}
       {moneticoWidget && (
