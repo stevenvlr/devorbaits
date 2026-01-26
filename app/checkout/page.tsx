@@ -2350,7 +2350,6 @@ export default function CheckoutPage() {
                       shippingTotal={paypalShippingTotal}
                       reference={orderReference || paypalReference}
                       disabled={!isFormValid()}
-                      paylaterOnly={true}
                       onBeforePayment={() => {
                         if (!orderReference) {
                           setOrderReference(paypalReference)
@@ -2683,7 +2682,6 @@ export default function CheckoutPage() {
                 </div>
               </div>
             </div>
-          </div>
           </div>
         </div>
       </div>
