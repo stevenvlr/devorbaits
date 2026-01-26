@@ -1068,6 +1068,7 @@ export default function CheckoutPage() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-noir-950 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
@@ -2686,29 +2687,30 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
-
-      {/* Widget Monetico iframe */}
-      {moneticoWidget && (
-        <MoneticoWidget
-          action={moneticoWidget.action}
-          fields={moneticoWidget.fields}
-          onClose={() => {
-            setMoneticoWidget(null)
-            setIsSubmitting(false)
-          }}
-          onSuccess={(reference) => {
-            console.log('[MONETICO] Paiement réussi, référence:', reference)
-            setMoneticoWidget(null)
-            // Rediriger vers la page de succès
-            router.push(`/payment/success?reference=${reference}&code-retour=paiement`)
-          }}
-          onError={(error) => {
-            console.error('[MONETICO] Erreur paiement:', error)
-            setMoneticoWidget(null)
-            alert(`Erreur de paiement: ${error}`)
-          }}
-        />
-      )}
     </div>
+    
+    {/* Widget Monetico iframe */}
+    {moneticoWidget && (
+      <MoneticoWidget
+        action={moneticoWidget.action}
+        fields={moneticoWidget.fields}
+        onClose={() => {
+          setMoneticoWidget(null)
+          setIsSubmitting(false)
+        }}
+        onSuccess={(reference) => {
+          console.log('[MONETICO] Paiement réussi, référence:', reference)
+          setMoneticoWidget(null)
+          // Rediriger vers la page de succès
+          router.push(`/payment/success?reference=${reference}&code-retour=paiement`)
+        }}
+        onError={(error) => {
+          console.error('[MONETICO] Erreur paiement:', error)
+          setMoneticoWidget(null)
+          alert(`Erreur de paiement: ${error}`)
+        }}
+      />
+    )}
+  </>
   )
 }
