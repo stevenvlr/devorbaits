@@ -49,15 +49,50 @@ export default function MoneticoWidget({
     // Attendre que l'iframe soit chargée
     const iframe = iframeRef.current
     if (iframe) {
+      let formRemoved = false
+      
       const handleLoad = () => {
         setLoading(false)
         console.log('[MONETICO WIDGET] Iframe chargée')
+        
+        // Vérifier si l'iframe contient une redirection vers notre URL de retour
+        // Monetico redirige vers url_retour_ok ou url_retour_err après paiement
+        try {
+          // Attendre un peu pour que Monetico charge
+          setTimeout(() => {
+            try {
+              const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
+              if (iframeDoc) {
+                const currentUrl = iframeDoc.location?.href || iframe.contentWindow?.location?.href
+                if (currentUrl && (currentUrl.includes('/payment/success') || currentUrl.includes('/api/monetico/retour'))) {
+                  console.log('[MONETICO WIDGET] Redirection détectée:', currentUrl)
+                  // Extraire la référence depuis l'URL
+                  const urlParams = new URLSearchParams(currentUrl.split('?')[1] || '')
+                  const reference = urlParams.get('reference')
+                  if (reference && onSuccess) {
+                    onSuccess(reference)
+                  }
+                }
+              }
+            } catch (e) {
+              // Cross-origin, on ne peut pas accéder au contenu
+              // On comptera sur les messages postMessage ou la redirection parent
+              console.log('[MONETICO WIDGET] Cross-origin, attente de redirection parent')
+            }
+          }, 2000)
+        } catch (e) {
+          // Ignorer les erreurs cross-origin
+        }
       }
 
       const handleError = () => {
         setLoading(false)
         setError('Erreur lors du chargement du formulaire de paiement')
         console.error('[MONETICO WIDGET] Erreur chargement iframe')
+        if (!formRemoved && form.parentNode) {
+          document.body.removeChild(form)
+          formRemoved = true
+        }
       }
 
       iframe.addEventListener('load', handleLoad)
@@ -68,32 +103,42 @@ export default function MoneticoWidget({
 
       // Nettoyer après soumission
       setTimeout(() => {
-        document.body.removeChild(form)
+        if (!formRemoved && form.parentNode) {
+          document.body.removeChild(form)
+          formRemoved = true
+        }
       }, 1000)
 
       return () => {
         iframe.removeEventListener('load', handleLoad)
         iframe.removeEventListener('error', handleError)
+        if (!formRemoved && form.parentNode) {
+          document.body.removeChild(form)
+        }
       }
     }
-  }, [action, fields])
+  }, [action, fields, onSuccess])
 
-  // Écouter les messages depuis l'iframe (si Monetico envoie des postMessage)
+  // Écouter les messages depuis l'iframe et les redirections
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       // Vérifier l'origine pour la sécurité
-      if (!event.origin.includes('creditmutuel.fr') && !event.origin.includes('monetico.fr')) {
+      const allowedOrigins = ['creditmutuel.fr', 'monetico.fr', 'paiement.monetico.fr']
+      const isAllowedOrigin = allowedOrigins.some(origin => event.origin.includes(origin))
+      
+      if (!isAllowedOrigin && event.origin !== window.location.origin) {
         return
       }
 
-      console.log('[MONETICO WIDGET] Message reçu:', event.data)
+      console.log('[MONETICO WIDGET] Message reçu:', event.data, 'depuis:', event.origin)
 
-      if (event.data.type === 'monetico-success') {
-        const reference = event.data.reference
+      if (event.data.type === 'monetico-success' || event.data.success) {
+        const reference = event.data.reference || event.data.moneticoReference
         if (onSuccess && reference) {
+          console.log('[MONETICO WIDGET] ✅ Paiement réussi, référence:', reference)
           onSuccess(reference)
         }
-      } else if (event.data.type === 'monetico-error') {
+      } else if (event.data.type === 'monetico-error' || event.data.error) {
         const errorMsg = event.data.error || 'Erreur de paiement'
         setError(errorMsg)
         if (onError) {
@@ -102,8 +147,29 @@ export default function MoneticoWidget({
       }
     }
 
+    // Écouter les changements d'URL dans la fenêtre parent (si Monetico redirige)
+    const handleHashChange = () => {
+      const hash = window.location.hash
+      if (hash.includes('reference=')) {
+        const params = new URLSearchParams(hash.substring(1))
+        const reference = params.get('reference')
+        const codeRetour = params.get('code-retour')
+        if (reference && (codeRetour === 'paiement' || codeRetour === 'payetest')) {
+          console.log('[MONETICO WIDGET] ✅ Paiement réussi via hash, référence:', reference)
+          if (onSuccess) {
+            onSuccess(reference)
+          }
+        }
+      }
+    }
+
     window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
+    window.addEventListener('hashchange', handleHashChange)
+    
+    return () => {
+      window.removeEventListener('message', handleMessage)
+      window.removeEventListener('hashchange', handleHashChange)
+    }
   }, [onSuccess, onError])
 
   return (
