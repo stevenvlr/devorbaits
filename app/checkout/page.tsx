@@ -1958,70 +1958,6 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              {/* Commentaire de commande */}
-              <div className="space-y-3 border-t border-noir-700 pt-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Info className="w-5 h-5 text-yellow-500" />
-                  Commentaire (optionnel)
-                </h3>
-                <textarea
-                  value={orderComment}
-                  onChange={(e) => {
-                    const value = e.target.value.trimStart()
-                    if (value.length <= 500) {
-                      setOrderComment(value)
-                    }
-                  }}
-                  placeholder="Ajoutez un commentaire pour votre commande (max 500 caractères)"
-                  rows={4}
-                  maxLength={500}
-                  className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-white text-sm focus:border-yellow-500 focus:outline-none resize-none"
-                />
-                <p className="text-xs text-gray-500 text-right">
-                  {orderComment.length}/500 caractères
-                </p>
-              </div>
-
-              {/* Acceptation des CGV */}
-              <div className="space-y-3 border-t border-noir-700 pt-4">
-                <label className="flex items-start gap-3 cursor-pointer group">
-                  <div className="relative flex items-center justify-center mt-0.5">
-                    <input
-                      type="checkbox"
-                      checked={cgvAccepted}
-                      onChange={(e) => setCgvAccepted(e.target.checked)}
-                      className="w-5 h-5 rounded border-2 border-noir-600 bg-noir-900 text-yellow-500 focus:ring-yellow-500 focus:ring-2 cursor-pointer"
-                    />
-                  </div>
-                  <span className="text-sm text-gray-300 group-hover:text-white transition-colors">
-                    J'accepte les{' '}
-                    <Link 
-                      href="/cgv" 
-                      target="_blank"
-                      className="text-yellow-500 hover:text-yellow-400 underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Conditions Générales de Vente
-                    </Link>
-                    {' '}et la{' '}
-                    <Link 
-                      href="/confidentialite" 
-                      target="_blank"
-                      className="text-yellow-500 hover:text-yellow-400 underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Politique de Confidentialité
-                    </Link>
-                    {' '}<span className="text-red-400">*</span>
-                  </span>
-                </label>
-                {!cgvAccepted && (
-                  <p className="text-xs text-gray-500 ml-8">
-                    Vous devez accepter les CGV pour continuer
-                  </p>
-                )}
-              </div>
-
               {/* Choix du mode de paiement */}
               {/* Bloc unique de paiement PayPal */}
               <div className="border-t border-noir-700 pt-8">
@@ -2680,6 +2616,70 @@ export default function CheckoutPage() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Commentaire de commande */}
+              <div className="space-y-3 border-t border-noir-700 pt-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Info className="w-5 h-5 text-yellow-500" />
+                  Commentaire (optionnel)
+                </h3>
+                <textarea
+                  value={orderComment}
+                  onChange={(e) => {
+                    const value = e.target.value.trimStart()
+                    if (value.length <= 500) {
+                      setOrderComment(value)
+                    }
+                  }}
+                  placeholder="Ajoutez un commentaire pour votre commande (max 500 caractères)"
+                  rows={4}
+                  maxLength={500}
+                  className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-white text-sm focus:border-yellow-500 focus:outline-none resize-none"
+                />
+                <p className="text-xs text-gray-500 text-right">
+                  {orderComment.length}/500 caractères
+                </p>
+              </div>
+
+              {/* Acceptation des CGV */}
+              <div className="space-y-3 border-t border-noir-700 pt-4">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <div className="relative flex items-center justify-center mt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={cgvAccepted}
+                      onChange={(e) => setCgvAccepted(e.target.checked)}
+                      className="w-5 h-5 rounded border-2 border-noir-600 bg-noir-900 text-yellow-500 focus:ring-yellow-500 focus:ring-2 cursor-pointer"
+                    />
+                  </div>
+                  <span className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                    J'accepte les{' '}
+                    <Link 
+                      href="/cgv" 
+                      target="_blank"
+                      className="text-yellow-500 hover:text-yellow-400 underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Conditions Générales de Vente
+                    </Link>
+                    {' '}et la{' '}
+                    <Link 
+                      href="/confidentialite" 
+                      target="_blank"
+                      className="text-yellow-500 hover:text-yellow-400 underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Politique de Confidentialité
+                    </Link>
+                    {' '}<span className="text-red-400">*</span>
+                  </span>
+                </label>
+                {!cgvAccepted && (
+                  <p className="text-xs text-gray-500 ml-8">
+                    Vous devez accepter les CGV pour continuer
+                  </p>
+                )}
               </div>
             </div>
           </div>
