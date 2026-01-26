@@ -1437,7 +1437,7 @@ export default function CheckoutPage() {
 
               {/* Choix du mode de paiement */}
               {/* Bloc unique de paiement PayPal */}
-              <div className="border-t border-noir-700 pt-8 mt-6">
+              <div className={`border-t border-noir-700 pt-8 mt-6 ${moneticoWidget ? 'opacity-30 pointer-events-none' : ''}`}>
                 <h3 className="font-semibold flex items-center gap-3 mb-8 text-2xl">
                   <Wallet className="w-7 h-7 text-yellow-500" />
                   Mode de paiement

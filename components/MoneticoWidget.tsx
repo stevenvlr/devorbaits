@@ -173,8 +173,18 @@ export default function MoneticoWidget({
   }, [onSuccess, onError])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-4xl h-[90vh] bg-noir-900 rounded-xl shadow-2xl overflow-hidden">
+    <div 
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 backdrop-blur-md"
+      style={{ pointerEvents: 'auto' }}
+      onClick={(e) => {
+        // Empêcher la fermeture en cliquant sur l'overlay
+        e.stopPropagation()
+      }}
+    >
+      <div 
+        className="relative w-full max-w-4xl h-[90vh] bg-noir-900 rounded-xl shadow-2xl overflow-hidden z-[10000]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 bg-noir-800 border-b border-noir-700">
           <h2 className="text-xl font-semibold text-white">Paiement sécurisé Monetico</h2>
