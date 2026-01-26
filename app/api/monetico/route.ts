@@ -250,24 +250,59 @@ export async function POST(request: NextRequest) {
       parts: macParts.map((v, i) => ({ key: macOrder[i], value: v, isEmpty: v === '' }))
     })
 
-    // Préparer la clé HMAC (server-only, UNIQUEMENT MONETICO_CLE_HMAC, pas de fallback)
-    const raw = process.env.MONETICO_CLE_HMAC
+    // Préparer la clé HMAC (server-only)
+    // Accepter MONETICO_CLE_HMAC ou MONETICO_CLE_SECRETE (compatibilité)
+    const raw = process.env.MONETICO_CLE_HMAC || process.env.MONETICO_CLE_SECRETE
     if (!raw) {
-      console.error('MONETICO_CLE_HMAC non configuré (server-only, pas de NEXT_PUBLIC_*)')
+      console.error('[MONETICO] Clé HMAC non trouvée. Variables disponibles:', {
+        hasMONETICO_CLE_HMAC: !!process.env.MONETICO_CLE_HMAC,
+        hasMONETICO_CLE_SECRETE: !!process.env.MONETICO_CLE_SECRETE,
+        envKeys: Object.keys(process.env).filter(k => k.includes('MONETICO') || k.includes('HMAC'))
+      })
       return NextResponse.json(
-        { error: 'MONETICO_CLE_HMAC non configuré. Configurez MONETICO_CLE_HMAC dans Cloudflare Dashboard (Settings → Environment Variables → Secrets)' },
+        { 
+          error: 'MONETICO_CLE_HMAC non configuré. Configurez MONETICO_CLE_HMAC (ou MONETICO_CLE_SECRETE) dans Cloudflare Dashboard (Settings → Environment Variables → Secrets). La clé doit faire exactement 40 caractères hexadécimaux (ex: A1B2C3D4E5F6...)' 
+        },
         { status: 500 }
       )
     }
     
     // Normaliser : trim + remove whitespace
-    const keyHex = raw.trim().replace(/[\s\r\n\t]+/g, '')
+    let keyHex = raw.trim().replace(/[\s\r\n\t]+/g, '')
     
-    // Valider regex ^[0-9A-Fa-f]{40}$ sinon throw erreur explicite
+    // Si la clé est plus longue que 40 caractères, prendre les 40 premiers (cas où Monetico fournit une clé plus longue)
+    if (keyHex.length > 40) {
+      console.warn(`[MONETICO] Clé HMAC trop longue (${keyHex.length} caractères), utilisation des 40 premiers caractères`)
+      keyHex = keyHex.substring(0, 40)
+    }
+    
+    // Diagnostic détaillé si invalide
     if (!/^[0-9A-Fa-f]{40}$/.test(keyHex)) {
-      console.error('[MONETICO] Clé HMAC invalide:', { keyLength: keyHex.length, keyPreview: keyHex.substring(0, 10) + '...' })
+      const invalidChars = keyHex.split('').filter(c => !/^[0-9A-Fa-f]$/.test(c))
+      console.error('[MONETICO] Clé HMAC invalide:', { 
+        keyLength: keyHex.length, 
+        expectedLength: 40,
+        keyPreview: keyHex.substring(0, 20) + '...' + keyHex.substring(keyHex.length - 10),
+        hasInvalidChars: invalidChars.length > 0,
+        invalidChars: invalidChars.slice(0, 5),
+        rawLength: raw.length,
+        rawPreview: raw.substring(0, 20) + '...'
+      })
+      
+      // Message d'erreur plus détaillé
+      let errorMessage = `Clé HMAC Monetico invalide. Longueur actuelle: ${keyHex.length} caractères (attendu: 40).`
+      if (keyHex.length < 40) {
+        errorMessage += ` La clé est trop courte.`
+      } else if (keyHex.length > 40) {
+        errorMessage += ` La clé est trop longue (${keyHex.length} caractères). Les 40 premiers caractères ont été utilisés, mais la clé contient des caractères invalides.`
+      }
+      if (invalidChars.length > 0) {
+        errorMessage += ` Caractères invalides détectés: ${invalidChars.slice(0, 5).join(', ')}.`
+      }
+      errorMessage += ` Format attendu: exactement 40 caractères hexadécimaux uniquement (0-9, A-F, a-f). Vérifiez que la clé dans Cloudflare Dashboard ne contient pas d'espaces, retours à la ligne ou caractères invalides.`
+      
       return NextResponse.json(
-        { error: 'Clé HMAC Monetico invalide (attendu: 40 caractères hexadécimaux, format: ^[0-9A-Fa-f]{40}$)' },
+        { error: errorMessage },
         { status: 500 }
       )
     }
