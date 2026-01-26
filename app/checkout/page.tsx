@@ -1435,532 +1435,9 @@ export default function CheckoutPage() {
                 </label>
               </div>
 
-            </div>
-          </div>
-
-          {/* Colonne latérale - Résumé et informations */}
-          <div className="lg:sticky lg:top-24 h-fit">
-            <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6 space-y-6">
-              <h2 className="text-2xl font-bold mb-4">Résumé</h2>
-
-              {/* Code promo */}
-              <div className="space-y-3 border-b border-noir-700 pb-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Ticket className="w-5 h-5 text-yellow-500" />
-                  Code promo
-                </h3>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => {
-                      setPromoCode(e.target.value.toUpperCase())
-                      setPromoError(null)
-                      setPromoValidation(null)
-                    }}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        handleValidatePromoCode()
-                      }
-                    }}
-                    placeholder="Entrez votre code"
-                    className="flex-1 px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
-                  />
-                  <button
-                    onClick={handleValidatePromoCode}
-                    className="px-4 py-2 bg-yellow-500 text-noir-950 font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
-                  >
-                    Appliquer
-                  </button>
-                </div>
-                {promoError && (
-                  <p className="text-sm text-red-400 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    {promoError}
-                  </p>
-                )}
-                {promoValidation && promoValidation.valid && (
-                  <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-3">
-                    <p className="text-sm text-green-400 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Code promo appliqué ! Réduction de {promoValidation.discount?.toFixed(2)}€
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Résumé des produits */}
-              <div className="space-y-3 border-b border-noir-700 pb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Nombre de produits:</span>
-                  <span className="text-white font-semibold">{cartItems.length}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Sous-total:</span>
-                  <span className="text-white">{totalWithPromotion.toFixed(2)} €</span>
-                </div>
-                {promoValidation && promoValidation.valid && promoValidation.discount && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">
-                      Réduction{promoCode.trim() ? ` (${promoCode.trim()})` : ''}:
-                    </span>
-                    <span className="text-green-400">-{promoValidation.discount.toFixed(2)} €</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">
-                    {retraitMode === 'livraison' || retraitMode === 'chronopost-relais' ? 'Expédition:' : 'Retrait:'}
-                  </span>
-                  <span className="text-white">
-                    {retraitMode === 'livraison' || retraitMode === 'chronopost-relais' ? (
-                      calculatedShippingCost > 0 ? (
-                        `${calculatedShippingCost.toFixed(2)} €`
-                      ) : livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville ? (
-                        <span className="text-yellow-400 text-xs flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />
-                          Calcul en cours...
-                        </span>
-                      ) : (
-                        <span className="text-gray-500 text-xs">Remplissez l'adresse</span>
-                      )
-                    ) : (
-                      'Gratuit'
-                    )}
-                  </span>
-                </div>
-                {/* Affichage réduction sponsor sur l'expédition */}
-                {sponsorShippingDiscount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-green-400 flex items-center gap-1">
-                      <Ticket className="w-3 h-3" />
-                      Tarif sponsor:
-                    </span>
-                    <span className="text-green-400">-{sponsorShippingDiscount.toFixed(2)} €</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-lg pt-2 border-t border-noir-700">
-                  <span className="text-gray-400 font-semibold">Total:</span>
-                  <span className="text-yellow-500 font-bold">{finalTotal.toFixed(2)} €</span>
-                </div>
-              </div>
-
-              {/* Point relais Boxtal sélectionné */}
-              {retraitMode === 'chronopost-relais' && boxtalParcelPoint && (
-                <div className="space-y-3 border-t border-noir-700 pt-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-yellow-500" />
-                    Point relais sélectionné
-                  </h3>
-                  <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4">
-                    <p className="text-sm text-yellow-300 font-semibold mb-2">
-                      {boxtalParcelPoint.name}
-                    </p>
-                    {boxtalParcelPoint.address?.street && (
-                      <p className="text-xs text-gray-300">
-                        {boxtalParcelPoint.address.street}
-                      </p>
-                    )}
-                    {(boxtalParcelPoint.address?.postalCode || boxtalParcelPoint.address?.city) && (
-                      <p className="text-xs text-gray-300">
-                        {boxtalParcelPoint.address?.postalCode} {boxtalParcelPoint.address?.city}
-                      </p>
-                    )}
-                    {boxtalParcelPoint.code && (
-                      <p className="text-xs text-gray-400 mt-2">
-                        Code: {boxtalParcelPoint.code}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Séparation des produits disponibles à l'amicale */}
-              {produitsDisponiblesAmicale.length > 0 && retraitMode === 'livraison' && (
-                <div className="space-y-4 border-t border-noir-700 pt-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <MapPin className="w-5 h-5 text-green-500" />
-                      Produits disponibles à l'amicale
-                    </h3>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={separerAmicale}
-                        onChange={(e) => setSeparerAmicale(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-noir-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
-                    </label>
-                  </div>
-                  
-                  {separerAmicale && (
-                    <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4">
-                      <p className="text-sm text-green-400 mb-3">
-                        <strong>{produitsDisponiblesAmicale.length} produit(s)</strong> seront retirés à l'amicale des pêcheurs au blanc
-                      </p>
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {produitsDisponiblesAmicale.map((item) => (
-                          <div key={item.id} className="text-xs text-gray-300 bg-noir-900/50 rounded p-2">
-                            <p className="font-semibold">{item.produit}</p>
-                            {item.arome && <p>Arôme: {item.arome}</p>}
-                            {item.taille && <p>Taille: {item.taille}</p>}
-                            <p>Quantité: {item.quantite}</p>
-                          </div>
-                        ))}
-                      </div>
-                      {produitsAutres.length > 0 && (
-                        <p className="text-sm text-gray-400 mt-3">
-                          Les {produitsAutres.length} autre(s) produit(s) seront livrés à votre adresse
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Adresse de livraison */}
-              {retraitMode === 'livraison' && (
-                <div className="space-y-4 border-t border-noir-700 pt-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-yellow-500" />
-                    Adresse de livraison
-                  </h3>
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      placeholder="Adresse"
-                      value={livraisonAddress.adresse}
-                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, adresse: e.target.value })}
-                      className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
-                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
-                      required
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        placeholder="Code postal (4 ou 5 chiffres)"
-                        value={livraisonAddress.codePostal}
-                        onChange={(e) => {
-                          // Accepter jusqu'à 5 chiffres (France) ou 4 chiffres (Belgique)
-                          const cleanValue = e.target.value.replace(/\D/g, '').slice(0, 5)
-                          // Auto-détecter le pays selon le code postal
-                          const detectedPays = cleanValue ? detectCountryFromPostalCode(cleanValue) : 'FR'
-                          setLivraisonAddress({ ...livraisonAddress, codePostal: cleanValue, pays: detectedPays })
-                        }}
-                        className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
-                        style={{ color: '#000000', backgroundColor: '#ffffff' }}
-                        maxLength={5}
-                        required
-                      />
-                      <input
-                        type="text"
-                        placeholder="Ville"
-                        value={livraisonAddress.ville}
-                        onChange={(e) => setLivraisonAddress({ ...livraisonAddress, ville: e.target.value })}
-                        className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
-                        style={{ color: '#000000', backgroundColor: '#ffffff' }}
-                        required
-                      />
-                    </div>
-                    <select
-                      value={livraisonAddress.pays || 'FR'}
-                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, pays: e.target.value as 'FR' | 'BE' })}
-                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
-                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
-                      required
-                    >
-                      <option value="FR">🇫🇷 France</option>
-                      <option value="BE">🇧🇪 Belgique</option>
-                    </select>
-                    <input
-                      type="tel"
-                      placeholder="Téléphone"
-                      value={livraisonAddress.telephone}
-                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, telephone: e.target.value })}
-                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
-                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Sélection point relais Boxtal */}
-              {retraitMode === 'chronopost-relais' && (
-                <div className="space-y-4 border-t border-noir-700 pt-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-yellow-500" />
-                    Point relais Boxtal
-                  </h3>
-                  
-                  {/* Code postal et pays pour calculer les tarifs */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Code postal (4 ou 5 chiffres)"
-                      value={livraisonAddress.codePostal}
-                      onChange={(e) => {
-                        const cleanValue = e.target.value.replace(/\D/g, '').slice(0, 5)
-                        const detectedPays = cleanValue ? detectCountryFromPostalCode(cleanValue) : 'FR'
-                        setLivraisonAddress({ ...livraisonAddress, codePostal: cleanValue, pays: detectedPays })
-                      }}
-                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
-                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
-                      maxLength={5}
-                    />
-                    <select
-                      value={livraisonAddress.pays || 'FR'}
-                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, pays: e.target.value as 'FR' | 'BE' })}
-                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
-                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
-                    >
-                      <option value="FR">🇫🇷 France</option>
-                      <option value="BE">🇧🇪 Belgique</option>
-                    </select>
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    Indiquez votre code postal et pays pour calculer les frais de port
-                  </p>
-                  
-                  <div 
-                    style={{ 
-                      position: 'relative', 
-                      zIndex: 1, 
-                      isolation: 'isolate',
-                      contain: 'layout style paint',
-                      maxHeight: '450px',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <BoxtalRelayMap
-                      active={retraitMode === 'chronopost-relais'}
-                      onSelect={(parcelPoint) => {
-                        setBoxtalParcelPoint(parcelPoint)
-                        console.log('Point relais Boxtal sélectionné:', parcelPoint)
-                      }}
-                      initialCity={livraisonAddress.ville}
-                      initialPostalCode={livraisonAddress.codePostal}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* RDV Wavignies */}
-              {retraitMode === 'wavignies-rdv' && (
-                <div className="space-y-4 border-t border-noir-700 pt-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-yellow-500" />
-                    Rendez-vous à Wavignies (60130)
-                  </h3>
-                  
-                  {/* Info */}
-                  <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-3">
-                    <div className="flex items-start gap-2">
-                      <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                      <div className="text-xs text-blue-300">
-                        <p className="font-semibold mb-1">Disponible uniquement :</p>
-                        <p>• Mardi et Jeudi</p>
-                        <p>• Créneaux : 15h-16h, 17h-18h, 18h-19h</p>
-                        <p className="mt-2 text-yellow-400">
-                          Besoin d'un autre créneau ? Contactez-nous
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Sélection de la date */}
-                  <div>
-                    <label className="block text-sm font-medium mb-3 text-gray-300">
-                      <Calendar className="w-4 h-4 inline mr-2" />
-                      Choisissez votre date <span className="text-red-400">*</span>
-                    </label>
-                    {availableDates.length === 0 ? (
-                      <div className="bg-gray-500/10 border border-gray-500/50 rounded-lg p-4 text-center">
-                        <p className="text-sm text-gray-400">Aucune date disponible pour le moment</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
-                        {availableDates
-                          .filter(date => {
-                            const dayName = getDayName(date)
-                            return dayName === 'Mardi' || dayName === 'Jeudi'
-                          })
-                          .map((date) => {
-                            const dayName = getDayName(date)
-                            const isMardi = dayName === 'Mardi'
-                            const isJeudi = dayName === 'Jeudi'
-                            const isSelected = rdvDate === date
-                            
-                            // Parser la date localement pour l'affichage
-                            const [year, month, day] = date.split('-').map(Number)
-                            const dateObj = new Date(year, month - 1, day)
-                            
-                            return (
-                              <button
-                                key={date}
-                                type="button"
-                                onClick={() => setRdvDate(date)}
-                                className={`p-3 rounded-xl border-2 transition-all text-center ${
-                                  isSelected
-                                    ? 'border-yellow-500 bg-yellow-500/20 ring-2 ring-yellow-500/50'
-                                    : 'border-noir-700 bg-noir-900 hover:border-yellow-500/50 hover:bg-noir-800'
-                                }`}
-                              >
-                                <div className={`text-xs font-semibold mb-1 ${
-                                  isMardi ? 'text-blue-400' : isJeudi ? 'text-purple-400' : 'text-gray-400'
-                                }`}>
-                                  {dayName}
-                                </div>
-                                <div className="text-sm font-bold text-white">
-                                  {dateObj.toLocaleDateString('fr-FR', {
-                                    day: 'numeric',
-                                    month: 'short'
-                                  })}
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  {year}
-                                </div>
-                              </button>
-                            )
-                          })}
-                      </div>
-                    )}
-                    {!rdvDate && (
-                      <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        Veuillez sélectionner une date (Mardi ou Jeudi uniquement)
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Sélection du créneau */}
-                  {rdvDate ? (
-                    <div>
-                      <label className="block text-sm font-medium mb-3 text-gray-300">
-                        <Clock className="w-4 h-4 inline mr-2" />
-                        Choisissez votre créneau horaire <span className="text-red-400">*</span>
-                      </label>
-                      {timeSlots.length === 0 ? (
-                        <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
-                          <p className="text-sm text-red-300 flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4" />
-                            Cette date n'est pas disponible (doit être un mardi ou jeudi)
-                          </p>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="grid grid-cols-1 gap-3">
-                            {timeSlots.map((slot) => {
-                              const isSelected = rdvTimeSlot === slot.timeSlot
-                              const placesLeft = MAX_BOOKINGS_PER_SLOT - slot.bookedCount
-                              
-                              return (
-                                <button
-                                  key={slot.timeSlot}
-                                  type="button"
-                                  onClick={() => setRdvTimeSlot(slot.timeSlot)}
-                                  disabled={!slot.available}
-                                  className={`relative p-4 rounded-xl border-2 transition-all ${
-                                    isSelected
-                                      ? 'border-yellow-500 bg-yellow-500/20 ring-2 ring-yellow-500/50 shadow-lg shadow-yellow-500/20'
-                                      : slot.available
-                                      ? 'border-noir-700 bg-noir-900 hover:border-yellow-500/50 hover:bg-noir-800 hover:shadow-lg'
-                                      : 'border-red-500/50 bg-red-500/10 opacity-50 cursor-not-allowed'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                                        isSelected
-                                          ? 'bg-yellow-500/30 border-2 border-yellow-500'
-                                          : slot.available
-                                          ? 'bg-noir-800 border border-noir-600'
-                                          : 'bg-red-500/20 border border-red-500/50'
-                                      }`}>
-                                        <Clock className={`w-6 h-6 ${
-                                          isSelected ? 'text-yellow-500' : slot.available ? 'text-gray-400' : 'text-red-400'
-                                        }`} />
-                                      </div>
-                                      <div className="text-left">
-                                        <div className="font-bold text-lg text-white">{slot.timeSlot}</div>
-                                        <div className="text-xs text-gray-400 mt-0.5">
-                                          {slot.available 
-                                            ? `${placesLeft} place${placesLeft > 1 ? 's' : ''} disponible${placesLeft > 1 ? 's' : ''}`
-                                            : 'Complet'
-                                          }
-                                        </div>
-                                      </div>
-                                    </div>
-                                    {isSelected && (
-                                      <div className="flex-shrink-0">
-                                        <CheckCircle2 className="w-6 h-6 text-yellow-500" />
-                                      </div>
-                                    )}
-                                    {!slot.available && !isSelected && (
-                                      <div className="flex-shrink-0">
-                                        <X className="w-5 h-5 text-red-400" />
-                                      </div>
-                                    )}
-                                  </div>
-                                </button>
-                              )
-                            })}
-                          </div>
-                          {!rdvTimeSlot && (
-                            <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3" />
-                              Veuillez sélectionner un créneau horaire
-                            </p>
-                          )}
-                          {rdvTimeSlot && (
-                            <div className="mt-4 bg-gradient-to-r from-green-500/20 to-green-600/20 border border-green-500/50 rounded-xl p-4">
-                              <div className="flex items-start gap-3">
-                                <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="text-sm font-semibold text-green-300 mb-1">Créneau réservé</p>
-                                  <p className="text-sm text-white">
-                                    <strong className="text-yellow-400">{rdvTimeSlot}</strong> le{' '}
-                                    <strong>{getDayName(rdvDate)} {new Date(rdvDate).toLocaleDateString('fr-FR', { 
-                                      day: 'numeric', 
-                                      month: 'long',
-                                      year: 'numeric'
-                                    })}</strong>
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="bg-gradient-to-r from-gray-500/10 to-gray-600/10 border border-gray-500/50 rounded-xl p-6 text-center">
-                      <Calendar className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">Sélectionnez d'abord une date pour voir les créneaux disponibles</p>
-                    </div>
-                  )}
-
-                  {/* Message pour autres créneaux */}
-                  <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-3">
-                    <p className="text-xs text-yellow-300">
-                      <strong>Autre créneau souhaité ?</strong> Contactez-nous pour convenir d'un rendez-vous personnalisé.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Message de validation pour Wavignies */}
-              {retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot) && (
-                <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3">
-                  <p className="text-sm text-red-300 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>Veuillez sélectionner une date et un créneau avant de continuer</span>
-                  </p>
-                </div>
-              )}
-
               {/* Choix du mode de paiement */}
               {/* Bloc unique de paiement PayPal */}
-              <div className="border-t border-noir-700 pt-8">
+              <div className="border-t border-noir-700 pt-8 mt-6">
                 <h3 className="font-semibold flex items-center gap-3 mb-8 text-2xl">
                   <Wallet className="w-7 h-7 text-yellow-500" />
                   Mode de paiement
@@ -2619,7 +2096,7 @@ export default function CheckoutPage() {
               </div>
 
               {/* Commentaire de commande */}
-              <div className="space-y-3 border-t border-noir-700 pt-4">
+              <div className="space-y-3 border-t border-noir-700 pt-4 mt-6">
                 <h3 className="font-semibold flex items-center gap-2">
                   <Info className="w-5 h-5 text-yellow-500" />
                   Commentaire (optionnel)
@@ -2643,7 +2120,7 @@ export default function CheckoutPage() {
               </div>
 
               {/* Acceptation des CGV */}
-              <div className="space-y-3 border-t border-noir-700 pt-4">
+              <div className="space-y-3 border-t border-noir-700 pt-4 mt-6">
                 <label className="flex items-start gap-3 cursor-pointer group">
                   <div className="relative flex items-center justify-center mt-0.5">
                     <input
@@ -2681,6 +2158,529 @@ export default function CheckoutPage() {
                   </p>
                 )}
               </div>
+
+            </div>
+          </div>
+
+          {/* Colonne latérale - Résumé et informations */}
+          <div className="lg:sticky lg:top-24 h-fit">
+            <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6 space-y-6">
+              <h2 className="text-2xl font-bold mb-4">Résumé</h2>
+
+              {/* Code promo */}
+              <div className="space-y-3 border-b border-noir-700 pb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Ticket className="w-5 h-5 text-yellow-500" />
+                  Code promo
+                </h3>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={promoCode}
+                    onChange={(e) => {
+                      setPromoCode(e.target.value.toUpperCase())
+                      setPromoError(null)
+                      setPromoValidation(null)
+                    }}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleValidatePromoCode()
+                      }
+                    }}
+                    placeholder="Entrez votre code"
+                    className="flex-1 px-3 py-2 bg-noir-900 border border-noir-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                  />
+                  <button
+                    onClick={handleValidatePromoCode}
+                    className="px-4 py-2 bg-yellow-500 text-noir-950 font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
+                  >
+                    Appliquer
+                  </button>
+                </div>
+                {promoError && (
+                  <p className="text-sm text-red-400 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {promoError}
+                  </p>
+                )}
+                {promoValidation && promoValidation.valid && (
+                  <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-3">
+                    <p className="text-sm text-green-400 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Code promo appliqué ! Réduction de {promoValidation.discount?.toFixed(2)}€
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Résumé des produits */}
+              <div className="space-y-3 border-b border-noir-700 pb-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Nombre de produits:</span>
+                  <span className="text-white font-semibold">{cartItems.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Sous-total:</span>
+                  <span className="text-white">{totalWithPromotion.toFixed(2)} €</span>
+                </div>
+                {promoValidation && promoValidation.valid && promoValidation.discount && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">
+                      Réduction{promoCode.trim() ? ` (${promoCode.trim()})` : ''}:
+                    </span>
+                    <span className="text-green-400">-{promoValidation.discount.toFixed(2)} €</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">
+                    {retraitMode === 'livraison' || retraitMode === 'chronopost-relais' ? 'Expédition:' : 'Retrait:'}
+                  </span>
+                  <span className="text-white">
+                    {retraitMode === 'livraison' || retraitMode === 'chronopost-relais' ? (
+                      calculatedShippingCost > 0 ? (
+                        `${calculatedShippingCost.toFixed(2)} €`
+                      ) : livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville ? (
+                        <span className="text-yellow-400 text-xs flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          Calcul en cours...
+                        </span>
+                      ) : (
+                        <span className="text-gray-500 text-xs">Remplissez l'adresse</span>
+                      )
+                    ) : (
+                      'Gratuit'
+                    )}
+                  </span>
+                </div>
+                {/* Affichage réduction sponsor sur l'expédition */}
+                {sponsorShippingDiscount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-400 flex items-center gap-1">
+                      <Ticket className="w-3 h-3" />
+                      Tarif sponsor:
+                    </span>
+                    <span className="text-green-400">-{sponsorShippingDiscount.toFixed(2)} €</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-lg pt-2 border-t border-noir-700">
+                  <span className="text-gray-400 font-semibold">Total:</span>
+                  <span className="text-yellow-500 font-bold">{finalTotal.toFixed(2)} €</span>
+                </div>
+              </div>
+
+              {/* Point relais Boxtal sélectionné */}
+              {retraitMode === 'chronopost-relais' && boxtalParcelPoint && (
+                <div className="space-y-3 border-t border-noir-700 pt-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-yellow-500" />
+                    Point relais sélectionné
+                  </h3>
+                  <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4">
+                    <p className="text-sm text-yellow-300 font-semibold mb-2">
+                      {boxtalParcelPoint.name}
+                    </p>
+                    {boxtalParcelPoint.address?.street && (
+                      <p className="text-xs text-gray-300">
+                        {boxtalParcelPoint.address.street}
+                      </p>
+                    )}
+                    {(boxtalParcelPoint.address?.postalCode || boxtalParcelPoint.address?.city) && (
+                      <p className="text-xs text-gray-300">
+                        {boxtalParcelPoint.address?.postalCode} {boxtalParcelPoint.address?.city}
+                      </p>
+                    )}
+                    {boxtalParcelPoint.code && (
+                      <p className="text-xs text-gray-400 mt-2">
+                        Code: {boxtalParcelPoint.code}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Séparation des produits disponibles à l'amicale */}
+              {produitsDisponiblesAmicale.length > 0 && retraitMode === 'livraison' && (
+                <div className="space-y-4 border-t border-noir-700 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <MapPin className="w-5 h-5 text-green-500" />
+                      Produits disponibles à l'amicale
+                    </h3>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={separerAmicale}
+                        onChange={(e) => setSeparerAmicale(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-noir-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                    </label>
+                  </div>
+                  
+                  {separerAmicale && (
+                    <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4">
+                      <p className="text-sm text-green-400 mb-3">
+                        <strong>{produitsDisponiblesAmicale.length} produit(s)</strong> seront retirés à l'amicale des pêcheurs au blanc
+                      </p>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {produitsDisponiblesAmicale.map((item) => (
+                          <div key={item.id} className="text-xs text-gray-300 bg-noir-900/50 rounded p-2">
+                            <p className="font-semibold">{item.produit}</p>
+                            {item.arome && <p>Arôme: {item.arome}</p>}
+                            {item.taille && <p>Taille: {item.taille}</p>}
+                            <p>Quantité: {item.quantite}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {produitsAutres.length > 0 && (
+                        <p className="text-sm text-gray-400 mt-3">
+                          Les {produitsAutres.length} autre(s) produit(s) seront livrés à votre adresse
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Adresse de livraison */}
+              {retraitMode === 'livraison' && (
+                <div className="space-y-4 border-t border-noir-700 pt-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-yellow-500" />
+                    Adresse de livraison
+                  </h3>
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      placeholder="Adresse"
+                      value={livraisonAddress.adresse}
+                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, adresse: e.target.value })}
+                      className="w-full bg-noir-900 border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                      required
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Code postal (4 ou 5 chiffres)"
+                        value={livraisonAddress.codePostal}
+                        onChange={(e) => {
+                          // Accepter jusqu'à 5 chiffres (France) ou 4 chiffres (Belgique)
+                          const cleanValue = e.target.value.replace(/\D/g, '').slice(0, 5)
+                          // Auto-détecter le pays selon le code postal
+                          const detectedPays = cleanValue ? detectCountryFromPostalCode(cleanValue) : 'FR'
+                          setLivraisonAddress({ ...livraisonAddress, codePostal: cleanValue, pays: detectedPays })
+                        }}
+                        className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                        style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                        maxLength={5}
+                        required
+                      />
+                      <input
+                        type="text"
+                        placeholder="Ville"
+                        value={livraisonAddress.ville}
+                        onChange={(e) => setLivraisonAddress({ ...livraisonAddress, ville: e.target.value })}
+                        className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                        style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                        required
+                      />
+                    </div>
+                    <select
+                      value={livraisonAddress.pays || 'FR'}
+                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, pays: e.target.value as 'FR' | 'BE' })}
+                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                      required
+                    >
+                      <option value="FR">🇫🇷 France</option>
+                      <option value="BE">🇧🇪 Belgique</option>
+                    </select>
+                    <input
+                      type="tel"
+                      placeholder="Téléphone"
+                      value={livraisonAddress.telephone}
+                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, telephone: e.target.value })}
+                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Sélection point relais Boxtal */}
+              {retraitMode === 'chronopost-relais' && (
+                <div className="space-y-4 border-t border-noir-700 pt-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-yellow-500" />
+                    Point relais Boxtal
+                  </h3>
+                  
+                  {/* Code postal et pays pour calculer les tarifs */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Code postal (4 ou 5 chiffres)"
+                      value={livraisonAddress.codePostal}
+                      onChange={(e) => {
+                        const cleanValue = e.target.value.replace(/\D/g, '').slice(0, 5)
+                        const detectedPays = cleanValue ? detectCountryFromPostalCode(cleanValue) : 'FR'
+                        setLivraisonAddress({ ...livraisonAddress, codePostal: cleanValue, pays: detectedPays })
+                      }}
+                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                      maxLength={5}
+                    />
+                    <select
+                      value={livraisonAddress.pays || 'FR'}
+                      onChange={(e) => setLivraisonAddress({ ...livraisonAddress, pays: e.target.value as 'FR' | 'BE' })}
+                      className="w-full border border-noir-700 rounded-lg px-4 py-2 text-sm placeholder:text-gray-500 focus:border-yellow-500 focus:outline-none"
+                      style={{ color: '#000000', backgroundColor: '#ffffff' }}
+                    >
+                      <option value="FR">🇫🇷 France</option>
+                      <option value="BE">🇧🇪 Belgique</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Indiquez votre code postal et pays pour calculer les frais de port
+                  </p>
+                  
+                  <div 
+                    style={{ 
+                      position: 'relative', 
+                      zIndex: 1, 
+                      isolation: 'isolate',
+                      contain: 'layout style paint',
+                      maxHeight: '450px',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <BoxtalRelayMap
+                      active={retraitMode === 'chronopost-relais'}
+                      onSelect={(parcelPoint) => {
+                        setBoxtalParcelPoint(parcelPoint)
+                        console.log('Point relais Boxtal sélectionné:', parcelPoint)
+                      }}
+                      initialCity={livraisonAddress.ville}
+                      initialPostalCode={livraisonAddress.codePostal}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* RDV Wavignies */}
+              {retraitMode === 'wavignies-rdv' && (
+                <div className="space-y-4 border-t border-noir-700 pt-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-yellow-500" />
+                    Rendez-vous à Wavignies (60130)
+                  </h3>
+                  
+                  {/* Info */}
+                  <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs text-blue-300">
+                        <p className="font-semibold mb-1">Disponible uniquement :</p>
+                        <p>• Mardi et Jeudi</p>
+                        <p>• Créneaux : 15h-16h, 17h-18h, 18h-19h</p>
+                        <p className="mt-2 text-yellow-400">
+                          Besoin d'un autre créneau ? Contactez-nous
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sélection de la date */}
+                  <div>
+                    <label className="block text-sm font-medium mb-3 text-gray-300">
+                      <Calendar className="w-4 h-4 inline mr-2" />
+                      Choisissez votre date <span className="text-red-400">*</span>
+                    </label>
+                    {availableDates.length === 0 ? (
+                      <div className="bg-gray-500/10 border border-gray-500/50 rounded-lg p-4 text-center">
+                        <p className="text-sm text-gray-400">Aucune date disponible pour le moment</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
+                        {availableDates
+                          .filter(date => {
+                            const dayName = getDayName(date)
+                            return dayName === 'Mardi' || dayName === 'Jeudi'
+                          })
+                          .map((date) => {
+                            const dayName = getDayName(date)
+                            const isMardi = dayName === 'Mardi'
+                            const isJeudi = dayName === 'Jeudi'
+                            const isSelected = rdvDate === date
+                            
+                            // Parser la date localement pour l'affichage
+                            const [year, month, day] = date.split('-').map(Number)
+                            const dateObj = new Date(year, month - 1, day)
+                            
+                            return (
+                              <button
+                                key={date}
+                                type="button"
+                                onClick={() => setRdvDate(date)}
+                                className={`p-3 rounded-xl border-2 transition-all text-center ${
+                                  isSelected
+                                    ? 'border-yellow-500 bg-yellow-500/20 ring-2 ring-yellow-500/50'
+                                    : 'border-noir-700 bg-noir-900 hover:border-yellow-500/50 hover:bg-noir-800'
+                                }`}
+                              >
+                                <div className={`text-xs font-semibold mb-1 ${
+                                  isMardi ? 'text-blue-400' : isJeudi ? 'text-purple-400' : 'text-gray-400'
+                                }`}>
+                                  {dayName}
+                                </div>
+                                <div className="text-sm font-bold text-white">
+                                  {dateObj.toLocaleDateString('fr-FR', {
+                                    day: 'numeric',
+                                    month: 'short'
+                                  })}
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">
+                                  {year}
+                                </div>
+                              </button>
+                            )
+                          })}
+                      </div>
+                    )}
+                    {!rdvDate && (
+                      <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        Veuillez sélectionner une date (Mardi ou Jeudi uniquement)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Sélection du créneau */}
+                  {rdvDate ? (
+                    <div>
+                      <label className="block text-sm font-medium mb-3 text-gray-300">
+                        <Clock className="w-4 h-4 inline mr-2" />
+                        Choisissez votre créneau horaire <span className="text-red-400">*</span>
+                      </label>
+                      {timeSlots.length === 0 ? (
+                        <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
+                          <p className="text-sm text-red-300 flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4" />
+                            Cette date n'est pas disponible (doit être un mardi ou jeudi)
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-1 gap-3">
+                            {timeSlots.map((slot) => {
+                              const isSelected = rdvTimeSlot === slot.timeSlot
+                              const placesLeft = MAX_BOOKINGS_PER_SLOT - slot.bookedCount
+                              
+                              return (
+                                <button
+                                  key={slot.timeSlot}
+                                  type="button"
+                                  onClick={() => setRdvTimeSlot(slot.timeSlot)}
+                                  disabled={!slot.available}
+                                  className={`relative p-4 rounded-xl border-2 transition-all ${
+                                    isSelected
+                                      ? 'border-yellow-500 bg-yellow-500/20 ring-2 ring-yellow-500/50 shadow-lg shadow-yellow-500/20'
+                                      : slot.available
+                                      ? 'border-noir-700 bg-noir-900 hover:border-yellow-500/50 hover:bg-noir-800 hover:shadow-lg'
+                                      : 'border-red-500/50 bg-red-500/10 opacity-50 cursor-not-allowed'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                                        isSelected
+                                          ? 'bg-yellow-500/30 border-2 border-yellow-500'
+                                          : slot.available
+                                          ? 'bg-noir-800 border border-noir-600'
+                                          : 'bg-red-500/20 border border-red-500/50'
+                                      }`}>
+                                        <Clock className={`w-6 h-6 ${
+                                          isSelected ? 'text-yellow-500' : slot.available ? 'text-gray-400' : 'text-red-400'
+                                        }`} />
+                                      </div>
+                                      <div className="text-left">
+                                        <div className="font-bold text-lg text-white">{slot.timeSlot}</div>
+                                        <div className="text-xs text-gray-400 mt-0.5">
+                                          {slot.available 
+                                            ? `${placesLeft} place${placesLeft > 1 ? 's' : ''} disponible${placesLeft > 1 ? 's' : ''}`
+                                            : 'Complet'
+                                          }
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {isSelected && (
+                                      <div className="flex-shrink-0">
+                                        <CheckCircle2 className="w-6 h-6 text-yellow-500" />
+                                      </div>
+                                    )}
+                                    {!slot.available && !isSelected && (
+                                      <div className="flex-shrink-0">
+                                        <X className="w-5 h-5 text-red-400" />
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                          {!rdvTimeSlot && (
+                            <p className="text-xs text-red-400 mt-2 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Veuillez sélectionner un créneau horaire
+                            </p>
+                          )}
+                          {rdvTimeSlot && (
+                            <div className="mt-4 bg-gradient-to-r from-green-500/20 to-green-600/20 border border-green-500/50 rounded-xl p-4">
+                              <div className="flex items-start gap-3">
+                                <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-sm font-semibold text-green-300 mb-1">Créneau réservé</p>
+                                  <p className="text-sm text-white">
+                                    <strong className="text-yellow-400">{rdvTimeSlot}</strong> le{' '}
+                                    <strong>{getDayName(rdvDate)} {new Date(rdvDate).toLocaleDateString('fr-FR', { 
+                                      day: 'numeric', 
+                                      month: 'long',
+                                      year: 'numeric'
+                                    })}</strong>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-gradient-to-r from-gray-500/10 to-gray-600/10 border border-gray-500/50 rounded-xl p-6 text-center">
+                      <Calendar className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+                      <p className="text-sm text-gray-400">Sélectionnez d'abord une date pour voir les créneaux disponibles</p>
+                    </div>
+                  )}
+
+                  {/* Message pour autres créneaux */}
+                  <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-3">
+                    <p className="text-xs text-yellow-300">
+                      <strong>Autre créneau souhaité ?</strong> Contactez-nous pour convenir d'un rendez-vous personnalisé.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Message de validation pour Wavignies */}
+              {retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot) && (
+                <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3">
+                  <p className="text-sm text-red-300 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Veuillez sélectionner une date et un créneau avant de continuer</span>
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
