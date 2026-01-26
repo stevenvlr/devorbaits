@@ -2594,29 +2594,80 @@ export default function CheckoutPage() {
                       </div>
                     </div>
 
-                    {/* Bouton Carte bancaire */}
+                    {/* Bouton Carte bancaire - Monetico */}
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
                         <CreditCard className="w-5 h-5 text-blue-400" />
                       </div>
                       <div className="flex-1">
                         <span className="font-bold text-base text-white">Carte bancaire</span>
-                        <p className="text-xs text-gray-400 mt-0.5">Visa, Mastercard, CB - Paiement sécurisé</p>
+                        <p className="text-xs text-gray-400 mt-0.5">Visa, Mastercard, CB - Paiement sécurisé Monetico</p>
                       </div>
                       <div className="flex-1 max-w-xs">
-                        <PayPalButton
-                      amount={paypalTotal}
-                      itemTotal={paypalItemTotal}
-                      shippingTotal={paypalShippingTotal}
-                      reference={orderReference || paypalReference}
-                      disabled={!isFormValid()}
-                      cardOnly={true}
-                      onBeforePayment={() => {
-                        if (!orderReference) {
-                          setOrderReference(paypalReference)
-                        }
-                      }}
-                      onSuccess={async (orderId, paymentId) => {
+                        <button
+                          onClick={async () => {
+                            if (!isFormValid() || isSubmitting) return
+                            
+                            try {
+                              setIsSubmitting(true)
+                              
+                              // Générer une référence de commande unique pour Monetico
+                              const moneticoRef = generateMoneticoReference()
+                              const orderRef = generateOrderReference()
+                              
+                              // Sauvegarder la référence
+                              if (!orderReference) {
+                                setOrderReference(orderRef)
+                              }
+                              
+                              // Calculer le montant au format Monetico (ex: "95.25EUR")
+                              const moneticoAmount = `${finalTotal.toFixed(2)}EUR`
+                              
+                              // Sauvegarder temporairement la commande avant paiement (comme dans handleSubmit)
+                              const pendingOrder = {
+                                reference: orderRef,
+                                moneticoReference: moneticoRef,
+                                cartItems,
+                                total: finalTotal,
+                                shippingCost: calculatedShippingCost,
+                                promoCode: promoValidation && promoValidation.valid ? promoCode : null,
+                                discount: promoValidation && promoValidation.valid ? promoValidation.discount : null,
+                                retraitMode,
+                                rdvDate: retraitMode === 'wavignies-rdv' ? rdvDate : null,
+                                rdvTimeSlot: retraitMode === 'wavignies-rdv' ? rdvTimeSlot : null,
+                                livraisonAddress: retraitMode === 'livraison' ? livraisonAddress : null,
+                                chronopostRelaisPoint: retraitMode === 'chronopost-relais' ? chronopostRelaisPoint : null,
+                                boxtalParcelPoint: retraitMode === 'chronopost-relais' ? boxtalParcelPoint : null,
+                                customerPhone: (livraisonAddress.telephone || user?.telephone || '').trim() || null,
+                                createdAt: new Date().toISOString(),
+                              }
+                              localStorage.setItem(`pending-order-${orderRef}`, JSON.stringify(pendingOrder))
+                              localStorage.setItem(`pending-order-${moneticoRef}`, JSON.stringify(pendingOrder))
+                              
+                              // Démarrer le paiement Monetico
+                              const moneticoData = await startMoneticoPayment({
+                                montant: moneticoAmount,
+                                mail: user?.email || '',
+                              })
+                              
+                              if (moneticoData) {
+                                setMoneticoWidget(moneticoData)
+                              } else {
+                                setIsSubmitting(false)
+                              }
+                            } catch (error: any) {
+                              console.error('Erreur démarrage paiement Monetico:', error)
+                              alert(`Erreur lors du démarrage du paiement: ${error?.message || 'Erreur inconnue'}`)
+                              setIsSubmitting(false)
+                            }
+                          }}
+                          disabled={!isFormValid() || isSubmitting}
+                          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                        >
+                          {isSubmitting ? 'Traitement...' : 'Payer par carte bancaire'}
+                        </button>
+                      </div>
+                    </div>
                         try {
                           const orderItems = cartItems.map((item) => ({
                             product_id: item.productId || item.produit || `product-${item.id}`,
