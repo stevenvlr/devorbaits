@@ -24,9 +24,9 @@ NEXT_PUBLIC_SITE_URL = "https://devorbaits.com"
 # Monetico
 NEXT_PUBLIC_MONETICO_TPE = "0917217"
 MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
-NEXT_PUBLIC_MONETICO_SOCIETE = "DEVORBAITS"  # Code société Monetico (obligatoire)
+NEXT_PUBLIC_MONETICO_SOCIETE = "devorbaits"  # Code société Monetico (obligatoire)
 # URL de production Monetico (Crédit Mutuel)
-NEXT_PUBLIC_MONETICO_URL = "https://paiement.creditmutuel.fr/paiement.cgi"
+NEXT_PUBLIC_MONETICO_URL = "https://paiement.creditmutuel.fr/test/paiement.cgi"
 # URLs de retour : d'abord vers l'API pour vérifier le MAC, puis redirection
 NEXT_PUBLIC_MONETICO_URL_RETOUR = "https://devorbaits.com/api/monetico/retour"
 NEXT_PUBLIC_MONETICO_URL_RETOUR_OK = "https://devorbaits.com/payment/success/"
