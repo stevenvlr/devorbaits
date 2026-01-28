@@ -1,8 +1,8 @@
 'use client'
 
-import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js'
+import { PayPalButtons } from '@paypal/react-paypal-js'
 import { useState } from 'react'
-import { getPayPalClientId, isPayPalConfigured } from '@/lib/paypal'
+import { isPayPalConfigured } from '@/lib/paypal'
 
 type PayPalPaymentType = 'paypal-account' | 'paypal-4x' | 'paypal-guest'
 
@@ -41,54 +41,36 @@ export default function PayPalButton({
     )
   }
 
-  const clientId = getPayPalClientId()
-  const isTestMode = process.env.NEXT_PUBLIC_PAYPAL_BASE_URL?.includes('sandbox') || 
-                     !process.env.NEXT_PUBLIC_PAYPAL_BASE_URL
-
-  // Configuration PayPal selon le type de paiement
-  const getPayPalConfig = () => {
+  // Configuration du style selon le type de paiement
+  const getButtonStyle = () => {
     switch (paymentType) {
-      case 'paypal-account':
-        // Paiement avec compte PayPal uniquement
+      case 'paypal-guest':
         return {
-          'enable-funding': 'paypal',
-          'disable-funding': 'card,paylater',
+          layout: 'vertical' as const,
+          color: 'blue' as const,
+          shape: 'rect' as const,
+          label: 'pay' as const,
         }
       case 'paypal-4x':
-        // Paiement en 4x sans frais (Pay Later)
         return {
-          'enable-funding': 'paylater',
-          'disable-funding': 'card',
-        }
-      case 'paypal-guest':
-        // Paiement sans compte PayPal (carte uniquement) - Guest Checkout
-        return {
-          'enable-funding': 'card',
-          'disable-funding': 'paypal,paylater',
-          'data-namespace': 'paypal_sdk',
+          layout: 'vertical' as const,
+          color: 'gold' as const,
+          shape: 'rect' as const,
+          label: 'paypal' as const,
         }
       default:
         return {
-          'enable-funding': 'paypal',
-          'disable-funding': 'card,paylater',
+          layout: 'vertical' as const,
+          color: 'gold' as const,
+          shape: 'rect' as const,
+          label: 'paypal' as const,
         }
     }
   }
 
-  const paypalConfig = getPayPalConfig()
-
   return (
-    <PayPalScriptProvider
-      options={{
-        clientId: clientId,
-        currency: 'EUR',
-        intent: 'capture',
-        ...paypalConfig,
-        ...(isTestMode && { 'data-client-token': undefined }),
-      }}
-    >
-      <div className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}>
-        <PayPalButtons
+    <div className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}>
+      <PayPalButtons
           disabled={disabled || isProcessing}
           createOrder={async () => {
             try {
@@ -186,14 +168,11 @@ export default function PayPalButton({
           onCancel={() => {
             setIsProcessing(false)
           }}
-          style={{
-            layout: 'vertical',
-            color: paymentType === 'paypal-guest' ? 'blue' : 'gold', // Bleu pour carte, or pour PayPal
-            shape: 'rect',
-            label: paymentType === 'paypal-guest' ? 'pay' : 'paypal', // Label selon le type
-          }}
+          style={getButtonStyle()}
+          {...(paymentType === 'paypal-guest' && { fundingSource: 'card' })}
+          {...(paymentType === 'paypal-4x' && { fundingSource: 'paylater' })}
+          {...(paymentType === 'paypal-account' && { fundingSource: 'paypal' })}
         />
-      </div>
-    </PayPalScriptProvider>
+    </div>
   )
 }

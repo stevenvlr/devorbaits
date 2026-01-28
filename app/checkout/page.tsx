@@ -27,6 +27,8 @@ import { createOrder, updateOrderStatus } from '@/lib/revenue-supabase'
 import { getActiveShippingPrice, getSponsorShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
 import PayPalButton from '@/components/PayPalButton'
+import { PayPalScriptProvider } from '@paypal/react-paypal-js'
+import { getPayPalClientId, isPayPalConfigured } from '@/lib/paypal'
 import { calculateCartWeightAsync } from '@/lib/product-weights'
 import BoxtalRelayMap, { type BoxtalParcelPoint } from '@/components/BoxtalRelayMap'
 import type { ChronopostRelaisPoint } from '@/components/ChronopostRelaisWidget'
@@ -150,9 +152,10 @@ export default function CheckoutPage() {
     const loadPaymentMethods = async () => {
       try {
         const status = await loadPaymentMethodsStatus()
+        console.log('✅ États des moyens de paiement chargés:', status)
         setPaymentMethodsEnabled(status)
       } catch (error) {
-        console.warn('⚠️ Impossible de charger les états des moyens de paiement depuis Supabase, utilisation des valeurs par défaut')
+        console.warn('⚠️ Impossible de charger les états des moyens de paiement depuis Supabase, utilisation des valeurs par défaut', error)
         // Garder les valeurs par défaut (variables d'environnement)
       }
     }
@@ -1464,9 +1467,19 @@ export default function CheckoutPage() {
                   Mode de paiement
                 </h3>
                 <div className="group relative p-8 rounded-xl border-2 border-noir-700 bg-gradient-to-br from-noir-900/80 to-noir-800/60 hover:border-yellow-500/50 transition-all duration-300 shadow-lg hover:shadow-yellow-500/10">
-                  <div className="space-y-6">
-                    {/* Bouton 1 : Paiement avec compte PayPal */}
-                    {paymentMethodsEnabled.paypal && (
+                  {paymentMethodsEnabled.paypal && isPayPalConfigured() ? (
+                    <PayPalScriptProvider
+                      options={{
+                        clientId: getPayPalClientId(),
+                        currency: 'EUR',
+                        intent: 'capture',
+                        'enable-funding': 'paypal,card,paylater',
+                        'disable-funding': '',
+                      }}
+                    >
+                      <div className="space-y-6">
+                        {/* Bouton 1 : Paiement avec compte PayPal */}
+                        {paymentMethodsEnabled.paypal && (
                       <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
                         <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
                           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#0070BA">
@@ -2328,7 +2341,21 @@ export default function CheckoutPage() {
                         </div>
                       </div>
                     )}
+                      </div>
+                    </PayPalScriptProvider>
+                  ) : paymentMethodsEnabled.paypal ? (
+                    <div className="p-6 rounded-lg bg-red-500/20 border border-red-500/30 text-center">
+                      <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+                      <p className="text-red-400 font-semibold">
+                        PayPal n'est pas configuré correctement.
+                      </p>
+                      <p className="text-sm text-gray-400 mt-2">
+                        Vérifiez NEXT_PUBLIC_PAYPAL_CLIENT_ID dans les variables d'environnement.
+                      </p>
+                    </div>
+                  ) : null}
 
+                  <div className="space-y-6">
                     {/* Bouton Carte bancaire - Monetico */}
                     {paymentMethodsEnabled.card && (
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
