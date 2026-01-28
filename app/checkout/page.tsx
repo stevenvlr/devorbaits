@@ -31,6 +31,7 @@ import { calculateCartWeightAsync } from '@/lib/product-weights'
 import BoxtalRelayMap, { type BoxtalParcelPoint } from '@/components/BoxtalRelayMap'
 import type { ChronopostRelaisPoint } from '@/components/ChronopostRelaisWidget'
 import { sendNewOrderNotification } from '@/lib/telegram-notifications'
+import { loadPaymentMethodsStatus } from '@/lib/payment-methods-supabase'
 
 type RetraitMode = 'livraison' | 'amicale-blanc' | 'wavignies-rdv' | 'chronopost-relais'
 type PaymentMethod = 'card' | 'paypal' 
@@ -107,6 +108,13 @@ export default function CheckoutPage() {
   
   // Mode test de paiement (pour tester les expéditions sans passer par Monetico)
   const TEST_PAYMENT_MODE = process.env.NEXT_PUBLIC_TEST_PAYMENT === 'true'
+
+  // Activation / désactivation des moyens de paiement (depuis Supabase ou variables d'environnement)
+  // Par défaut, activés si non configurés
+  const [paymentMethodsEnabled, setPaymentMethodsEnabled] = useState<{ paypal: boolean; card: boolean }>({
+    paypal: process.env.NEXT_PUBLIC_PAYMENT_PAYPAL_ENABLED !== 'false',
+    card: process.env.NEXT_PUBLIC_PAYMENT_CARD_ENABLED !== 'false'
+  })
   
   const [retraitMode, setRetraitMode] = useState<RetraitMode>('livraison')
   const [separerAmicale, setSeparerAmicale] = useState(false)
@@ -136,6 +144,20 @@ export default function CheckoutPage() {
   const [orderComment, setOrderComment] = useState('')
   const [totalWeight, setTotalWeight] = useState<number>(0)
   const [moneticoWidget, setMoneticoWidget] = useState<{ action: string; fields: Record<string, string> } | null>(null)
+
+  // Charger les états des moyens de paiement depuis Supabase
+  useEffect(() => {
+    const loadPaymentMethods = async () => {
+      try {
+        const status = await loadPaymentMethodsStatus()
+        setPaymentMethodsEnabled(status)
+      } catch (error) {
+        console.warn('⚠️ Impossible de charger les états des moyens de paiement depuis Supabase, utilisation des valeurs par défaut')
+        // Garder les valeurs par défaut (variables d'environnement)
+      }
+    }
+    loadPaymentMethods()
+  }, [])
 
   // Rediriger si non connecté
   useEffect(() => {
@@ -1436,7 +1458,6 @@ export default function CheckoutPage() {
               </div>
 
               {/* Choix du mode de paiement */}
-              {/* Bloc unique de paiement PayPal */}
               <div className={`border-t border-noir-700 pt-8 mt-6 ${moneticoWidget ? 'opacity-30 pointer-events-none' : ''}`}>
                 <h3 className="font-semibold flex items-center gap-3 mb-8 text-2xl">
                   <Wallet className="w-7 h-7 text-yellow-500" />
@@ -1445,218 +1466,219 @@ export default function CheckoutPage() {
                 <div className="group relative p-8 rounded-xl border-2 border-noir-700 bg-gradient-to-br from-noir-900/80 to-noir-800/60 hover:border-yellow-500/50 transition-all duration-300 shadow-lg hover:shadow-yellow-500/10">
                   <div className="space-y-6">
                     {/* Bouton PayPal */}
-                    <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
-                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
-                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#0070BA">
-                          <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-bold text-lg text-white block mb-1">PayPal</span>
-                        <p className="text-sm text-gray-400">Paiement sécurisé avec votre compte PayPal</p>
-                      </div>
-                      <div className="flex-1 max-w-xs flex-shrink-0">
-                        <PayPalButton
-                      amount={paypalTotal}
-                      itemTotal={paypalItemTotal}
-                      shippingTotal={paypalShippingTotal}
-                      reference={orderReference || paypalReference}
-                      disabled={!isFormValid()}
-                      onBeforePayment={() => {
-                        if (!orderReference) {
-                          setOrderReference(paypalReference)
-                        }
-                      }}
-                      onSuccess={async (orderId, paymentId) => {
-                        try {
-                          // Créer la commande après paiement PayPal réussi
-                          const orderItems = cartItems.map((item) => ({
-                            product_id: item.productId || item.produit || `product-${item.id}`,
-                            variant_id: item.variantId || undefined,
-                            quantity: item.quantite,
-                            price: getItemPrice(item), // Utiliser le prix avec promotion
-                            arome: item.arome,
-                            taille: item.taille,
-                            couleur: item.couleur,
-                            diametre: item.diametre,
-                            conditionnement: item.conditionnement,
-                            produit: item.produit
-                          }))
-
-                          const currentRef = orderReference || paypalReference
-                          const commentValue = orderComment.trim() || undefined
-                          
-                          // Appel conditionnel pour éviter les problèmes de typage TypeScript
-                          const order = commentValue
-                            ? await createOrder(
-                                user?.id || '',
-                                currentRef,
-                                finalTotal,
-                                orderItems,
-                                'paypal',
-                                calculatedShippingCost,
-                                commentValue,
-                                undefined
-                              )
-                            : await createOrder(
-                                user?.id || '',
-                                currentRef,
-                                finalTotal,
-                                orderItems,
-                                'paypal',
-                                calculatedShippingCost,
-                                undefined,
-                                undefined
-                              )
-
-                          if (order.id) {
-                            // Enregistrer l'utilisation du code promo APRÈS création de la commande
-                            if (promoValidation && promoValidation.valid && promoCode && user?.id) {
-                              const promoCodeObj = await getPromoCodeByCode(promoCode)
-                              if (promoCodeObj) {
-                                await recordPromoCodeUsageAsync(
-                                  promoCodeObj.id,
-                                  user.id,
-                                  order.id,
-                                  promoValidation.discount || 0
-                                )
+                    {paymentMethodsEnabled.paypal && (
+                      <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
+                        <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
+                          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#0070BA">
+                            <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-bold text-lg text-white block mb-1">PayPal</span>
+                          <p className="text-sm text-gray-400">Paiement sécurisé avec votre compte PayPal</p>
+                        </div>
+                        <div className="flex-1 max-w-xs flex-shrink-0">
+                          <PayPalButton
+                            amount={paypalTotal}
+                            itemTotal={paypalItemTotal}
+                            shippingTotal={paypalShippingTotal}
+                            reference={orderReference || paypalReference}
+                            disabled={!isFormValid()}
+                            onBeforePayment={() => {
+                              if (!orderReference) {
+                                setOrderReference(paypalReference)
                               }
-                            }
-
-                            // La commande reste en "pending" (en attente) par défaut
-                            // Le statut sera changé manuellement depuis l'admin
-                            
-                            // Créer le rendez-vous pour Wavignies si nécessaire
-                            if (retraitMode === 'wavignies-rdv' && rdvDate && rdvTimeSlot && user) {
+                            }}
+                            onSuccess={async (orderId, paymentId) => {
                               try {
-                                const { createAppointment } = await import('@/lib/appointments-manager')
-                                const appointmentResult = createAppointment(
-                                  rdvDate,
-                                  rdvTimeSlot,
-                                  user.id || user.email,
-                                  user.nom || user.email,
-                                  user.email,
-                                  livraisonAddress.telephone,
-                                  order.id // Lier le rendez-vous à la commande
-                                )
+                                // Créer la commande après paiement PayPal réussi
+                                const orderItems = cartItems.map((item) => ({
+                                  product_id: item.productId || item.produit || `product-${item.id}`,
+                                  variant_id: item.variantId || undefined,
+                                  quantity: item.quantite,
+                                  price: getItemPrice(item), // Utiliser le prix avec promotion
+                                  arome: item.arome,
+                                  taille: item.taille,
+                                  couleur: item.couleur,
+                                  diametre: item.diametre,
+                                  conditionnement: item.conditionnement,
+                                  produit: item.produit
+                                }))
+
+                                const currentRef = orderReference || paypalReference
+                                const commentValue = orderComment.trim() || undefined
                                 
-                                if (appointmentResult.success) {
-                                  console.log('✅ Rendez-vous créé pour Wavignies')
-                                } else {
-                                  console.warn('⚠️ Erreur création rendez-vous:', appointmentResult.message)
-                                }
-                              } catch (appointmentError) {
-                                console.warn('⚠️ Erreur lors de la création du rendez-vous:', appointmentError)
-                              }
-                            }
-                            
-                            // Sauvegarder l'adresse de livraison dans la commande
-                            if (retraitMode === 'livraison' && order.id) {
-                              try {
-                                const { getSupabaseClient } = await import('@/lib/supabase')
-                                const supabase = getSupabaseClient()
-                                if (supabase && livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville) {
-                                  await supabase
-                                    .from('orders')
-                                    .update({
-                                      shipping_address: {
-                                        adresse: livraisonAddress.adresse,
-                                        codePostal: livraisonAddress.codePostal,
-                                        ville: livraisonAddress.ville,
-                                        telephone: livraisonAddress.telephone
-                                      }
-                                    })
-                                    .eq('id', order.id)
-                                  console.log('✅ Adresse de livraison sauvegardée dans la commande')
-                                }
-                              } catch (addressError) {
-                                console.warn('⚠️ Erreur lors de la sauvegarde de l\'adresse:', addressError)
-                              }
-                            }
+                                // Appel conditionnel pour éviter les problèmes de typage TypeScript
+                                const order = commentValue
+                                  ? await createOrder(
+                                      user?.id || '',
+                                      currentRef,
+                                      finalTotal,
+                                      orderItems,
+                                      'paypal',
+                                      calculatedShippingCost,
+                                      commentValue,
+                                      undefined
+                                    )
+                                  : await createOrder(
+                                      user?.id || '',
+                                      currentRef,
+                                      finalTotal,
+                                      orderItems,
+                                      'paypal',
+                                      calculatedShippingCost,
+                                      undefined,
+                                      undefined
+                                    )
 
-                            // Sauvegarder le point relais dans la commande (Boxtal ou Chronopost)
-                            if (retraitMode === 'chronopost-relais' && order.id) {
-                              try {
-                                const { getSupabaseClient } = await import('@/lib/supabase')
-                                const supabase = getSupabaseClient()
-                                if (supabase) {
-                                  if (boxtalParcelPoint) {
-                                    const pointAddress = boxtalParcelPoint.address || {} as any
-                                    const rawData = (boxtalParcelPoint as any).rawData || boxtalParcelPoint
-                                    
-                                    const postalCode = 
-                                      pointAddress.postalCode || 
-                                      pointAddress.postal_code || 
-                                      pointAddress.zipCode || 
-                                      rawData.address?.postalCode ||
-                                      rawData.postalCode ||
-                                      ''
-                                    
-                                    const city = 
-                                      pointAddress.city || 
-                                      pointAddress.ville || 
-                                      rawData.address?.city ||
-                                      rawData.city ||
-                                      ''
-                                    
-                                    const street = 
-                                      pointAddress.street || 
-                                      pointAddress.address || 
-                                      rawData.address?.street ||
-                                      rawData.street ||
-                                      ''
-                                    
-                                    const fullAddress = [street, postalCode, city].filter(Boolean).join(', ')
-                                    
-                                    await supabase
-                                      .from('orders')
-                                      .update({
-                                        shipping_address: {
-                                          type: 'boxtal-relais',
-                                          identifiant: boxtalParcelPoint.code || '',
-                                          nom: boxtalParcelPoint.name || '',
-                                          adresseComplete: fullAddress,
-                                          adresse: street,
-                                          codePostal: postalCode,
-                                          ville: city,
-                                          pays: pointAddress.country || pointAddress.countryCode || 'FR',
-                                          coordonnees: boxtalParcelPoint.coordinates || {},
-                                          network: boxtalParcelPoint.network || '',
-                                          telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
-                                          codePostalRecherche: livraisonAddress.codePostal || '',
-                                          villeRecherche: livraisonAddress.ville || '',
-                                          pointRelais: boxtalParcelPoint
-                                        }
-                                      })
-                                      .eq('id', order.id)
-                                    console.log('✅ Point relais Boxtal sauvegardé dans la commande (PayPal)')
-                                  } else if (chronopostRelaisPoint) {
-                                    await supabase
-                                      .from('orders')
-                                      .update({
-                                        shipping_address: {
-                                          type: 'chronopost-relais',
-                                          identifiant: chronopostRelaisPoint.identifiant,
-                                          nom: chronopostRelaisPoint.nom,
-                                          adresse: chronopostRelaisPoint.adresse,
-                                          codePostal: chronopostRelaisPoint.codePostal,
-                                          ville: chronopostRelaisPoint.ville,
-                                          horaires: chronopostRelaisPoint.horaires,
-                                          coordonnees: chronopostRelaisPoint.coordonnees,
-                                          telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
-                                        }
-                                      })
-                                      .eq('id', order.id)
-                                    console.log('✅ Point relais Chronopost sauvegardé dans la commande (PayPal)')
+                                if (order.id) {
+                                  // Enregistrer l'utilisation du code promo APRÈS création de la commande
+                                  if (promoValidation && promoValidation.valid && promoCode && user?.id) {
+                                    const promoCodeObj = await getPromoCodeByCode(promoCode)
+                                    if (promoCodeObj) {
+                                      await recordPromoCodeUsageAsync(
+                                        promoCodeObj.id,
+                                        user.id,
+                                        order.id,
+                                        promoValidation.discount || 0
+                                      )
+                                    }
                                   }
-                                }
-                              } catch (relaisError) {
-                                console.warn('⚠️ Erreur lors de la sauvegarde du point relais:', relaisError)
-                              }
-                            }
 
-                            // Sauvegarder les informations de retrait à Wavignies
-                            if (retraitMode === 'wavignies-rdv' && order.id && rdvDate && rdvTimeSlot) {
+                                  // La commande reste en "pending" (en attente) par défaut
+                                  // Le statut sera changé manuellement depuis l'admin
+                                  
+                                  // Créer le rendez-vous pour Wavignies si nécessaire
+                                  if (retraitMode === 'wavignies-rdv' && rdvDate && rdvTimeSlot && user) {
+                                    try {
+                                      const { createAppointment } = await import('@/lib/appointments-manager')
+                                      const appointmentResult = createAppointment(
+                                        rdvDate,
+                                        rdvTimeSlot,
+                                        user.id || user.email,
+                                        user.nom || user.email,
+                                        user.email,
+                                        livraisonAddress.telephone,
+                                        order.id // Lier le rendez-vous à la commande
+                                      )
+                                      
+                                      if (appointmentResult.success) {
+                                        console.log('✅ Rendez-vous créé pour Wavignies')
+                                      } else {
+                                        console.warn('⚠️ Erreur création rendez-vous:', appointmentResult.message)
+                                      }
+                                    } catch (appointmentError) {
+                                      console.warn('⚠️ Erreur lors de la création du rendez-vous:', appointmentError)
+                                    }
+                                  }
+                                  
+                                  // Sauvegarder l'adresse de livraison dans la commande
+                                  if (retraitMode === 'livraison' && order.id) {
+                                    try {
+                                      const { getSupabaseClient } = await import('@/lib/supabase')
+                                      const supabase = getSupabaseClient()
+                                      if (supabase && livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville) {
+                                        await supabase
+                                          .from('orders')
+                                          .update({
+                                            shipping_address: {
+                                              adresse: livraisonAddress.adresse,
+                                              codePostal: livraisonAddress.codePostal,
+                                              ville: livraisonAddress.ville,
+                                              telephone: livraisonAddress.telephone
+                                            }
+                                          })
+                                          .eq('id', order.id)
+                                        console.log('✅ Adresse de livraison sauvegardée dans la commande')
+                                      }
+                                    } catch (addressError) {
+                                      console.warn('⚠️ Erreur lors de la sauvegarde de l\'adresse:', addressError)
+                                    }
+                                  }
+
+                                  // Sauvegarder le point relais dans la commande (Boxtal ou Chronopost)
+                                  if (retraitMode === 'chronopost-relais' && order.id) {
+                                    try {
+                                      const { getSupabaseClient } = await import('@/lib/supabase')
+                                      const supabase = getSupabaseClient()
+                                      if (supabase) {
+                                        if (boxtalParcelPoint) {
+                                          const pointAddress = boxtalParcelPoint.address || {} as any
+                                          const rawData = (boxtalParcelPoint as any).rawData || boxtalParcelPoint
+                                          
+                                          const postalCode = 
+                                            pointAddress.postalCode || 
+                                            pointAddress.postal_code || 
+                                            pointAddress.zipCode || 
+                                            rawData.address?.postalCode ||
+                                            rawData.postalCode ||
+                                            ''
+                                          
+                                          const city = 
+                                            pointAddress.city || 
+                                            pointAddress.ville || 
+                                            rawData.address?.city ||
+                                            rawData.city ||
+                                            ''
+                                          
+                                          const street = 
+                                            pointAddress.street || 
+                                            pointAddress.address || 
+                                            rawData.address?.street ||
+                                            rawData.street ||
+                                            ''
+                                          
+                                          const fullAddress = [street, postalCode, city].filter(Boolean).join(', ')
+                                          
+                                          await supabase
+                                            .from('orders')
+                                            .update({
+                                              shipping_address: {
+                                                type: 'boxtal-relais',
+                                                identifiant: boxtalParcelPoint.code || '',
+                                                nom: boxtalParcelPoint.name || '',
+                                                adresseComplete: fullAddress,
+                                                adresse: street,
+                                                codePostal: postalCode,
+                                                ville: city,
+                                                pays: pointAddress.country || pointAddress.countryCode || 'FR',
+                                                coordonnees: boxtalParcelPoint.coordinates || {},
+                                                network: boxtalParcelPoint.network || '',
+                                                telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
+                                                codePostalRecherche: livraisonAddress.codePostal || '',
+                                                villeRecherche: livraisonAddress.ville || '',
+                                                pointRelais: boxtalParcelPoint
+                                              }
+                                            })
+                                            .eq('id', order.id)
+                                          console.log('✅ Point relais Boxtal sauvegardé dans la commande (PayPal)')
+                                        } else if (chronopostRelaisPoint) {
+                                          await supabase
+                                            .from('orders')
+                                            .update({
+                                              shipping_address: {
+                                                type: 'chronopost-relais',
+                                                identifiant: chronopostRelaisPoint.identifiant,
+                                                nom: chronopostRelaisPoint.nom,
+                                                adresse: chronopostRelaisPoint.adresse,
+                                                codePostal: chronopostRelaisPoint.codePostal,
+                                                ville: chronopostRelaisPoint.ville,
+                                                horaires: chronopostRelaisPoint.horaires,
+                                                coordonnees: chronopostRelaisPoint.coordonnees,
+                                                telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
+                                              }
+                                            })
+                                            .eq('id', order.id)
+                                          console.log('✅ Point relais Chronopost sauvegardé dans la commande (PayPal)')
+                                        }
+                                      }
+                                    } catch (relaisError) {
+                                      console.warn('⚠️ Erreur lors de la sauvegarde du point relais:', relaisError)
+                                    }
+                                  }
+
+                                  // Sauvegarder les informations de retrait à Wavignies
+                                  if (retraitMode === 'wavignies-rdv' && order.id && rdvDate && rdvTimeSlot) {
                               try {
                                 const { getSupabaseClient } = await import('@/lib/supabase')
                                 const supabase = getSupabaseClient()
@@ -1741,6 +1763,7 @@ export default function CheckoutPage() {
                       />
                       </div>
                       </div>
+                    )}
 
                     {/* Bouton PayPal 4x */}
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
@@ -2008,6 +2031,7 @@ export default function CheckoutPage() {
                     </div>
 
                     {/* Bouton Carte bancaire - Monetico */}
+                    {paymentMethodsEnabled.card && (
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
                       <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
                         <CreditCard className="w-6 h-6 text-blue-400" />
@@ -2081,6 +2105,19 @@ export default function CheckoutPage() {
                         </button>
                       </div>
                     </div>
+                    )}
+
+                    {!paymentMethodsEnabled.paypal && !paymentMethodsEnabled.card && (
+                      <div className="p-6 rounded-lg bg-red-500/20 border border-red-500/30 text-center">
+                        <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+                        <p className="text-red-400 font-semibold">
+                          Aucun moyen de paiement disponible pour le moment.
+                        </p>
+                        <p className="text-sm text-gray-400 mt-2">
+                          Veuillez contacter le support si le problème persiste.
+                        </p>
+                      </div>
+                    )}
 
                     {!isFormValid() && (
                       <p className="text-sm text-gray-400 text-center mt-4 pt-4 border-t border-noir-700">
