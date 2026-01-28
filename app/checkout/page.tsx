@@ -1464,9 +1464,18 @@ export default function CheckoutPage() {
                   Mode de paiement
                 </h3>
                 <div className="group relative p-8 rounded-xl border-2 border-noir-700 bg-gradient-to-br from-noir-900/80 to-noir-800/60 hover:border-yellow-500/50 transition-all duration-300 shadow-lg hover:shadow-yellow-500/10">
-                  <div className="space-y-6">
-                    {/* Bouton 1 : Paiement avec compte PayPal */}
+                  <div className="space-y-8">
+                    {/* Section PayPal - Regroupe les 3 choix */}
                     {paymentMethodsEnabled.paypal && (
+                      <div className="space-y-6">
+                        <div className="flex items-center gap-3 pb-4 border-b border-noir-700">
+                          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#0070BA">
+                            <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
+                          </svg>
+                          <h4 className="font-bold text-xl text-white">Paiement PayPal</h4>
+                        </div>
+                        
+                        {/* Bouton 1 : Paiement avec compte PayPal */}
                       <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
                         <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
                           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#0070BA">
@@ -1763,12 +1772,10 @@ export default function CheckoutPage() {
                         }}
                       />
                       </div>
-                      </div>
-                    )}
+                    </div>
 
                     {/* Bouton 2 : Paiement en 4x sans frais */}
-                    {paymentMethodsEnabled.paypal && (
-                      <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
+                    <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
                         <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex-shrink-0">
                           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#FFC439">
                             <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
@@ -2032,11 +2039,9 @@ export default function CheckoutPage() {
                           />
                       </div>
                     </div>
-                    )}
 
                     {/* Bouton 3 : Paiement sans compte PayPal (Guest) */}
-                    {paymentMethodsEnabled.paypal && (
-                      <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
+                    <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
                         <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 flex-shrink-0">
                           <CreditCard className="w-6 h-6 text-green-400" />
                         </div>
@@ -2327,18 +2332,25 @@ export default function CheckoutPage() {
                           />
                         </div>
                       </div>
+                      </div>
                     )}
 
-                    {/* Bouton Carte bancaire - Monetico */}
+                    {/* Section Carte bancaire - Monetico */}
                     {paymentMethodsEnabled.card && (
-                    <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
-                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
-                        <CreditCard className="w-6 h-6 text-blue-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-bold text-lg text-white block mb-1">Carte bancaire</span>
-                        <p className="text-sm text-gray-400">Visa, Mastercard, CB - Paiement sécurisé Monetico</p>
-                      </div>
+                      <div className="space-y-6">
+                        <div className="flex items-center gap-3 pb-4 border-b border-noir-700">
+                          <CreditCard className="w-6 h-6 text-blue-400" />
+                          <h4 className="font-bold text-xl text-white">Carte bancaire</h4>
+                        </div>
+                        
+                        <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
+                          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
+                            <CreditCard className="w-6 h-6 text-blue-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-bold text-lg text-white block mb-1">Visa, Mastercard, CB</span>
+                            <p className="text-sm text-gray-400">Paiement sécurisé Monetico</p>
+                          </div>
                       <div className="flex-1 max-w-xs flex-shrink-0">
                         <button
                           onClick={async () => {
@@ -2404,6 +2416,7 @@ export default function CheckoutPage() {
                         </button>
                       </div>
                     </div>
+                      </div>
                     )}
 
                     {!paymentMethodsEnabled.paypal && !paymentMethodsEnabled.card && (
