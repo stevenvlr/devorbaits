@@ -61,10 +61,11 @@ export default function PayPalButton({
           'disable-funding': 'card',
         }
       case 'paypal-guest':
-        // Paiement sans compte PayPal (carte uniquement)
+        // Paiement sans compte PayPal (carte uniquement) - Guest Checkout
         return {
           'enable-funding': 'card',
           'disable-funding': 'paypal,paylater',
+          'data-namespace': 'paypal_sdk',
         }
       default:
         return {
@@ -107,6 +108,7 @@ export default function PayPalButton({
                   shippingTotal,
                   reference,
                   currency: 'EUR',
+                  paymentType, // Passer le type de paiement à l'API
                 }),
               })
 
