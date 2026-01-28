@@ -1464,18 +1464,9 @@ export default function CheckoutPage() {
                   Mode de paiement
                 </h3>
                 <div className="group relative p-8 rounded-xl border-2 border-noir-700 bg-gradient-to-br from-noir-900/80 to-noir-800/60 hover:border-yellow-500/50 transition-all duration-300 shadow-lg hover:shadow-yellow-500/10">
-                  <div className="space-y-8">
-                    {/* Section PayPal - Regroupe les 3 choix */}
+                  <div className="space-y-6">
+                    {/* Bouton PayPal */}
                     {paymentMethodsEnabled.paypal && (
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-3 pb-4 border-b border-noir-700">
-                          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#0070BA">
-                            <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
-                          </svg>
-                          <h4 className="font-bold text-xl text-white">Paiement PayPal</h4>
-                        </div>
-                        
-                        {/* Bouton 1 : Paiement avec compte PayPal */}
                       <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
                         <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
                           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#0070BA">
@@ -1483,12 +1474,11 @@ export default function CheckoutPage() {
                           </svg>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <span className="font-bold text-lg text-white block mb-1">Payer avec PayPal</span>
-                          <p className="text-sm text-gray-400">Connectez-vous à votre compte PayPal pour payer</p>
+                          <span className="font-bold text-lg text-white block mb-1">Paiement</span>
+                          <p className="text-sm text-gray-400">Paiement sécurisé avec votre compte PayPal</p>
                         </div>
                         <div className="flex-1 max-w-xs flex-shrink-0">
                           <PayPalButton
-                            paymentType="paypal-account"
                             amount={paypalTotal}
                             itemTotal={paypalItemTotal}
                             shippingTotal={paypalShippingTotal}
@@ -1772,36 +1762,36 @@ export default function CheckoutPage() {
                         }}
                       />
                       </div>
-                    </div>
+                      </div>
+                    )}
 
-                    {/* Bouton 2 : Paiement en 4x sans frais */}
+                    {/* Bouton PayPal 4x */}
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
-                        <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex-shrink-0">
-                          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#FFC439">
-                            <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
-                          </svg>
+                      <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex-shrink-0">
+                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="#FFC439">
+                          <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .757-.643h6.676c2.227 0 3.905.536 4.988 1.593 1.064 1.04 1.42 2.497 1.057 4.329-.026.127-.053.254-.082.381-.633 3.1-2.76 4.935-5.814 5.013H9.865a.77.77 0 0 0-.758.643l-.885 5.602a.641.641 0 0 1-.633.54z"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-lg text-white">PayPal 4x sans frais</span>
+                          <span className="px-2.5 py-1 text-xs font-semibold bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">0%</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-lg text-white">PayPal 4x sans frais</span>
-                            <span className="px-2.5 py-1 text-xs font-semibold bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">0%</span>
-                          </div>
-                          <p className="text-sm text-gray-400">Paiement en 4 fois sans frais ni intérêts</p>
-                        </div>
-                        <div className="flex-1 max-w-xs flex-shrink-0">
-                          <PayPalButton
-                            paymentType="paypal-4x"
-                            amount={paypalTotal}
-                            itemTotal={paypalItemTotal}
-                            shippingTotal={paypalShippingTotal}
-                            reference={orderReference || paypalReference}
-                            disabled={!isFormValid()}
-                            onBeforePayment={() => {
-                              if (!orderReference) {
-                                setOrderReference(paypalReference)
-                              }
-                            }}
-                            onSuccess={async (orderId, paymentId) => {
+                        <p className="text-sm text-gray-400">Paiement en 4 fois sans frais ni intérêts</p>
+                      </div>
+                      <div className="flex-1 max-w-xs flex-shrink-0">
+                        <PayPalButton
+                      amount={paypalTotal}
+                      itemTotal={paypalItemTotal}
+                      shippingTotal={paypalShippingTotal}
+                      reference={orderReference || paypalReference}
+                      disabled={!isFormValid()}
+                      onBeforePayment={() => {
+                        if (!orderReference) {
+                          setOrderReference(paypalReference)
+                        }
+                      }}
+                      onSuccess={async (orderId, paymentId) => {
                         try {
                           const orderItems = cartItems.map((item) => ({
                             product_id: item.productId || item.produit || `product-${item.id}`,
@@ -2033,324 +2023,23 @@ export default function CheckoutPage() {
                           alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
                         }
                       }}
-                            onError={(error) => {
-                              alert(`Erreur PayPal 4x: ${error}`)
-                            }}
-                          />
+                      onError={(error) => {
+                        alert(`Erreur PayPal 4x: ${error}`)
+                        }}
+                      />
                       </div>
                     </div>
 
-                    {/* Bouton 3 : Paiement sans compte PayPal (Guest) */}
-                    <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
-                        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 flex-shrink-0">
-                          <CreditCard className="w-6 h-6 text-green-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="font-bold text-lg text-white block mb-1">Payer sans compte PayPal</span>
-                          <p className="text-sm text-gray-400">Paiement par carte bancaire sans créer de compte</p>
-                        </div>
-                        <div className="flex-1 max-w-xs flex-shrink-0">
-                          <PayPalButton
-                            paymentType="paypal-guest"
-                            amount={paypalTotal}
-                            itemTotal={paypalItemTotal}
-                            shippingTotal={paypalShippingTotal}
-                            reference={orderReference || paypalReference}
-                            disabled={!isFormValid()}
-                            onBeforePayment={() => {
-                              if (!orderReference) {
-                                setOrderReference(paypalReference)
-                              }
-                            }}
-                            onSuccess={async (orderId, paymentId) => {
-                              try {
-                                // Créer la commande après paiement PayPal réussi
-                                const orderItems = cartItems.map((item) => ({
-                                  product_id: item.productId || item.produit || `product-${item.id}`,
-                                  variant_id: item.variantId || undefined,
-                                  quantity: item.quantite,
-                                  price: getItemPrice(item),
-                                  arome: item.arome,
-                                  taille: item.taille,
-                                  couleur: item.couleur,
-                                  diametre: item.diametre,
-                                  conditionnement: item.conditionnement,
-                                  produit: item.produit
-                                }))
-
-                                const currentRef = orderReference || paypalReference
-                                const commentValue = orderComment.trim() || undefined
-                                
-                                const order = commentValue
-                                  ? await createOrder(
-                                      user?.id || '',
-                                      currentRef,
-                                      finalTotal,
-                                      orderItems,
-                                      'paypal',
-                                      calculatedShippingCost,
-                                      commentValue,
-                                      undefined
-                                    )
-                                  : await createOrder(
-                                      user?.id || '',
-                                      currentRef,
-                                      finalTotal,
-                                      orderItems,
-                                      'paypal',
-                                      calculatedShippingCost,
-                                      undefined,
-                                      undefined
-                                    )
-
-                                if (order.id) {
-                                  // Enregistrer l'utilisation du code promo
-                                  if (promoValidation && promoValidation.valid && promoCode && user?.id) {
-                                    const promoCodeObj = await getPromoCodeByCode(promoCode)
-                                    if (promoCodeObj) {
-                                      await recordPromoCodeUsageAsync(
-                                        promoCodeObj.id,
-                                        user.id,
-                                        order.id,
-                                        promoValidation.discount || 0
-                                      )
-                                    }
-                                  }
-
-                                  // Créer le rendez-vous pour Wavignies si nécessaire
-                                  if (retraitMode === 'wavignies-rdv' && rdvDate && rdvTimeSlot && user) {
-                                    try {
-                                      const { createAppointment } = await import('@/lib/appointments-manager')
-                                      const appointmentResult = createAppointment(
-                                        rdvDate,
-                                        rdvTimeSlot,
-                                        user.id || user.email,
-                                        user.nom || user.email,
-                                        user.email,
-                                        livraisonAddress.telephone,
-                                        order.id
-                                      )
-                                      
-                                      if (appointmentResult.success) {
-                                        console.log('✅ Rendez-vous créé pour Wavignies')
-                                      } else {
-                                        console.warn('⚠️ Erreur création rendez-vous:', appointmentResult.message)
-                                      }
-                                    } catch (appointmentError) {
-                                      console.warn('⚠️ Erreur lors de la création du rendez-vous:', appointmentError)
-                                    }
-                                  }
-                                  
-                                  // Sauvegarder l'adresse de livraison
-                                  if (retraitMode === 'livraison' && order.id) {
-                                    try {
-                                      const { getSupabaseClient } = await import('@/lib/supabase')
-                                      const supabase = getSupabaseClient()
-                                      if (supabase && livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville) {
-                                        await supabase
-                                          .from('orders')
-                                          .update({
-                                            shipping_address: {
-                                              adresse: livraisonAddress.adresse,
-                                              codePostal: livraisonAddress.codePostal,
-                                              ville: livraisonAddress.ville,
-                                              telephone: livraisonAddress.telephone
-                                            }
-                                          })
-                                          .eq('id', order.id)
-                                        console.log('✅ Adresse de livraison sauvegardée dans la commande')
-                                      }
-                                    } catch (addressError) {
-                                      console.warn('⚠️ Erreur lors de la sauvegarde de l\'adresse:', addressError)
-                                    }
-                                  }
-
-                                  // Sauvegarder le point relais
-                                  if (retraitMode === 'chronopost-relais' && order.id) {
-                                    try {
-                                      const { getSupabaseClient } = await import('@/lib/supabase')
-                                      const supabase = getSupabaseClient()
-                                      if (supabase) {
-                                        if (boxtalParcelPoint) {
-                                          const pointAddress = boxtalParcelPoint.address || {} as any
-                                          const rawData = (boxtalParcelPoint as any).rawData || boxtalParcelPoint
-                                          
-                                          const postalCode = 
-                                            pointAddress.postalCode || 
-                                            pointAddress.postal_code || 
-                                            pointAddress.zipCode || 
-                                            rawData.address?.postalCode ||
-                                            rawData.postalCode ||
-                                            ''
-                                          
-                                          const city = 
-                                            pointAddress.city || 
-                                            pointAddress.ville || 
-                                            rawData.address?.city ||
-                                            rawData.city ||
-                                            ''
-                                          
-                                          const street = 
-                                            pointAddress.street || 
-                                            pointAddress.address || 
-                                            rawData.address?.street ||
-                                            rawData.street ||
-                                            ''
-                                          
-                                          const fullAddress = [street, postalCode, city].filter(Boolean).join(', ')
-                                          
-                                          await supabase
-                                            .from('orders')
-                                            .update({
-                                              shipping_address: {
-                                                type: 'boxtal-relais',
-                                                identifiant: boxtalParcelPoint.code || '',
-                                                nom: boxtalParcelPoint.name || '',
-                                                adresseComplete: fullAddress,
-                                                adresse: street,
-                                                codePostal: postalCode,
-                                                ville: city,
-                                                pays: pointAddress.country || pointAddress.countryCode || 'FR',
-                                                coordonnees: boxtalParcelPoint.coordinates || {},
-                                                network: boxtalParcelPoint.network || '',
-                                                telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
-                                                codePostalRecherche: livraisonAddress.codePostal || '',
-                                                villeRecherche: livraisonAddress.ville || '',
-                                                pointRelais: boxtalParcelPoint
-                                              }
-                                            })
-                                            .eq('id', order.id)
-                                          console.log('✅ Point relais Boxtal sauvegardé dans la commande (PayPal Guest)')
-                                        } else if (chronopostRelaisPoint) {
-                                          await supabase
-                                            .from('orders')
-                                            .update({
-                                              shipping_address: {
-                                                type: 'chronopost-relais',
-                                                identifiant: chronopostRelaisPoint.identifiant,
-                                                nom: chronopostRelaisPoint.nom,
-                                                adresse: chronopostRelaisPoint.adresse,
-                                                codePostal: chronopostRelaisPoint.codePostal,
-                                                ville: chronopostRelaisPoint.ville,
-                                                horaires: chronopostRelaisPoint.horaires,
-                                                coordonnees: chronopostRelaisPoint.coordonnees,
-                                                telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
-                                              }
-                                            })
-                                            .eq('id', order.id)
-                                          console.log('✅ Point relais Chronopost sauvegardé dans la commande (PayPal Guest)')
-                                        }
-                                      }
-                                    } catch (relaisError) {
-                                      console.warn('⚠️ Erreur lors de la sauvegarde du point relais:', relaisError)
-                                    }
-                                  }
-
-                                  // Sauvegarder les informations de retrait à Wavignies
-                                  if (retraitMode === 'wavignies-rdv' && order.id && rdvDate && rdvTimeSlot) {
-                                    try {
-                                      const { getSupabaseClient } = await import('@/lib/supabase')
-                                      const supabase = getSupabaseClient()
-                                      if (supabase) {
-                                        await supabase
-                                          .from('orders')
-                                          .update({
-                                            shipping_address: {
-                                              type: 'wavignies-rdv',
-                                              rdvDate: rdvDate,
-                                              rdvTimeSlot: rdvTimeSlot,
-                                              adresse: 'Retrait sur rendez-vous à Wavignies (60130)',
-                                              ville: 'Wavignies',
-                                              codePostal: '60130',
-                                              telephone: (livraisonAddress.telephone || user?.telephone || '').trim() || undefined,
-                                            }
-                                          })
-                                          .eq('id', order.id)
-                                        console.log('✅ Informations de retrait Wavignies sauvegardées dans la commande (PayPal Guest)')
-                                      }
-                                    } catch (wavigniesError) {
-                                      console.warn('⚠️ Erreur lors de la sauvegarde du retrait Wavignies:', wavigniesError)
-                                    }
-                                  }
-
-                                  // Générer automatiquement la facture et envoyer l'email
-                                  try {
-                                    const invoiceResponse = await fetch('/api/auto-invoice', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ orderId: order.id }),
-                                    })
-                                    const invoiceResult = await invoiceResponse.json()
-                                    if (invoiceResult.ok) {
-                                      console.log('✅ Facture générée et email envoyé automatiquement (PayPal Guest)')
-                                    } else {
-                                      console.warn('⚠️ Erreur génération facture automatique:', invoiceResult.error)
-                                    }
-                                  } catch (invoiceError) {
-                                    console.warn('⚠️ Erreur appel API auto-invoice (PayPal Guest):', invoiceError)
-                                  }
-                                  
-                                  // Envoyer notification Telegram
-                                  try {
-                                    await sendNewOrderNotification({
-                                      reference: currentRef,
-                                      total: finalTotal,
-                                      itemCount: cartItems.length,
-                                      customerName: user?.nom || user?.email,
-                                      customerEmail: user?.email,
-                                      shippingCost: calculatedShippingCost,
-                                      retraitMode: retraitMode,
-                                      items: cartItems.map(item => ({
-                                        produit: item.produit,
-                                        quantity: item.quantite,
-                                        price: item.prix,
-                                        arome: item.arome,
-                                        taille: item.taille,
-                                        couleur: item.couleur,
-                                        diametre: item.diametre,
-                                        conditionnement: item.conditionnement,
-                                        forme: item.format,
-                                        saveur: item.arome,
-                                        gamme: item.gamme,
-                                      }))
-                                    })
-                                  } catch (telegramError) {
-                                    console.warn('⚠️ Erreur notification Telegram:', telegramError)
-                                  }
-                                }
-
-                                clearCart()
-                                router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal`)
-                              } catch (error) {
-                                console.error('Erreur création commande:', error)
-                                alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
-                              }
-                            }}
-                            onError={(error) => {
-                              alert(`Erreur PayPal Guest: ${error}`)
-                            }}
-                          />
-                        </div>
-                      </div>
-                      </div>
-                    )}
-
-                    {/* Section Carte bancaire - Monetico */}
+                    {/* Bouton Carte bancaire - Monetico */}
                     {paymentMethodsEnabled.card && (
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-3 pb-4 border-b border-noir-700">
-                          <CreditCard className="w-6 h-6 text-blue-400" />
-                          <h4 className="font-bold text-xl text-white">Carte bancaire</h4>
-                        </div>
-                        
-                        <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
-                          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
-                            <CreditCard className="w-6 h-6 text-blue-400" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <span className="font-bold text-lg text-white block mb-1">Visa, Mastercard, CB</span>
-                            <p className="text-sm text-gray-400">Paiement sécurisé Monetico</p>
-                          </div>
+                    <div className="flex items-center gap-4 p-4 rounded-lg bg-noir-800/30 hover:bg-noir-800/50 transition-colors">
+                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
+                        <CreditCard className="w-6 h-6 text-blue-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-bold text-lg text-white block mb-1">Carte bancaire</span>
+                        <p className="text-sm text-gray-400">Visa, Mastercard, CB - Paiement sécurisé Monetico</p>
+                      </div>
                       <div className="flex-1 max-w-xs flex-shrink-0">
                         <button
                           onClick={async () => {
@@ -2416,7 +2105,6 @@ export default function CheckoutPage() {
                         </button>
                       </div>
                     </div>
-                      </div>
                     )}
 
                     {!paymentMethodsEnabled.paypal && !paymentMethodsEnabled.card && (
