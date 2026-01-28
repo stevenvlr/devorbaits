@@ -16,7 +16,7 @@ function round2(n: number): number {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { amount, itemTotal, shippingTotal, reference, currency = 'EUR', paymentType } = body
+    const { amount, itemTotal, shippingTotal, reference, currency = 'EUR' } = body
 
     // Vérifier que les paramètres sont présents
     if (amount == null || itemTotal == null || shippingTotal == null || !reference) {
@@ -118,11 +118,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Configuration selon le type de paiement
-    const isGuestCheckout = paymentType === 'paypal-guest'
-    
     // Créer la commande PayPal
-    const orderData: any = {
+    const orderData = {
       intent: 'CAPTURE',
       purchase_units: [
         {
@@ -146,14 +143,10 @@ export async function POST(request: NextRequest) {
       ],
       application_context: {
         brand_name: 'Boutique Pêche Carpe',
-        landing_page: isGuestCheckout ? 'BILLING' : 'NO_PREFERENCE', // BILLING pour guest checkout
+        landing_page: 'NO_PREFERENCE',
         user_action: 'PAY_NOW',
         return_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/payment/success?payment_method=paypal`,
         cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/payment/error?payment_method=paypal`,
-        payment_method: isGuestCheckout ? {
-          payer_selected: 'PAYPAL',
-          payee_preferred: 'IMMEDIATE_PAYMENT_REQUIRED',
-        } : undefined,
       },
     }
 
