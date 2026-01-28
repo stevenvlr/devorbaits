@@ -4,8 +4,6 @@ import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js'
 import { useState } from 'react'
 import { getPayPalClientId, isPayPalConfigured } from '@/lib/paypal'
 
-type PayPalPaymentType = 'paypal-account' | 'paypal-4x' | 'paypal-guest'
-
 interface PayPalButtonProps {
   amount: number
   itemTotal: number
@@ -15,7 +13,6 @@ interface PayPalButtonProps {
   onError: (error: string) => void
   disabled?: boolean
   onBeforePayment?: () => void
-  paymentType?: PayPalPaymentType // Type de paiement PayPal
 }
 
 export default function PayPalButton({
@@ -27,7 +24,6 @@ export default function PayPalButton({
   onError,
   disabled,
   onBeforePayment,
-  paymentType = 'paypal-account', // Par défaut : paiement avec compte PayPal
 }: PayPalButtonProps) {
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -45,44 +41,14 @@ export default function PayPalButton({
   const isTestMode = process.env.NEXT_PUBLIC_PAYPAL_BASE_URL?.includes('sandbox') || 
                      !process.env.NEXT_PUBLIC_PAYPAL_BASE_URL
 
-  // Configuration PayPal selon le type de paiement
-  const getPayPalConfig = () => {
-    switch (paymentType) {
-      case 'paypal-account':
-        // Paiement avec compte PayPal uniquement
-        return {
-          'enable-funding': 'paypal',
-          'disable-funding': 'card,paylater',
-        }
-      case 'paypal-4x':
-        // Paiement en 4x sans frais (Pay Later)
-        return {
-          'enable-funding': 'paylater',
-          'disable-funding': 'card',
-        }
-      case 'paypal-guest':
-        // Paiement sans compte PayPal (carte uniquement)
-        return {
-          'enable-funding': 'card',
-          'disable-funding': 'paypal,paylater',
-        }
-      default:
-        return {
-          'enable-funding': 'paypal',
-          'disable-funding': 'card,paylater',
-        }
-    }
-  }
-
-  const paypalConfig = getPayPalConfig()
-
   return (
     <PayPalScriptProvider
       options={{
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        ...paypalConfig,
+        'enable-funding': 'card', // Activer le paiement par carte
+        'disable-funding': 'paylater', // Désactiver paylater
         ...(isTestMode && { 'data-client-token': undefined }),
       }}
     >
@@ -186,9 +152,9 @@ export default function PayPalButton({
           }}
           style={{
             layout: 'vertical',
-            color: paymentType === 'paypal-guest' ? 'blue' : 'gold', // Bleu pour carte, or pour PayPal
+            color: 'blue', // Couleur bleue pour carte (au lieu de gold pour PayPal)
             shape: 'rect',
-            label: paymentType === 'paypal-guest' ? 'pay' : 'paypal', // Label selon le type
+            label: 'pay', // Afficher "Pay with Debit or Credit Card" directement
           }}
         />
       </div>
