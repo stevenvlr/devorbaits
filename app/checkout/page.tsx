@@ -1475,7 +1475,7 @@ export default function CheckoutPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <span className="font-bold text-lg text-white block mb-1">Paiement</span>
-                          <p className="text-sm text-gray-400">Paiement sécurisé uniquement</p>
+                          <p className="text-sm text-gray-400">Paiement sécurisé</p>
                         </div>
                         <div className="flex-1 max-w-xs flex-shrink-0">
                           <PayPalButton
