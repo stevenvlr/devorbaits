@@ -647,20 +647,7 @@ export default function CheckoutPage() {
       return livraisonAddress.adresse && livraisonAddress.codePostal && livraisonAddress.ville
     }
     if (retraitMode === 'chronopost-relais') {
-      // Mode test : permettre le paiement même sans point relais sélectionné
-      // Mode test pour valider le formulaire
-      const MODE_TEST = true // Mettre à false quand l'API est configurée
-      
-      if (MODE_TEST) {
-        // En mode test, on accepte même sans point relais sélectionné
-        // Vérifier juste le code postal pour le calcul du prix (4 ou 5 chiffres)
-        if (!isValidPostalCode(livraisonAddress.codePostal)) {
-          return false
-        }
-        return true
-      }
-      
-      // Mode production : vérifier qu'un point relais est sélectionné
+      // Point relais obligatoire : vérifier qu'un point est sélectionné (Boxtal ou Chronopost)
       // Accepter soit chronopostRelaisPoint soit boxtalParcelPoint
       if (!chronopostRelaisPoint && !boxtalParcelPoint) {
         return false
@@ -691,6 +678,11 @@ export default function CheckoutPage() {
       return
     }
 
+    if (retraitMode === 'chronopost-relais' && !chronopostRelaisPoint && !boxtalParcelPoint) {
+      alert('Veuillez sélectionner un point relais')
+      setIsSubmitting(false)
+      return
+    }
 
     if (retraitMode === 'wavignies-rdv') {
       if (!rdvDate || !rdvTimeSlot) {
@@ -2125,6 +2117,8 @@ export default function CheckoutPage() {
                           ? 'Veuillez accepter les CGV'
                           : retraitMode === 'wavignies-rdv' && (!rdvDate || !rdvTimeSlot)
                           ? 'Veuillez sélectionner un créneau'
+                          : retraitMode === 'chronopost-relais' && !chronopostRelaisPoint && !boxtalParcelPoint
+                          ? 'Veuillez sélectionner un point relais'
                           : 'Veuillez compléter les informations requises'}
                       </p>
                     )}
