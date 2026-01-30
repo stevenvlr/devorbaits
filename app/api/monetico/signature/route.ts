@@ -43,34 +43,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Construire la chaîne à signer selon Monetico v3.0 (VALEURS uniquement, pas key=value)
-    // Format: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*nbrech*dateech1*montantech1*dateech2*montantech2*dateech3*montantech3*dateech4*montantech4*options*
-    // Les url_retour ne sont PAS inclus dans la signature
-    const texteLibre = params['texte-libre'] || params['texte_libre'] || ''
-    const toSign = [
-      params.TPE || '',
-      params.date || '',
-      params.montant || '',
-      params.reference || '',
-      texteLibre,
-      params.version || '3.0',
-      params.lgue || 'FR',
-      params.societe || '',
-      params.mail || '',
-      '', // nbrech (vide pour paiement simple)
-      '', // dateech1
-      '', // montantech1
-      '', // dateech2
-      '', // montantech2
-      '', // dateech3
-      '', // montantech3
-      '', // dateech4
-      '', // montantech4
-      '', // options
-    ].join('*') + '*' // Ajouter le * final
+    // Construire la chaîne à signer selon doc Monetico §9.3 (mail support) :
+    // nom_champ=valeur_champ, ordre alphabétique, séparés par *, PAS de * en fin
+    // Tous les paramètres du formulaire (le client doit envoyer les mêmes que le formulaire)
+    const paramsForMac: Record<string, string> = {}
+    for (const [k, v] of Object.entries(params)) {
+      if (k === 'MAC') continue // ne pas inclure le MAC dans la chaîne
+      paramsForMac[k] = v !== null && v !== undefined ? String(v) : ''
+    }
+    const sortedKeys = Object.keys(paramsForMac).sort()
+    const toSign = sortedKeys
+      .map((key) => `${key}=${paramsForMac[key]}`)
+      .join('*')
 
     // Logs debug
-    console.log('[MONETICO toSign]', toSign)
+    console.log('[MONETICO toSign]', toSign.substring(0, 120) + '...')
 
     // --- Utils WebCrypto ---
     const encoder = new TextEncoder()

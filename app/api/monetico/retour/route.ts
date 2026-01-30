@@ -103,35 +103,22 @@ export async function POST(request: NextRequest) {
       keyBytes[i] = parseInt(keyHex.slice(i * 2, i * 2 + 2), 16)
     }
 
-    // Construire la chaîne pour vérifier le MAC (même format que l'envoi)
-    // FORMAT: VALEURS uniquement (pas key=value), dans l'ordre exact Monetico v3.0
-    // IMPORTANT: Les champs d'échéance (nbrech, dateech*, montantech*) et options sont EXCLUS si vides
-    // ORDRE OBLIGATOIRE: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*
-    // (identique au calcul dans /api/monetico/route.ts)
-    const macOrder = [
-      'TPE', 'date', 'montant', 'reference', 'texte-libre', 'version', 'lgue', 'societe', 'mail'
-    ]
-    
-    // Construire macString avec les VALEURS uniquement (pas key=value)
-    // IMPORTANT: Ne pas inclure les champs d'échéance vides (cohérence avec l'envoi)
-    const macParts: string[] = []
-    for (const key of macOrder) {
-      const value = params[key]
-      // Utiliser la valeur (même vide pour texte-libre) ou chaîne vide si absente
-      const val = value !== null && value !== undefined ? String(value) : ''
-      macParts.push(val)
+    // Construire la chaîne pour vérifier le MAC (même format que l'envoi) - doc Monetico §9.3
+    // nom_champ=valeur_champ, ordre alphabétique, séparés par *, PAS de * en fin
+    // Tous les paramètres reçus SAUF MAC
+    const paramsForMac: Record<string, string> = {}
+    for (const [k, v] of Object.entries(params)) {
+      if (k === 'MAC') continue
+      paramsForMac[k] = v !== null && v !== undefined ? String(v) : ''
     }
-    
-    // Joindre avec "*" et ajouter le * final
-    const macString = macParts.join('*') + '*'
-    
+    const sortedKeys = Object.keys(paramsForMac).sort()
+    const macString = sortedKeys
+      .map((key) => `${key}=${paramsForMac[key]}`)
+      .join('*')
+
     // Log pour debug
-    console.log('[MONETICO RETOUR macString]', macString)
-    console.log('[MONETICO RETOUR macParts]', {
-      count: macParts.length,
-      expected: macOrder.length,
-      parts: macParts.map((v, i) => ({ key: macOrder[i], value: v, isEmpty: v === '' }))
-    })
+    console.log('[MONETICO RETOUR macString]', macString.substring(0, 120) + '...')
+    console.log('[MONETICO RETOUR macKeys]', sortedKeys.length, sortedKeys)
 
     // Calculer le MAC attendu
     const macCalculated = await calculateMAC(keyBytes, macString)
@@ -148,12 +135,11 @@ export async function POST(request: NextRequest) {
         receivedLength: macReceivedUpper.length,
         calculatedLength: macCalculatedUpper.length,
         paramsKeys: Object.keys(params),
-        macOrder: macOrder,
+        sortedKeys: sortedKeys,
       })
       
       // Log détaillé pour debug (sans exposer la clé)
       console.error('[MONETICO RETOUR] Détails MAC:', {
-        macParts: macParts.map((v, i) => ({ key: macOrder[i], value: v })),
         macStringFull: macString,
       })
       

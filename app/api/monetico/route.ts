@@ -217,38 +217,20 @@ export async function POST(request: NextRequest) {
     // Log des clés présentes
     console.log('[MONETICO fieldsKeys]', Object.keys(fields))
 
-    // Construire macString selon doc Monetico v3.0 :
-    // FORMAT: VALEURS uniquement (pas key=value), séparées par *
-    // ORDRE EXACT: TPE*date*montant*reference*texte-libre*version*lgue*societe*mail*
-    // NOTE: Les champs d'échéance (nbrech, dateech*, montantech*) et options sont EXCLUS si vides
-    // Les URLs de retour (url_retour, url_retour_ok, url_retour_err) sont EXCLUES du calcul MAC
-    
-    // Ordre exact des champs OBLIGATOIRES pour le MAC (selon documentation Monetico v3.0)
-    // Format: VALEURS uniquement, séparées par *
-    // IMPORTANT: Seuls les champs obligatoires sont inclus (pas les champs d'échéance vides)
-    const macOrder = [
-      'TPE', 'date', 'montant', 'reference', 'texte-libre', 'version', 'lgue', 'societe', 'mail'
-    ]
-    
-    // Construire macString avec les VALEURS uniquement (pas key=value)
-    const macParts: string[] = []
-    for (const key of macOrder) {
-      const value = fields[key]
-      // Utiliser la valeur (même vide pour texte-libre) ou chaîne vide si absente
-      const val = value !== null && value !== undefined ? String(value) : ''
-      macParts.push(val)
-    }
-    
-    // Joindre avec "*" et ajouter le * final
-    const macString = macParts.join('*') + '*'
+    // Construire macString selon doc Monetico §9.3 (mail du support Monetico) :
+    // - Tous les paramètres envoyés dans le formulaire, au format nom_champ=valeur_champ
+    // - Classés par ordre ALPHABÉTIQUE selon le nom du champ
+    // - Séparés par * (PAS d'astérisque supplémentaire en fin de chaîne)
+    const macKeys = Object.keys(fields).sort()
+    const macParts = macKeys.map((key) => {
+      const value = fields[key] !== null && fields[key] !== undefined ? String(fields[key]) : ''
+      return `${key}=${value}`
+    })
+    const macString = macParts.join('*')
 
     // Log détaillé pour debug
     console.log('[MONETICO macString]', macString)
-    console.log('[MONETICO macParts]', {
-      count: macParts.length,
-      expected: macOrder.length,
-      parts: macParts.map((v, i) => ({ key: macOrder[i], value: v, isEmpty: v === '' }))
-    })
+    console.log('[MONETICO macKeys]', macKeys.length, macKeys)
 
     // Préparer la clé HMAC (server-only)
     // Accepter MONETICO_CLE_HMAC ou MONETICO_CLE_SECRETE (compatibilité)
