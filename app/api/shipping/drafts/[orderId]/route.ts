@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createOrUpdateShippingDraft } from '@/lib/shipping-draft'
 
+export const runtime = 'edge'
+
 const INTERNAL_SECRET_HEADER = 'x-internal-secret'
 
 /**
