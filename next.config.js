@@ -6,9 +6,7 @@ const nextConfig = {
   // et casser le build (webpack/minifier).
   // On force donc la racine de tracing au dossier du projet.
   outputFileTracingRoot: __dirname,
-  // IMPORTANT (Vercel) :
-  // Ne pas activer `output: 'export'` en production, sinon Next passe en export statique
-  // et les routes API (app/api/*) + fonctionnalités serveur ne fonctionnent plus.
+  // Pas d'output: 'export' → build standard pour API routes (app/api/*) et next-on-pages (Cloudflare).
   async headers() {
     return [
       // Cache très long pour les assets buildés de Next (hashés)
