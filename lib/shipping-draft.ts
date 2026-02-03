@@ -128,7 +128,7 @@ export function validatePickupPoint(pickup_point: PickupPoint | null | undefined
 
 // ----- Création / mise à jour du draft -----
 
-/** Récupère country_code depuis billing_address ou fallback FR */
+/** Récupère country_code depuis recipient, puis billing_address, sinon fallback FR (ne bloque jamais). */
 function ensureCountryCode(
   recipient: Recipient,
   billingAddress: unknown
@@ -138,17 +138,15 @@ function ensureCountryCode(
     return { recipient, country_code }
   }
   const ba = billingAddress as Record<string, unknown> | null | undefined
-  if (ba && (typeof ba === 'object')) {
-    country_code = safeStr(ba.country_code ?? ba.country)
+  if (ba && typeof ba === 'object') {
+    country_code = safeStr(ba.country_code ?? ba.country ?? ba.pays)
   }
   if (!country_code) {
-    console.warn('[createOrUpdateShippingDraft] country_code absent sur le profil et billing_address, fallback FR')
+    console.warn('[createOrUpdateShippingDraft] country_code absent (profil + billing), fallback FR')
     country_code = 'FR'
   }
-  return {
-    recipient: { ...recipient, country_code },
-    country_code,
-  }
+  const recipientWithCountry: Recipient = { ...recipient, country_code }
+  return { recipient: recipientWithCountry, country_code }
 }
 
 /** Compare deux drafts (payload à écrire vs existant) pour idempotence */
@@ -165,15 +163,19 @@ function draftPayloadEquals(
   return true
 }
 
+/** Résultat quand le draft n’est pas créé (ex. retrait sur place) */
+export type ShippingDraftSkipped = { skipped: true; reason: string }
+
 /**
  * Crée ou met à jour le brouillon d’expédition pour une commande.
  * - Charge la commande (id, user_id, billing_address, total_weight_g, delivery_type, pickup_point)
  * - Récupère le destinataire (getRecipientForOrder), assure country_code (fallback FR + warning si absent)
+ * - Si adresse = retrait sur place (Wavignies / "Retrait sur..."), ne crée pas de draft (retourne { skipped: true, reason: 'pickup' })
  * - Valide destinataire et, si relay, point relais
  * - Construit les colis (buildParcels) et upsert shipping_drafts
  * - Idempotent : ne met à jour que si recipient/parcels/delivery_type/pickup_point/weight ont changé
  */
-export async function createOrUpdateShippingDraft(orderId: string): Promise<ShippingDraftRow> {
+export async function createOrUpdateShippingDraft(orderId: string): Promise<ShippingDraftRow | ShippingDraftSkipped> {
   const supabase = getSupabaseService()
 
   const { data: order, error: orderError } = await supabase
@@ -206,6 +208,16 @@ export async function createOrUpdateShippingDraft(orderId: string): Promise<Ship
     orderForDraft.billing_address
   )
   recipient = recipientWithCountry
+
+  const a = (recipient.address1 || '').toLowerCase()
+  if (
+    a.includes('retrait sur rendez-vous') ||
+    a.includes('wavignies') ||
+    a.startsWith('retrait sur')
+  ) {
+    console.info('[createOrUpdateShippingDraft] Retrait sur place, pas de draft', orderId)
+    return { skipped: true, reason: 'pickup' }
+  }
 
   validateRecipient(recipient, delivery_type)
 

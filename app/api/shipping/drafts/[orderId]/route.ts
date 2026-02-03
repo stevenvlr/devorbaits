@@ -36,38 +36,24 @@ export async function POST(
   try {
     const params = await context.params
     orderId = params.orderId?.trim() ?? ''
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: 'orderId manquant' },
-      { status: 400 }
-    )
-  }
-
-  if (!orderId) {
-    return NextResponse.json(
-      { ok: false, error: 'orderId manquant' },
-      { status: 400 }
-    )
-  }
-
-  try {
-    const draft = await createOrUpdateShippingDraft(orderId)
-    return NextResponse.json({ ok: true, draft })
+    if (!orderId) {
+      return NextResponse.json({ ok: false, error: 'orderId manquant' }, { status: 400 })
+    }
+    const result = await createOrUpdateShippingDraft(orderId)
+    if (result.skipped) {
+      return NextResponse.json({ ok: true, skipped: true, reason: result.reason })
+    }
+    return NextResponse.json({ ok: true, draft: result })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     const lower = message.toLowerCase()
-
     if (
       lower.includes('introuvable') ||
       lower.includes('0 rows') ||
       lower.includes('commande introuvable')
     ) {
-      return NextResponse.json(
-        { ok: false, error: message },
-        { status: 404 }
-      )
+      return NextResponse.json({ ok: false, error: message }, { status: 404 })
     }
-
     if (
       (lower.includes('champs') && lower.includes('manquants')) ||
       lower.includes('destinataire manquant') ||
@@ -75,16 +61,9 @@ export async function POST(
       lower.includes('total_weight_g manquant ou invalide') ||
       lower.includes('buildparcels')
     ) {
-      return NextResponse.json(
-        { ok: false, error: message },
-        { status: 400 }
-      )
+      return NextResponse.json({ ok: false, error: message }, { status: 400 })
     }
-
     console.error('[POST /api/shipping/drafts/[orderId]]', orderId, err)
-    return NextResponse.json(
-      { ok: false, error: message },
-      { status: 500 }
-    )
+    return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }
