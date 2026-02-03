@@ -40,7 +40,7 @@ export async function POST(
       return NextResponse.json({ ok: false, error: 'orderId manquant' }, { status: 400 })
     }
     const result = await createOrUpdateShippingDraft(orderId)
-    if (result.skipped) {
+    if ('skipped' in result && result.skipped) {
       return NextResponse.json({ ok: true, skipped: true, reason: result.reason })
     }
     return NextResponse.json({ ok: true, draft: result })
