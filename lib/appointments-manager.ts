@@ -26,6 +26,9 @@ export const AVAILABLE_TIME_SLOTS = [
 // Nombre maximum de personnes par créneau
 export const MAX_BOOKINGS_PER_SLOT = 2
 
+// Délai minimum (en jours) entre la commande et le premier rendez-vous disponible
+const MIN_DAYS_BEFORE_FIRST_RDV = 5
+
 // Vérifier si une date est un mardi ou jeudi
 export function isAvailableDay(dateString: string): boolean {
   // Parser la date en local pour éviter les problèmes de fuseau horaire
@@ -389,21 +392,24 @@ export function removeAvailableDate(date: string): boolean {
 }
 
 // Obtenir les prochaines dates disponibles (mardis et jeudis)
+// Le premier RDV possible est au moins MIN_DAYS_BEFORE_FIRST_RDV jours après aujourd'hui
 export function getNextAvailableDates(count: number = 10): string[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const minFirstRdvDate = new Date(today)
+  minFirstRdvDate.setDate(minFirstRdvDate.getDate() + MIN_DAYS_BEFORE_FIRST_RDV)
+
   // D'abord, vérifier s'il y a des dates personnalisées
   const customDates = loadAvailableDates()
   
   if (customDates.length > 0) {
-    // Filtrer pour ne garder que les dates valides (mardi/jeudi) et futures
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
+    // Filtrer pour ne garder que les dates valides (mardi/jeudi) et au moins 5 jours après aujourd'hui
     const validDates = customDates
       .filter(date => {
         if (!isAvailableDay(date)) return false
         const [year, month, day] = date.split('-').map(Number)
         const dateObj = new Date(year, month - 1, day)
-        return dateObj >= today
+        return dateObj >= minFirstRdvDate
       })
       .sort()
       .slice(0, count)
@@ -413,9 +419,9 @@ export function getNextAvailableDates(count: number = 10): string[] {
       return validDates
     }
     
-    // Sinon, compléter avec des dates générées automatiquement
+    // Sinon, compléter avec des dates générées automatiquement (à partir de minFirstRdvDate)
     const dates: string[] = [...validDates]
-    let currentDate = new Date(today)
+    let currentDate = new Date(minFirstRdvDate)
     let found = validDates.length
     let maxIterations = 100
 
@@ -437,12 +443,9 @@ export function getNextAvailableDates(count: number = 10): string[] {
     return dates.sort()
   }
 
-  // Si pas de dates personnalisées, générer automatiquement
+  // Si pas de dates personnalisées, générer automatiquement à partir de minFirstRdvDate
   const dates: string[] = []
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  
-  let currentDate = new Date(today)
+  let currentDate = new Date(minFirstRdvDate)
   let found = 0
   let maxIterations = 100
 
