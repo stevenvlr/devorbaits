@@ -32,7 +32,7 @@ export async function POST(
     )
   }
 
-  let orderId: string
+  let orderId = ''
   try {
     const params = await context.params
     orderId = params.orderId?.trim() ?? ''
