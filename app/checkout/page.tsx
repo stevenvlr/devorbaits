@@ -23,7 +23,8 @@ import {
 } from '@/lib/appointments-manager'
 import { startMoneticoPayment, generateOrderReference, generateMoneticoReference } from '@/lib/monetico'
 import MoneticoWidget from '@/components/MoneticoWidget'
-import { createOrder, updateOrderStatus } from '@/lib/revenue-supabase'
+import { createOrder, updateOrderStatus, type OrderPickupPoint } from '@/lib/revenue-supabase'
+import { buildOrderPickupPointFromBoxtal, buildOrderPickupPointFromChronopost } from '@/lib/order-pickup-point'
 import { getActiveShippingPrice, getSponsorShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
 import PayPalButton from '@/components/PayPalButton'
@@ -826,10 +827,20 @@ export default function CheckoutPage() {
           produit: item.produit
         }))
 
+        // delivery_type + pickup_point pour orders (relay => point relais, sinon home)
+        const deliveryType: 'home' | 'relay' = retraitMode === 'chronopost-relais' ? 'relay' : 'home'
+        let pickupPoint: OrderPickupPoint | null = null
+        if (deliveryType === 'relay') {
+          if (boxtalParcelPoint) {
+            pickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
+          } else if (chronopostRelaisPoint) {
+            pickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
+          }
+        }
+
         // Créer la commande directement (avec le total incluant l'expédition)
         const commentValue = orderComment.trim() || undefined
-        // Appel conditionnel pour éviter les problèmes de typage TypeScript
-        const order = commentValue 
+        const order = commentValue
           ? await createOrder(
               user?.id || '',
               orderReference,
@@ -838,7 +849,9 @@ export default function CheckoutPage() {
               'test',
               calculatedShippingCost,
               commentValue,
-              undefined
+              undefined,
+              deliveryType,
+              pickupPoint ?? undefined
             )
           : await createOrder(
               user?.id || '',
@@ -848,7 +861,9 @@ export default function CheckoutPage() {
               'test',
               calculatedShippingCost,
               undefined,
-              undefined
+              undefined,
+              deliveryType,
+              pickupPoint ?? undefined
             )
 
         // Enregistrer l'utilisation du code promo APRÈS création de la commande
@@ -1499,8 +1514,12 @@ export default function CheckoutPage() {
 
                                 const currentRef = orderReference || paypalReference
                                 const commentValue = orderComment.trim() || undefined
-                                
-                                // Appel conditionnel pour éviter les problèmes de typage TypeScript
+                                const paypalDeliveryType: 'home' | 'relay' = retraitMode === 'chronopost-relais' ? 'relay' : 'home'
+                                let paypalPickupPoint: OrderPickupPoint | null = null
+                                if (paypalDeliveryType === 'relay') {
+                                  if (boxtalParcelPoint) paypalPickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
+                                  else if (chronopostRelaisPoint) paypalPickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
+                                }
                                 const order = commentValue
                                   ? await createOrder(
                                       user?.id || '',
@@ -1510,7 +1529,9 @@ export default function CheckoutPage() {
                                       'paypal',
                                       calculatedShippingCost,
                                       commentValue,
-                                      undefined
+                                      undefined,
+                                      paypalDeliveryType,
+                                      paypalPickupPoint ?? undefined
                                     )
                                   : await createOrder(
                                       user?.id || '',
@@ -1520,7 +1541,9 @@ export default function CheckoutPage() {
                                       'paypal',
                                       calculatedShippingCost,
                                       undefined,
-                                      undefined
+                                      undefined,
+                                      paypalDeliveryType,
+                                      paypalPickupPoint ?? undefined
                                     )
 
                                 if (order.id) {
@@ -1800,7 +1823,12 @@ export default function CheckoutPage() {
 
                           const currentRef = orderReference || paypalReference
                           const commentValue = orderComment.trim() || undefined
-                          
+                          const paypal2DeliveryType: 'home' | 'relay' = retraitMode === 'chronopost-relais' ? 'relay' : 'home'
+                          let paypal2PickupPoint: OrderPickupPoint | null = null
+                          if (paypal2DeliveryType === 'relay') {
+                            if (boxtalParcelPoint) paypal2PickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
+                            else if (chronopostRelaisPoint) paypal2PickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
+                          }
                           const order = commentValue
                             ? await createOrder(
                                 user?.id || '',
@@ -1810,7 +1838,9 @@ export default function CheckoutPage() {
                                 'paypal',
                                 calculatedShippingCost,
                                 commentValue,
-                                undefined
+                                undefined,
+                                paypal2DeliveryType,
+                                paypal2PickupPoint ?? undefined
                               )
                             : await createOrder(
                                 user?.id || '',
@@ -1820,7 +1850,9 @@ export default function CheckoutPage() {
                                 'paypal',
                                 calculatedShippingCost,
                                 undefined,
-                                undefined
+                                undefined,
+                                paypal2DeliveryType,
+                                paypal2PickupPoint ?? undefined
                               )
 
                           if (order.id) {

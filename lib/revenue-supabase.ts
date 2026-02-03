@@ -1,6 +1,18 @@
 // Gestion des revenus et commandes avec Supabase ou localStorage
 import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 
+/** Point relais normalisé (orders.pickup_point en jsonb) */
+export type OrderPickupPoint = {
+  id: string
+  network: string
+  name: string
+  address1: string
+  address2?: string
+  zip: string
+  city: string
+  country_code: string
+}
+
 export interface Order {
   id: string
   user_id?: string
@@ -18,6 +30,8 @@ export interface Order {
   billing_address?: any
   items?: OrderItem[] // Les items sont maintenant stockés directement dans orders
   comment?: string // Commentaire de commande (optionnel, max 500 caractères)
+  delivery_type?: 'home' | 'relay'
+  pickup_point?: OrderPickupPoint | null
 }
 
 export interface OrderItem {
@@ -40,7 +54,8 @@ export interface OrderItem {
 }
 
 /**
- * Crée une commande
+ * Crée une commande.
+ * Si deliveryType === 'relay', pickupPoint est obligatoire (sinon erreur côté serveur).
  */
 export async function createOrder(
   userId: string | undefined,
@@ -50,10 +65,26 @@ export async function createOrder(
   paymentMethod?: string,
   shippingCost?: number,
   comment?: string,
-  moneticoReference?: string
+  moneticoReference?: string,
+  deliveryType?: 'home' | 'relay',
+  pickupPoint?: OrderPickupPoint | null
 ): Promise<Order> {
-  // Pour Supabase, on ne fournit pas l'ID (il sera généré automatiquement)
-  // Pour localStorage, on génère un ID
+  if (deliveryType === 'relay') {
+    if (
+      pickupPoint == null ||
+      typeof pickupPoint !== 'object' ||
+      !String(pickupPoint.id ?? '').trim() ||
+      !String(pickupPoint.address1 ?? '').trim() ||
+      !String(pickupPoint.zip ?? '').trim() ||
+      !String(pickupPoint.city ?? '').trim() ||
+      !String(pickupPoint.country_code ?? '').trim()
+    ) {
+      throw new Error(
+        'pickup_point obligatoire lorsque delivery_type est relay (id, address1, zip, city, country_code requis)'
+      )
+    }
+  }
+
   const orderIdForLocalStorage = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
   if (isSupabaseConfigured()) {
@@ -79,14 +110,18 @@ export async function createOrder(
           produit: item.produit
         }))
 
+        const delivery_type = deliveryType ?? 'home'
+        const pickup_point = delivery_type === 'relay' ? pickupPoint : null
+
         const orderDataToInsertBase = {
           user_id: userId,
           reference,
           total,
           status: 'pending' as const,
           payment_method: paymentMethod,
-          items: itemsForJson, // Stocker les items directement dans orders
-          // Ne pas inclure 'id' ni 'created_at' - Supabase les génère automatiquement
+          items: itemsForJson,
+          delivery_type,
+          pickup_point: pickup_point ?? null,
         }
 
         // Ajouter shipping_cost et comment si fournis (et valides)
@@ -117,16 +152,22 @@ export async function createOrder(
           orderError &&
           typeof orderError.message === 'string' &&
           (orderError.message.toLowerCase().includes('shipping_cost') ||
-           orderError.message.toLowerCase().includes('comment') ||
-           orderError.message.toLowerCase().includes('monetico_reference')) &&
+            orderError.message.toLowerCase().includes('comment') ||
+            orderError.message.toLowerCase().includes('monetico_reference') ||
+            orderError.message.toLowerCase().includes('delivery_type') ||
+            orderError.message.toLowerCase().includes('pickup_point')) &&
           orderError.message.toLowerCase().includes('does not exist')
         ) {
-          console.warn('⚠️ Colonne shipping_cost, comment ou monetico_reference absente dans orders, retry sans ces colonnes')
-          const retry = await supabase
-            .from('orders')
-            .insert(orderDataToInsertBase as any)
-            .select()
-            .single()
+          console.warn('⚠️ Colonne(s) absente(s) dans orders, retry sans delivery_type/pickup_point/shipping_cost/comment/monetico_reference')
+          const fallback: any = {
+            user_id: userId,
+            reference,
+            total,
+            status: 'pending',
+            payment_method: paymentMethod,
+            items: itemsForJson,
+          }
+          const retry = await supabase.from('orders').insert(fallback).select().single()
           orderData = retry.data as any
           orderError = retry.error as any
         }

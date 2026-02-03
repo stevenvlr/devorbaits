@@ -7,7 +7,8 @@ import { CheckCircle2, Package, Home, Info } from 'lucide-react'
 import { parseMoneticoReturn } from '@/lib/monetico'
 import { useCart } from '@/contexts/CartContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { createOrder, updateOrderStatus, getOrderByReference, type OrderItem } from '@/lib/revenue-supabase'
+import { createOrder, updateOrderStatus, getOrderByReference, type OrderItem, type OrderPickupPoint } from '@/lib/revenue-supabase'
+import { buildOrderPickupPointFromBoxtal, buildOrderPickupPointFromChronopost } from '@/lib/order-pickup-point'
 import { loadProducts } from '@/lib/products-manager'
 import { getPromoCodeByCode, recordPromoCodeUsageAsync } from '@/lib/promo-codes-manager'
 import { sendNewOrderNotification } from '@/lib/telegram-notifications'
@@ -194,7 +195,17 @@ function PaymentSuccessContent() {
               conditionnement: item.conditionnement,
               produit: item.produit
             }))
-            
+
+            const moneticoDeliveryType: 'home' | 'relay' = pendingOrder?.retraitMode === 'chronopost-relais' ? 'relay' : 'home'
+            let moneticoPickupPoint: OrderPickupPoint | null = null
+            if (moneticoDeliveryType === 'relay') {
+              if (pendingOrder?.boxtalParcelPoint) {
+                moneticoPickupPoint = buildOrderPickupPointFromBoxtal(pendingOrder.boxtalParcelPoint)
+              } else if (pendingOrder?.chronopostRelaisPoint) {
+                moneticoPickupPoint = buildOrderPickupPointFromChronopost(pendingOrder.chronopostRelaisPoint)
+              }
+            }
+
             // Créer la commande dans Supabase ou localStorage
             const order = await createOrder(
               user?.id,
@@ -204,7 +215,9 @@ function PaymentSuccessContent() {
               'monetico',
               typeof pendingOrder?.shippingCost === 'number' ? pendingOrder.shippingCost : undefined,
               undefined,
-              moneticoReference
+              moneticoReference,
+              moneticoDeliveryType,
+              moneticoPickupPoint ?? undefined
             )
 
             // Enregistrer l'utilisation du code promo APRÈS création de la commande

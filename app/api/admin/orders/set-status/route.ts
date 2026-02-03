@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { buildProductNameWithVariants } from '@/lib/price-utils'
+import { createShippingDraftForOrder } from '@/lib/create-shipping-draft-for-order'
 
 export const runtime = 'edge'
 
@@ -715,6 +716,12 @@ export async function POST(request: NextRequest) {
     const reference = (typeof order.reference === 'string' && order.reference.trim() !== '')
       ? order.reference.trim()
       : orderId
+
+    if (statusNorm === 'preparation' || statusNorm === 'preparing') {
+      createShippingDraftForOrder(orderId).catch((e) =>
+        console.error('[set-status] createShippingDraftForOrder', orderId, e)
+      )
+    }
 
     // FACTURE: status == preparation/preparing
     if (statusNorm === 'preparation' || statusNorm === 'preparing') {
