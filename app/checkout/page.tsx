@@ -23,7 +23,8 @@ import {
 } from '@/lib/appointments-manager'
 import { startMoneticoPayment, generateOrderReference, generateMoneticoReference } from '@/lib/monetico'
 import MoneticoWidget from '@/components/MoneticoWidget'
-import { createOrder, updateOrderStatus, type OrderPickupPoint } from '@/lib/revenue-supabase'
+import { updateOrderStatus, type OrderPickupPoint } from '@/lib/revenue-supabase'
+import { createOrderAction } from '@/app/actions/create-order'
 import { buildOrderPickupPointFromBoxtal, buildOrderPickupPointFromChronopost } from '@/lib/order-pickup-point'
 import { getActiveShippingPrice, getSponsorShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
@@ -843,33 +844,23 @@ export default function CheckoutPage() {
           }
         }
 
-        // Créer la commande directement (avec le total incluant l'expédition)
         const commentValue = orderComment.trim() || undefined
-        const order = commentValue
-          ? await createOrder(
-              user?.id || '',
-              orderReference,
-              finalTotal,
-              orderItems,
-              'test',
-              calculatedShippingCost,
-              commentValue,
-              undefined,
-              deliveryType,
-              pickupPoint ?? undefined
-            )
-          : await createOrder(
-              user?.id || '',
-              orderReference,
-              finalTotal,
-              orderItems,
-              'test',
-              calculatedShippingCost,
-              undefined,
-              undefined,
-              deliveryType,
-              pickupPoint ?? undefined
-            )
+        const testResult = await createOrderAction({
+          userId: user?.id || '',
+          reference: orderReference,
+          total: finalTotal,
+          items: orderItems,
+          paymentMethod: 'test',
+          shippingCost: calculatedShippingCost,
+          comment: commentValue,
+          retraitModeForLog: retraitMode,
+          deliveryType,
+          pickupPoint,
+        })
+        if (!testResult.ok) {
+          throw new Error(testResult.error)
+        }
+        const order = testResult.order
 
         // Enregistrer l'utilisation du code promo APRÈS création de la commande
         if (promoValidation && promoValidation.valid && promoCode && order?.id && user?.id) {
@@ -1530,31 +1521,22 @@ export default function CheckoutPage() {
                                   if (boxtalParcelPoint) paypalPickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
                                   else if (chronopostRelaisPoint) paypalPickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
                                 }
-                                const order = commentValue
-                                  ? await createOrder(
-                                      user?.id || '',
-                                      currentRef,
-                                      finalTotal,
-                                      orderItems,
-                                      'paypal',
-                                      calculatedShippingCost,
-                                      commentValue,
-                                      undefined,
-                                      paypalDeliveryType,
-                                      paypalPickupPoint ?? undefined
-                                    )
-                                  : await createOrder(
-                                      user?.id || '',
-                                      currentRef,
-                                      finalTotal,
-                                      orderItems,
-                                      'paypal',
-                                      calculatedShippingCost,
-                                      undefined,
-                                      undefined,
-                                      paypalDeliveryType,
-                                      paypalPickupPoint ?? undefined
-                                    )
+                                const paypalResult = await createOrderAction({
+                                  userId: user?.id || '',
+                                  reference: currentRef,
+                                  total: finalTotal,
+                                  items: orderItems,
+                                  paymentMethod: 'paypal',
+                                  shippingCost: calculatedShippingCost,
+                                  comment: commentValue,
+                                  retraitModeForLog: retraitMode,
+                                  deliveryType: paypalDeliveryType,
+                                  pickupPoint: paypalPickupPoint,
+                                })
+                                if (!paypalResult.ok) {
+                                  throw new Error(paypalResult.error)
+                                }
+                                const order = paypalResult.order
 
                                 if (order.id) {
                                   // Enregistrer l'utilisation du code promo APRÈS création de la commande
@@ -1844,31 +1826,22 @@ export default function CheckoutPage() {
                             if (boxtalParcelPoint) paypal2PickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
                             else if (chronopostRelaisPoint) paypal2PickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
                           }
-                          const order = commentValue
-                            ? await createOrder(
-                                user?.id || '',
-                                currentRef,
-                                finalTotal,
-                                orderItems,
-                                'paypal',
-                                calculatedShippingCost,
-                                commentValue,
-                                undefined,
-                                paypal2DeliveryType,
-                                paypal2PickupPoint ?? undefined
-                              )
-                            : await createOrder(
-                                user?.id || '',
-                                currentRef,
-                                finalTotal,
-                                orderItems,
-                                'paypal',
-                                calculatedShippingCost,
-                                undefined,
-                                undefined,
-                                paypal2DeliveryType,
-                                paypal2PickupPoint ?? undefined
-                              )
+                          const paypal2Result = await createOrderAction({
+                            userId: user?.id || '',
+                            reference: currentRef,
+                            total: finalTotal,
+                            items: orderItems,
+                            paymentMethod: 'paypal',
+                            shippingCost: calculatedShippingCost,
+                            comment: commentValue,
+                            retraitModeForLog: retraitMode,
+                            deliveryType: paypal2DeliveryType,
+                            pickupPoint: paypal2PickupPoint,
+                          })
+                          if (!paypal2Result.ok) {
+                            throw new Error(paypal2Result.error)
+                          }
+                          const order = paypal2Result.order
 
                           if (order.id) {
                             // Enregistrer l'utilisation du code promo

@@ -7,7 +7,8 @@ import { CheckCircle2, Package, Home, Info } from 'lucide-react'
 import { parseMoneticoReturn } from '@/lib/monetico'
 import { useCart } from '@/contexts/CartContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { createOrder, updateOrderStatus, getOrderByReference, type OrderItem, type OrderPickupPoint } from '@/lib/revenue-supabase'
+import { updateOrderStatus, getOrderByReference, type OrderItem, type OrderPickupPoint } from '@/lib/revenue-supabase'
+import { createOrderAction } from '@/app/actions/create-order'
 import { buildOrderPickupPointFromBoxtal, buildOrderPickupPointFromChronopost } from '@/lib/order-pickup-point'
 import { loadProducts } from '@/lib/products-manager'
 import { getPromoCodeByCode, recordPromoCodeUsageAsync } from '@/lib/promo-codes-manager'
@@ -196,11 +197,15 @@ function PaymentSuccessContent() {
               produit: item.produit
             }))
 
-            const moneticoDeliveryType =
-              pendingOrder?.retraitMode === 'chronopost-relais' ? 'relay'
-              : pendingOrder?.retraitMode === 'livraison' ? 'home'
-              : pendingOrder?.retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
-              : pendingOrder?.retraitMode === 'amicale-blanc' ? 'pickup_apb'
+            // Mapping retraitMode → delivery_type (point relais => relay + pickup_point obligatoire)
+            const retraitModeRaw = pendingOrder?.retraitMode != null ? String(pendingOrder.retraitMode).trim() : ''
+            const hasRelayPoint = !!(pendingOrder?.chronopostRelaisPoint || pendingOrder?.boxtalParcelPoint)
+            let moneticoDeliveryType: 'relay' | 'home' | 'pickup_wavignies' | 'pickup_apb' =
+              retraitModeRaw === 'chronopost-relais' ? 'relay'
+              : retraitModeRaw === 'livraison' ? 'home'
+              : retraitModeRaw === 'wavignies-rdv' ? 'pickup_wavignies'
+              : retraitModeRaw === 'amicale-blanc' ? 'pickup_apb'
+              : hasRelayPoint ? 'relay'
               : 'home'
             let moneticoPickupPoint: OrderPickupPoint | null = null
             if (moneticoDeliveryType === 'relay') {
@@ -210,20 +215,30 @@ function PaymentSuccessContent() {
                 moneticoPickupPoint = buildOrderPickupPointFromChronopost(pendingOrder.chronopostRelaisPoint)
               }
             }
+            if (moneticoDeliveryType === 'relay' && !moneticoPickupPoint) {
+              console.error('[payment/success] Relay sans pickup_point — retraitMode:', retraitModeRaw, 'hasRelayPoint:', hasRelayPoint)
+              setLoading(false)
+              return
+            }
 
-            // Créer la commande dans Supabase ou localStorage
-            const order = await createOrder(
-              user?.id,
-              internalReference,
+            const result = await createOrderAction({
+              userId: user?.id,
+              reference: internalReference,
               total,
-              orderItems,
-              'monetico',
-              typeof pendingOrder?.shippingCost === 'number' ? pendingOrder.shippingCost : undefined,
-              undefined,
+              items: orderItems,
+              paymentMethod: 'monetico',
+              shippingCost: typeof pendingOrder?.shippingCost === 'number' ? pendingOrder.shippingCost : undefined,
               moneticoReference,
-              moneticoDeliveryType,
-              moneticoPickupPoint ?? undefined
-            )
+              retraitModeForLog: retraitModeRaw || (pendingOrder?.retraitMode ?? null),
+              deliveryType: moneticoDeliveryType,
+              pickupPoint: moneticoPickupPoint,
+            })
+            if (!result.ok) {
+              console.error('[payment/success] createOrderAction:', result.error)
+              setLoading(false)
+              return
+            }
+            const order = result.order
 
             // Enregistrer l'utilisation du code promo APRÈS création de la commande
             if (order?.id && user?.id && pendingOrder?.promoCode && pendingOrder?.discount != null) {

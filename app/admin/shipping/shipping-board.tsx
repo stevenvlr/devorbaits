@@ -231,15 +231,6 @@ function OrderCard({
   onFetchOffers: () => void
   onCreateLabel: () => void
 }) {
-  // DEBUG temporaire — à retirer
-  console.log('[ADMIN SHIPPING DEBUG]', {
-    orderId: order.id,
-    orderDeliveryType: order.delivery_type,
-    orderPickupPoint: order.pickup_point,
-    draftDeliveryType: draft?.delivery_type,
-    draftPickupPoint: draft?.pickup_point,
-  })
-
   const recipient = draft?.recipient
   const orderDeliveryType = order.delivery_type ?? draft?.delivery_type ?? ''
   const pickupPoint = draft?.pickup_point ?? (orderDeliveryType === 'relay' ? order.pickup_point : null)
