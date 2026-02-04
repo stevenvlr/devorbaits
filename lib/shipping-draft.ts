@@ -31,7 +31,11 @@ export type PickupPoint = {
   country_code: string
 }
 
+/** Types de livraison pour lesquels on crée un draft (expédition). Retraits = pas de draft. */
 type DeliveryType = 'home' | 'relay'
+
+/** Valeurs possibles de orders.delivery_type (4 modes) */
+type OrderDeliveryTypeRaw = 'relay' | 'home' | 'pickup_wavignies' | 'pickup_apb'
 
 /** Commande telle que lue pour le draft (colonnes utilisées) */
 type OrderForDraft = {
@@ -39,7 +43,7 @@ type OrderForDraft = {
   user_id?: string | null
   billing_address?: unknown
   total_weight_g?: number | null
-  delivery_type?: DeliveryType | null
+  delivery_type?: OrderDeliveryTypeRaw | null
   pickup_point?: PickupPoint | null
 }
 
@@ -197,10 +201,15 @@ export async function createOrUpdateShippingDraft(orderId: string): Promise<Ship
     )
   }
 
+  // Retraits sur place : pas d'expédition, pas de draft (orders.delivery_type est la source de vérité)
+  const raw = orderForDraft.delivery_type
+  if (raw === 'pickup_wavignies' || raw === 'pickup_apb') {
+    console.info('[createOrUpdateShippingDraft] Retrait sur place (delivery_type)', raw, orderId)
+    return { skipped: true, reason: 'pickup' }
+  }
+
   const delivery_type: DeliveryType =
-    orderForDraft.delivery_type === 'relay' || orderForDraft.delivery_type === 'home'
-      ? orderForDraft.delivery_type
-      : 'home'
+    raw === 'relay' || raw === 'home' ? raw : 'home'
 
   let recipient = await getRecipientForOrder(orderForDraft) as Recipient
   const { recipient: recipientWithCountry, country_code } = ensureCountryCode(
@@ -208,16 +217,6 @@ export async function createOrUpdateShippingDraft(orderId: string): Promise<Ship
     orderForDraft.billing_address
   )
   recipient = recipientWithCountry
-
-  const a = (recipient.address1 || '').toLowerCase()
-  if (
-    a.includes('retrait sur rendez-vous') ||
-    a.includes('wavignies') ||
-    a.startsWith('retrait sur')
-  ) {
-    console.info('[createOrUpdateShippingDraft] Retrait sur place, pas de draft', orderId)
-    return { skipped: true, reason: 'pickup' }
-  }
 
   validateRecipient(recipient, delivery_type)
 

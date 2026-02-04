@@ -30,9 +30,12 @@ export interface Order {
   billing_address?: any
   items?: OrderItem[] // Les items sont maintenant stockés directement dans orders
   comment?: string // Commentaire de commande (optionnel, max 500 caractères)
-  delivery_type?: 'home' | 'relay'
+  delivery_type?: 'relay' | 'home' | 'pickup_wavignies' | 'pickup_apb'
   pickup_point?: OrderPickupPoint | null
 }
+
+/** Valeurs valides pour orders.delivery_type */
+export type OrderDeliveryType = 'relay' | 'home' | 'pickup_wavignies' | 'pickup_apb'
 
 export interface OrderItem {
   id: string
@@ -55,7 +58,8 @@ export interface OrderItem {
 
 /**
  * Crée une commande.
- * Si deliveryType === 'relay', pickupPoint est obligatoire (sinon erreur côté serveur).
+ * delivery_type: relay | home | pickup_wavignies | pickup_apb.
+ * pickup_point obligatoire uniquement si deliveryType === 'relay'.
  */
 export async function createOrder(
   userId: string | undefined,
@@ -66,10 +70,11 @@ export async function createOrder(
   shippingCost?: number,
   comment?: string,
   moneticoReference?: string,
-  deliveryType?: 'home' | 'relay',
+  deliveryType?: OrderDeliveryType,
   pickupPoint?: OrderPickupPoint | null
 ): Promise<Order> {
-  if (deliveryType === 'relay') {
+  const dt = deliveryType ?? 'home'
+  if (dt === 'relay') {
     if (
       pickupPoint == null ||
       typeof pickupPoint !== 'object' ||
@@ -84,6 +89,9 @@ export async function createOrder(
       )
     }
   }
+  // pickup_wavignies / pickup_apb / home => pickup_point doit être null
+  const pickup_point = dt === 'relay' ? pickupPoint : null
+  const delivery_type = dt
 
   const orderIdForLocalStorage = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
@@ -109,9 +117,6 @@ export async function createOrder(
           saveur: item.saveur,
           produit: item.produit
         }))
-
-        const delivery_type = deliveryType ?? 'home'
-        const pickup_point = delivery_type === 'relay' ? pickupPoint : null
 
         const orderDataToInsertBase = {
           user_id: userId,

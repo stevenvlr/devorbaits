@@ -827,8 +827,13 @@ export default function CheckoutPage() {
           produit: item.produit
         }))
 
-        // delivery_type + pickup_point pour orders (relay => point relais, sinon home)
-        const deliveryType: 'home' | 'relay' = retraitMode === 'chronopost-relais' ? 'relay' : 'home'
+        // delivery_type: relay | home | pickup_wavignies | pickup_apb
+        const deliveryType =
+          retraitMode === 'chronopost-relais' ? 'relay'
+          : retraitMode === 'livraison' ? 'home'
+          : retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
+          : retraitMode === 'amicale-blanc' ? 'pickup_apb'
+          : 'home'
         let pickupPoint: OrderPickupPoint | null = null
         if (deliveryType === 'relay') {
           if (boxtalParcelPoint) {
@@ -1514,7 +1519,12 @@ export default function CheckoutPage() {
 
                                 const currentRef = orderReference || paypalReference
                                 const commentValue = orderComment.trim() || undefined
-                                const paypalDeliveryType: 'home' | 'relay' = retraitMode === 'chronopost-relais' ? 'relay' : 'home'
+                                const paypalDeliveryType =
+                                  retraitMode === 'chronopost-relais' ? 'relay'
+                                  : retraitMode === 'livraison' ? 'home'
+                                  : retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
+                                  : retraitMode === 'amicale-blanc' ? 'pickup_apb'
+                                  : 'home'
                                 let paypalPickupPoint: OrderPickupPoint | null = null
                                 if (paypalDeliveryType === 'relay') {
                                   if (boxtalParcelPoint) paypalPickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
@@ -1823,7 +1833,12 @@ export default function CheckoutPage() {
 
                           const currentRef = orderReference || paypalReference
                           const commentValue = orderComment.trim() || undefined
-                          const paypal2DeliveryType: 'home' | 'relay' = retraitMode === 'chronopost-relais' ? 'relay' : 'home'
+                          const paypal2DeliveryType =
+                            retraitMode === 'chronopost-relais' ? 'relay'
+                            : retraitMode === 'livraison' ? 'home'
+                            : retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
+                            : retraitMode === 'amicale-blanc' ? 'pickup_apb'
+                            : 'home'
                           let paypal2PickupPoint: OrderPickupPoint | null = null
                           if (paypal2DeliveryType === 'relay') {
                             if (boxtalParcelPoint) paypal2PickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)

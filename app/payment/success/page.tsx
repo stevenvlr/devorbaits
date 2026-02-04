@@ -196,7 +196,12 @@ function PaymentSuccessContent() {
               produit: item.produit
             }))
 
-            const moneticoDeliveryType: 'home' | 'relay' = pendingOrder?.retraitMode === 'chronopost-relais' ? 'relay' : 'home'
+            const moneticoDeliveryType =
+              pendingOrder?.retraitMode === 'chronopost-relais' ? 'relay'
+              : pendingOrder?.retraitMode === 'livraison' ? 'home'
+              : pendingOrder?.retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
+              : pendingOrder?.retraitMode === 'amicale-blanc' ? 'pickup_apb'
+              : 'home'
             let moneticoPickupPoint: OrderPickupPoint | null = null
             if (moneticoDeliveryType === 'relay') {
               if (pendingOrder?.boxtalParcelPoint) {

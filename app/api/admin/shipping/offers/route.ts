@@ -40,6 +40,15 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createSupabaseAdmin()
+  const { data: order } = await supabase
+    .from('orders')
+    .select('delivery_type')
+    .eq('id', orderId)
+    .maybeSingle()
+  if (order?.delivery_type === 'pickup_wavignies' || order?.delivery_type === 'pickup_apb') {
+    return NextResponse.json({ error: 'Pickup on site: no shipping' }, { status: 400 })
+  }
+
   const { data: draft, error: draftError } = await (supabase as any)
     .from('shipping_drafts')
     .select('order_id, delivery_type, pickup_point')

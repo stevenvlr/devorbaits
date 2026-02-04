@@ -1,20 +1,38 @@
 'use client'
 
 /**
- * Tableau admin expédition : une card par commande, offres transporteurs, création d’étiquettes.
+ * Tableau admin expédition : une card par commande, offres transporteurs, création d'étiquettes.
  * Utilise des Server Actions (aucun secret côté client).
  * TODO: intégration Boxtal plus tard.
  */
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Truck, MapPin, Package } from 'lucide-react'
 import type { InitialRow, ShippingDraftForAdmin, OrderRowForShipping } from './types'
-import { getOffersAction, createLabelAction } from './actions'
+import { getOffersAction, createLabelAction, fixOrderToRelayAction } from './actions'
 
 const FALLBACK = '—'
 
 type Offer = { offer_code: string; label: string; price?: number }
 
 const RELAY_PICKUP_ERROR = 'Relay requires pickup_point'
+const NO_SHIPPING_CODE = 'NO_SHIPPING'
+
+/** Libellé du mode de livraison (orders.delivery_type) */
+function deliveryTypeLabel(deliveryType: string | null | undefined): string {
+  switch (deliveryType) {
+    case 'relay':
+      return 'Point relais'
+    case 'home':
+      return 'Domicile'
+    case 'pickup_wavignies':
+      return 'Retrait Wavignies'
+    case 'pickup_apb':
+      return 'Retrait APB'
+    default:
+      return FALLBACK
+  }
+}
 
 export default function ShippingBoard({ initialRows }: { initialRows: InitialRow[] }) {
   const [offersByOrderId, setOffersByOrderId] = useState<Record<string, { deliveryType: string; offers: Offer[] }>>({})
@@ -23,7 +41,9 @@ export default function ShippingBoard({ initialRows }: { initialRows: InitialRow
   const [loadingLabel, setLoadingLabel] = useState<Record<string, boolean>>({})
   const [messageByOrderId, setMessageByOrderId] = useState<Record<string, { type: 'success' | 'error'; text: string } | undefined>>({})
   const [pickupPointMissingByOrderId, setPickupPointMissingByOrderId] = useState<Record<string, boolean>>({})
+  const [fixingOrderId, setFixingOrderId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
+  const router = useRouter()
 
   function safe(value: unknown): string {
     if (value == null) return FALLBACK
@@ -49,6 +69,11 @@ export default function ShippingBoard({ initialRows }: { initialRows: InitialRow
           if (!result.offers.length) {
             setSelectedOfferByOrderId((prev) => ({ ...prev, [orderId]: '' }))
           }
+        } else if (result.code === NO_SHIPPING_CODE) {
+          setMessageByOrderId((prev) => ({
+            ...prev,
+            [orderId]: { type: 'success', text: 'Retrait sur place — pas d’expédition.' },
+          }))
         } else {
           const isRelayPickupError = result.error === RELAY_PICKUP_ERROR || result.error.toLowerCase().includes('pickup_point')
           setPickupPointMissingByOrderId((prev) => ({ ...prev, [orderId]: isRelayPickupError }))
@@ -93,6 +118,11 @@ export default function ShippingBoard({ initialRows }: { initialRows: InitialRow
             ...prev,
             [orderId]: { type: 'success', text: msg },
           }))
+        } else if (result.code === NO_SHIPPING_CODE) {
+          setMessageByOrderId((prev) => ({
+            ...prev,
+            [orderId]: { type: 'success', text: 'Retrait sur place — pas d’expédition.' },
+          }))
         } else {
           const isRelayPickupError = result.error === RELAY_PICKUP_ERROR || result.error.toLowerCase().includes('pickup_point')
           setPickupPointMissingByOrderId((prev) => ({ ...prev, [orderId]: isRelayPickupError }))
@@ -108,6 +138,26 @@ export default function ShippingBoard({ initialRows }: { initialRows: InitialRow
         }))
       } finally {
         setLoadingLabel((prev) => ({ ...prev, [orderId]: false }))
+      }
+    })
+  }
+
+  const handleFixToRelay = (orderId: string) => {
+    setFixingOrderId(orderId)
+    setMessageByOrderId((prev) => ({ ...prev, [orderId]: undefined }))
+    startTransition(async () => {
+      try {
+        const result = await fixOrderToRelayAction(orderId)
+        if (result.ok) {
+          setMessageByOrderId((prev) => ({ ...prev, [orderId]: { type: 'success', text: 'Commande corrigée en point relais.' } }))
+          router.refresh()
+        } else {
+          setMessageByOrderId((prev) => ({ ...prev, [orderId]: { type: 'error', text: result.error } }))
+        }
+      } catch (e) {
+        setMessageByOrderId((prev) => ({ ...prev, [orderId]: { type: 'error', text: e instanceof Error ? e.message : 'Erreur' } }))
+      } finally {
+        setFixingOrderId(null)
       }
     })
   }
@@ -132,6 +182,13 @@ export default function ShippingBoard({ initialRows }: { initialRows: InitialRow
             loadingLabel={loadingLabel[order.id]}
             message={messageByOrderId[order.id]}
             pickupPointMissing={pickupPointMissingByOrderId[order.id]}
+            showFixToRelay={
+              order.delivery_type != null
+              && order.delivery_type !== 'relay'
+              && (order.pickup_point != null || draft?.delivery_type === 'relay')
+            }
+            onFixToRelay={() => handleFixToRelay(order.id)}
+            fixingRelay={fixingOrderId === order.id}
             onFetchOffers={() => fetchOffers(order.id)}
             onCreateLabel={() => createLabel(order.id)}
           />
@@ -152,6 +209,9 @@ function OrderCard({
   loadingLabel,
   message,
   pickupPointMissing,
+  showFixToRelay,
+  onFixToRelay,
+  fixingRelay,
   onFetchOffers,
   onCreateLabel,
 }: {
@@ -165,12 +225,17 @@ function OrderCard({
   loadingLabel: boolean
   message?: { type: 'success' | 'error'; text: string }
   pickupPointMissing?: boolean
+  showFixToRelay?: boolean
+  onFixToRelay?: () => void
+  fixingRelay?: boolean
   onFetchOffers: () => void
   onCreateLabel: () => void
 }) {
   const recipient = draft?.recipient
-  const deliveryType = draft?.delivery_type ?? ''
-  const pickupPoint = draft?.pickup_point
+  const orderDeliveryType = order.delivery_type ?? draft?.delivery_type ?? ''
+  const pickupPoint = draft?.pickup_point ?? (orderDeliveryType === 'relay' ? order.pickup_point : null)
+  const isPickupOnSite = orderDeliveryType === 'pickup_wavignies' || orderDeliveryType === 'pickup_apb'
+  const hasIncoherence = order.pickup_point != null && order.delivery_type != null && order.delivery_type !== 'relay'
 
   return (
     <div className="bg-noir-800/50 border border-noir-700 rounded-lg p-6">
@@ -209,13 +274,13 @@ function OrderCard({
             <Truck className="w-4 h-4" />
             <span className="text-sm font-medium">Livraison</span>
           </div>
-          <p className="text-white">Type : {deliveryType || FALLBACK}</p>
-          {deliveryType === 'relay' && pickupPoint != null && (
+          <p className="text-white">Type : {deliveryTypeLabel(orderDeliveryType)}</p>
+          {orderDeliveryType === 'relay' && pickupPoint != null && (
             <pre className="mt-2 text-xs text-gray-300 bg-noir-800 p-2 rounded overflow-auto max-h-32">
               {JSON.stringify(pickupPoint, null, 2)}
             </pre>
           )}
-          {deliveryType === 'relay' && pickupPoint == null && (
+          {orderDeliveryType === 'relay' && pickupPoint == null && (
             <p className="text-amber-500 text-sm mt-1">Point relais manquant (obligatoire pour relay).</p>
           )}
           {pickupPointMissing && (
@@ -223,9 +288,29 @@ function OrderCard({
               PICKUP_POINT MANQUANT
             </span>
           )}
+          {hasIncoherence && (
+            <p className="mt-2 text-amber-500 text-sm">Incohérence : pickup_point renseigné mais mode ≠ relay.</p>
+          )}
+          {showFixToRelay && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => onFixToRelay?.()}
+                disabled={fixingRelay}
+                className="px-3 py-2 rounded-lg bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 disabled:opacity-50 text-sm font-medium"
+              >
+                {fixingRelay ? 'Correction…' : 'Corriger en POINT RELAIS'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
+      {isPickupOnSite ? (
+        <div className="border-t border-noir-700 pt-4">
+          <p className="text-gray-400 text-sm">Retrait sur place — aucune expédition à créer.</p>
+        </div>
+      ) : (
       <div className="border-t border-noir-700 pt-4">
         <div className="flex items-center gap-2 text-gray-400 mb-2">
           <Package className="w-4 h-4" />
@@ -270,6 +355,7 @@ function OrderCard({
           </div>
         )}
       </div>
+      )}
 
       {message && (
         <div

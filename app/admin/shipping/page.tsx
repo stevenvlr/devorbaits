@@ -14,7 +14,7 @@ export default async function AdminShippingPage() {
 
   const { data: orders, error: ordersError } = await supabase
     .from('orders')
-    .select('id, reference, created_at, user_id')
+    .select('id, reference, created_at, user_id, delivery_type, pickup_point')
     .eq('status', 'preparing')
     .order('created_at', { ascending: false })
 
@@ -71,7 +71,7 @@ export default async function AdminShippingPage() {
     }
   }
 
-  const initialRows: InitialRow[] = orderList.map((order: { id: string; reference: string; created_at: string; user_id?: string | null }) => {
+  const initialRows: InitialRow[] = orderList.map((order: { id: string; reference: string; created_at: string; user_id?: string | null; delivery_type?: string | null; pickup_point?: unknown }) => {
     const profile = order.user_id ? profiles[order.user_id] : undefined
     const user_name = profile?.nom || profile?.prenom
       ? `${profile.nom ?? ''} ${profile.prenom ?? ''}`.trim()
@@ -83,6 +83,8 @@ export default async function AdminShippingPage() {
         created_at: order.created_at,
         user_email: profile?.email ?? null,
         user_name: user_name ?? null,
+        delivery_type: order.delivery_type ?? null,
+        pickup_point: order.pickup_point ?? null,
       },
       draft: draftByOrderId[order.id] ?? null,
     }
