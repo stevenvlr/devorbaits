@@ -6,7 +6,7 @@ import { createSupabaseAdmin } from '@/lib/supabase/admin'
 import ShippingBoard from './shipping-board'
 import type { InitialRow, ShippingDraftForAdmin } from './types'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
 
 export default async function AdminShippingPage() {

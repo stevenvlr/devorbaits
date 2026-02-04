@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { assertInternalSecret } from '@/lib/internal-secret'
 import { createSupabaseAdmin } from '@/lib/supabase/admin'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 type DeliveryType = 'home' | 'relay'
 
