@@ -2,7 +2,23 @@
 
 Ce projet utilise **@cloudflare/next-on-pages** pour que les routes API (`/api/*`) fonctionnent sur Cloudflare Pages (Functions).
 
-## Commandes à lancer
+## Déployer depuis Windows (recommandé)
+
+Sur Windows, `npm run build:pages` échoue car **next-on-pages** utilise `bash`. Utilise l’**intégration Git** Cloudflare :
+
+1. **Pousser le code** sur ton dépôt Git (GitHub, GitLab, etc.).
+2. **Cloudflare Dashboard** → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
+3. Choisir le dépôt et la branche (ex. `main`).
+4. **Build configuration** :
+   - **Build command** : `npm run build:pages`
+   - **Build output directory** : `.vercel/output/static`
+   - **Root directory** : laisser vide (ou `/` si le projet est dans un sous-dossier).
+5. **Variables d’environnement** : ajouter celles listées plus bas (Production + Preview si besoin).
+6. **Save and Deploy** : Cloudflare build et déploie sur Linux automatiquement.
+
+À chaque **push** sur la branche connectée, un nouveau déploiement est lancé.
+
+## Commandes à lancer (Linux / Mac / WSL)
 
 - **Installer les dépendances** (inclut `@cloudflare/next-on-pages` en devDependency) :
   ```bash
