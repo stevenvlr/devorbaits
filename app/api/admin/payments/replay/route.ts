@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { createOrderAction } from '@/app/actions/create-order'
 import { sendNewOrderNotification } from '@/lib/telegram-notifications'
+import type { OrderPickupPoint } from '@/lib/revenue-supabase'
 
 export const runtime = 'edge'
 
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const pickupPoint = payload.pickupPoint
+  const pickupPoint: OrderPickupPoint | null = payload.pickupPoint
     ? {
         id: payload.pickupPoint.id,
         network: payload.pickupPoint.network ?? '',
