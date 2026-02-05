@@ -54,6 +54,22 @@ export type PayPalOrderPayload = {
   customerEmail?: string
 }
 
+function normalizePickupPoint(
+  p: PayPalOrderPayload['pickupPoint']
+): import('@/lib/revenue-supabase').OrderPickupPoint | null {
+  if (!p) return null
+  return {
+    id: p.id,
+    network: p.network ?? '',
+    name: p.name ?? '',
+    address1: p.address1,
+    address2: p.address2,
+    zip: p.zip,
+    city: p.city,
+    country_code: p.country_code,
+  }
+}
+
 // Cette route capture un paiement PayPal après approbation
 export async function POST(request: NextRequest) {
   try {
@@ -269,7 +285,7 @@ export async function POST(request: NextRequest) {
             comment: payload.comment?.trim() || undefined,
             retraitModeForLog: payload.retraitMode ?? null,
             deliveryType: payload.deliveryType,
-            pickupPoint: payload.pickupPoint ?? null,
+            pickupPoint: normalizePickupPoint(payload.pickupPoint),
           })
           if (result.ok) {
             createdOrder = result.order
@@ -365,7 +381,7 @@ export async function POST(request: NextRequest) {
             comment: orderPayload.comment?.trim() || undefined,
             retraitModeForLog: orderPayload.retraitMode ?? null,
             deliveryType: orderPayload.deliveryType,
-            pickupPoint: orderPayload.pickupPoint ?? null,
+            pickupPoint: normalizePickupPoint(orderPayload.pickupPoint),
           })
           if (result.ok) {
             createdOrder = result.order

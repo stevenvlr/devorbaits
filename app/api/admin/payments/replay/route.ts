@@ -141,6 +141,19 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  const pickupPoint = payload.pickupPoint
+    ? {
+        id: payload.pickupPoint.id,
+        network: payload.pickupPoint.network ?? '',
+        name: payload.pickupPoint.name ?? '',
+        address1: payload.pickupPoint.address1,
+        address2: payload.pickupPoint.address2,
+        zip: payload.pickupPoint.zip,
+        city: payload.pickupPoint.city,
+        country_code: payload.pickupPoint.country_code,
+      }
+    : null
+
   const result = await createOrderAction({
     userId: payload.userId ?? undefined,
     reference: payload.reference,
@@ -151,7 +164,7 @@ export async function POST(request: NextRequest) {
     comment: payload.comment?.trim() || undefined,
     retraitModeForLog: payload.retraitMode ?? null,
     deliveryType: payload.deliveryType,
-    pickupPoint: payload.pickupPoint ?? null,
+    pickupPoint,
   })
 
   if (!result.ok) {
@@ -177,9 +190,10 @@ export async function POST(request: NextRequest) {
     .eq('id', intent.id)
 
   try {
+    const orderTotal = typeof result.order.total === 'number' ? result.order.total : payload.total ?? 0
     await sendNewOrderNotification({
       reference: payload.reference,
-      total: result.order.total ?? payload.total,
+      total: orderTotal,
       itemCount: payload.items.length,
       customerName: payload.customerName,
       customerEmail: payload.customerEmail,
