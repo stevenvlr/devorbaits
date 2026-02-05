@@ -13,7 +13,10 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
 
-/** Payload stocké dans payment_intents (même forme que capture-order) */
+/** Unité de montant pour PayPal (currency_code + value string 2 décimales) */
+export type PayPalUnitAmount = { currency_code: string; value: string }
+
+/** Payload stocké dans payment_intents (même forme que capture-order). Pour PayPal, items doit avoir name + quantity + unit_amount. */
 export type PayPalOrderPayload = {
   reference: string
   items: Array<{
@@ -21,6 +24,10 @@ export type PayPalOrderPayload = {
     variant_id?: string
     quantity: number
     price: number
+    /** Nom affiché dans PayPal (obligatoire pour create-order) */
+    name?: string
+    /** Montant unitaire pour PayPal (obligatoire pour create-order) */
+    unit_amount?: PayPalUnitAmount
     arome?: string
     taille?: string
     couleur?: string
@@ -48,6 +55,10 @@ export type PayPalOrderPayload = {
   customerEmail?: string
 }
 
+const PAYPAL_ITEM_NAME_MAX = 127
+const PAYPAL_ITEM_SKU_MAX = 127
+const PAYPAL_ITEMS_MAX = 100
+
 // Cette route crée une commande PayPal côté serveur et enregistre l'intent (payload) pour capture
 export async function POST(request: NextRequest) {
   try {
@@ -65,6 +76,23 @@ export async function POST(request: NextRequest) {
     if (amount == null || itemTotal == null || shippingTotal == null || !reference) {
       return NextResponse.json(
         { error: 'Montants (amount, itemTotal, shippingTotal) et référence requis' },
+        { status: 400 }
+      )
+    }
+
+    // Exiger orderPayload avec items non vides pour afficher le détail dans PayPal
+    if (!orderPayload || !Array.isArray(orderPayload.items) || orderPayload.items.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            'Le panier est vide ou les détails de la commande sont incomplets. Veuillez actualiser la page et réessayer.',
+        },
+        { status: 400 }
+      )
+    }
+    if (orderPayload.items.length > PAYPAL_ITEMS_MAX) {
+      return NextResponse.json(
+        { error: `Trop d'articles (max ${PAYPAL_ITEMS_MAX}). Réduisez le panier.` },
         { status: 400 }
       )
     }
@@ -105,6 +133,48 @@ export async function POST(request: NextRequest) {
         {
           error:
             'Montants incohérents: amount doit être égal à itemTotal + shippingTotal (arrondi 2 décimales)',
+        },
+        { status: 400 }
+      )
+    }
+
+    // Construire les items PayPal (name, quantity, unit_amount, sku) et vérifier item_total
+    const paypalItems: Array<{ name: string; quantity: string; unit_amount: { currency_code: string; value: string }; sku?: string }> = []
+    let sumItemTotal = 0
+    for (const it of orderPayload.items) {
+      const qty = Math.max(1, Math.min(999999, Math.floor(Number(it.quantity)) || 1))
+      const unitValue = it.unit_amount?.value != null
+        ? parseMoney(it.unit_amount.value)
+        : Number(it.price)
+      const unitPrice = Number.isFinite(unitValue) ? round2(unitValue) : 0
+      const valueStr = unitPrice.toFixed(2)
+      const name =
+        typeof it.name === 'string' && it.name.trim() !== ''
+          ? it.name.trim().slice(0, PAYPAL_ITEM_NAME_MAX)
+          : (it.produit && it.produit.trim() !== '' ? it.produit.trim() : 'Article').slice(0, PAYPAL_ITEM_NAME_MAX)
+      const sku =
+        typeof it.product_id === 'string' && it.product_id.trim() !== ''
+          ? it.product_id.trim().slice(0, PAYPAL_ITEM_SKU_MAX)
+          : undefined
+      sumItemTotal += round2(unitPrice * qty)
+      paypalItems.push({
+        name,
+        quantity: String(qty),
+        unit_amount: { currency_code: currency, value: valueStr },
+        ...(sku && { sku }),
+      })
+    }
+    const computedItemTotal = round2(sumItemTotal)
+    if (Math.abs(computedItemTotal - round2(numericItemTotal)) > 0.01) {
+      console.error('❌ PayPal create-order: item_total incohérent avec items', {
+        reference,
+        fromItems: computedItemTotal,
+        provided: round2(numericItemTotal),
+      })
+      return NextResponse.json(
+        {
+          error:
+            'Le total des articles ne correspond pas. Veuillez actualiser la page et réessayer.',
         },
         { status: 400 }
       )
@@ -161,20 +231,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Créer la commande PayPal
+    // Créer la commande PayPal (items = détail produits affichés dans PayPal)
     const orderData = {
       intent: 'CAPTURE',
       purchase_units: [
         {
           reference_id: reference,
           description: `Commande ${reference}`,
+          items: paypalItems,
           amount: {
             currency_code: currency,
             value: computedTotal.toFixed(2),
             breakdown: {
               item_total: {
                 currency_code: currency,
-                value: round2(numericItemTotal).toFixed(2),
+                value: computedItemTotal.toFixed(2),
               },
               shipping: {
                 currency_code: currency,
@@ -215,10 +286,11 @@ export async function POST(request: NextRequest) {
     const order = await orderResponse.json()
 
     // Stocker l'intent avec le payload pour création de commande à la capture (indépendant du navigateur)
+    let intentId: string | null = null
     if (orderPayload?.reference && Array.isArray(orderPayload.items) && orderPayload.items.length > 0) {
       try {
         const supabase = createSupabaseAdmin()
-        const { error: intentError } = await supabase.from('payment_intents').upsert(
+        const { data: intentRow, error: intentError } = await supabase.from('payment_intents').upsert(
           {
             provider: 'paypal',
             paypal_order_id: order.id,
@@ -229,15 +301,18 @@ export async function POST(request: NextRequest) {
             processed_at: null,
           },
           { onConflict: 'paypal_order_id' }
-        )
+        ).select('id').single()
         if (intentError) {
-          console.error('[PAYMENT_INTENT] Erreur upsert create-order:', intentError.message)
+          console.error('[PAYPAL_CREATE_ORDER] paypal_order_id=%s intentSaved=false error=%s', order.id, intentError.message)
         } else {
-          console.log('[PAYMENT_INTENT] Intent enregistré:', order.id)
+          intentId = intentRow?.id ?? null
+          console.log('[PAYPAL_CREATE_ORDER] paypal_order_id=%s intentId=%s', order.id, intentId ?? '(none)')
         }
       } catch (e) {
-        console.error('[PAYMENT_INTENT] Exception:', e)
+        console.error('[PAYPAL_CREATE_ORDER] paypal_order_id=%s intentSaved=false exception=%s', order.id, e instanceof Error ? e.message : String(e))
       }
+    } else {
+      console.log('[PAYPAL_CREATE_ORDER] paypal_order_id=%s intentSkipped=noPayload', order.id)
     }
 
     return NextResponse.json({

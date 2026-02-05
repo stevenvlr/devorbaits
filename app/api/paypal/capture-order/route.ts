@@ -19,7 +19,7 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
 
-/** Payload pour créer la commande côté serveur (évite perte si l'utilisateur ferme l'onglet) */
+/** Payload pour créer la commande côté serveur (évite perte si l'utilisateur ferme l'onglet). items peut inclure name/unit_amount pour PayPal. */
 export type PayPalOrderPayload = {
   reference: string
   items: Array<{
@@ -27,6 +27,8 @@ export type PayPalOrderPayload = {
     variant_id?: string
     quantity: number
     price: number
+    name?: string
+    unit_amount?: { currency_code: string; value: string }
     arome?: string
     taille?: string
     couleur?: string
@@ -257,6 +259,9 @@ export async function POST(request: NextRequest) {
         .eq('paypal_order_id', orderId)
         .maybeSingle()
 
+      const intentFound = !!intent
+      console.log('[PAYPAL_CAPTURE] paypal_order_id=%s intentFound=%s', orderId, intentFound)
+
       const payload = (intent?.payload as PayPalOrderPayload | null) ?? orderPayload ?? null
 
       // Idempotence : intent déjà traité → retourner la commande existante
@@ -268,7 +273,7 @@ export async function POST(request: NextRequest) {
           .single()
         if (existingOrder) {
           createdOrder = existingOrder as { id: string; reference: string; [k: string]: unknown }
-          console.log('[ORDER_CREATE] Idempotence: commande déjà créée', intent.order_id)
+          console.log('[PAYPAL_CAPTURE] paypal_order_id=%s intentFound=true orderCreated=false orderId=%s (idempotence)', orderId, intent.order_id)
         }
       }
       // Intent présent sans order_id : créer la commande depuis le payload
@@ -298,7 +303,7 @@ export async function POST(request: NextRequest) {
                 last_error: null,
               })
               .eq('id', intent.id)
-            console.log('[ORDER_CREATE] Commande créée depuis intent (PayPal):', result.order?.id, result.order?.reference)
+            console.log('[PAYPAL_CAPTURE] paypal_order_id=%s intentFound=true orderCreated=true orderId=%s', orderId, result.order.id)
             try {
               await sendNewOrderNotification({
                 reference: payload.reference,
@@ -331,7 +336,7 @@ export async function POST(request: NextRequest) {
                 processed_at: new Date().toISOString(),
               })
               .eq('id', intent.id)
-            console.error('[ORDER_CREATE] Échec création commande après capture PayPal:', result.error)
+            console.error('[PAYPAL_CAPTURE] paypal_order_id=%s intentFound=true orderCreated=false error=%s', orderId, result.error)
             return NextResponse.json(
               {
                 success: true,
@@ -354,7 +359,7 @@ export async function POST(request: NextRequest) {
               processed_at: new Date().toISOString(),
             })
             .eq('id', intent.id)
-          console.error('[ORDER_CREATE] Exception création commande après capture PayPal:', orderErr)
+          console.error('[PAYPAL_CAPTURE] paypal_order_id=%s intentFound=true orderCreated=false error=%s', orderId, msg)
           return NextResponse.json(
             {
               success: true,
@@ -369,6 +374,7 @@ export async function POST(request: NextRequest) {
       }
       // Pas d'intent : fallback sur orderPayload du body (ancien flux)
       else if (orderPayload?.reference && Array.isArray(orderPayload.items) && orderPayload.items.length > 0) {
+        console.log('[PAYPAL_CAPTURE] paypal_order_id=%s intentFound=false usingBodyPayload=true', orderId)
         const totalForOrder = orderTotal || round2(orderPayload.total ?? 0)
         try {
           const result = await createOrderAction({
@@ -385,7 +391,7 @@ export async function POST(request: NextRequest) {
           })
           if (result.ok) {
             createdOrder = result.order
-            console.log('[ORDER_CREATE] Commande créée depuis body (fallback):', result.order?.id)
+            console.log('[PAYPAL_CAPTURE] paypal_order_id=%s intentFound=false orderCreated=true orderId=%s (fallback)', orderId, result.order.id)
             try {
               await sendNewOrderNotification({
                 reference: orderPayload.reference,
@@ -410,6 +416,7 @@ export async function POST(request: NextRequest) {
               console.warn('⚠️ Notification Telegram (capture-order):', telegramErr)
             }
           } else {
+            console.error('[PAYPAL_CAPTURE] paypal_order_id=%s intentFound=false orderCreated=false error=%s', orderId, result.error)
             return NextResponse.json(
               {
                 success: true,
@@ -424,6 +431,7 @@ export async function POST(request: NextRequest) {
           }
         } catch (orderErr: unknown) {
           const msg = orderErr instanceof Error ? orderErr.message : String(orderErr)
+          console.error('[PAYPAL_CAPTURE] paypal_order_id=%s intentFound=false orderCreated=false error=%s', orderId, msg)
           return NextResponse.json(
             {
               success: true,

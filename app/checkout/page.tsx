@@ -7,7 +7,7 @@ import { ArrowLeft, MapPin, Truck, Calendar, Package, CheckCircle2, AlertCircle,
 import { useCart } from '@/contexts/CartContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { TOUS_LES_PRODUITS } from '@/lib/amicale-blanc-config'
-import { getBouilletteId } from '@/lib/price-utils'
+import { getBouilletteId, buildProductNameWithVariants } from '@/lib/price-utils'
 import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 import { validatePromoCode, recordPromoCodeUsageAsync, getPromoCodeByCode, type PromoCodeValidation } from '@/lib/promo-codes-manager'
@@ -670,20 +670,38 @@ export default function CheckoutPage() {
     return false
   }
 
-  /** Payload pour création commande côté serveur (capture-order) — évite perte si onglet fermé */
+  /** Payload pour création commande côté serveur (capture-order + create-order PayPal). Inclut name et unit_amount pour afficher les articles dans PayPal. */
   const getOrderPayload = async (): Promise<PayPalOrderPayload | null> => {
-    const orderItems = cartItems.map((item) => ({
-      product_id: item.productId || item.produit || `product-${item.id}`,
-      variant_id: item.variantId || undefined,
-      quantity: item.quantite,
-      price: getItemPrice(item),
-      arome: item.arome,
-      taille: item.taille,
-      couleur: item.couleur,
-      diametre: item.diametre,
-      conditionnement: item.conditionnement,
-      produit: item.produit,
-    }))
+    const orderItems = cartItems.map((item) => {
+      const unitPrice = getItemPrice(item)
+      const name = buildProductNameWithVariants({
+        produit: item.produit,
+        name: item.produit,
+        product_id: item.productId,
+        arome: item.arome,
+        taille: item.taille,
+        couleur: item.couleur,
+        diametre: item.diametre,
+        conditionnement: item.conditionnement,
+        forme: item.format,
+        saveur: item.arome,
+        gamme: item.gamme,
+      })
+      return {
+        product_id: item.productId || item.produit || `product-${item.id}`,
+        variant_id: item.variantId || undefined,
+        quantity: item.quantite,
+        price: unitPrice,
+        name,
+        unit_amount: { currency_code: 'EUR', value: round2(unitPrice).toFixed(2) },
+        arome: item.arome,
+        taille: item.taille,
+        couleur: item.couleur,
+        diametre: item.diametre,
+        conditionnement: item.conditionnement,
+        produit: item.produit,
+      }
+    })
     const currentRef = orderReference || paypalReference
     const paypalDeliveryType =
       retraitMode === 'chronopost-relais' ? 'relay'
