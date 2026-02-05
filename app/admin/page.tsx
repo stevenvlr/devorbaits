@@ -134,6 +134,24 @@ export default function AdminPage() {
           </Link>
 
           <Link
+            href="/admin/payments/orphans"
+            className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-amber-500/50 transition-all group"
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 bg-amber-500/10 rounded-lg flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                <AlertCircle className="w-8 h-8 text-amber-500" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold mb-1">Paiements orphelins</h2>
+                <p className="text-sm text-gray-400">PayPal sans commande – rattrapage</p>
+              </div>
+            </div>
+            <p className="text-gray-300">
+              Paiements PayPal capturés sans commande créée. Rejouer la création de commande depuis le payload.
+            </p>
+          </Link>
+
+          <Link
             href="/admin/clients"
             className="bg-noir-800/50 border border-noir-700 rounded-xl p-8 hover:border-yellow-500/50 transition-all group"
           >

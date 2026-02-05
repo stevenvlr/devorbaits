@@ -29,6 +29,7 @@ import { buildOrderPickupPointFromBoxtal, buildOrderPickupPointFromChronopost } 
 import { getActiveShippingPrice, getSponsorShippingPrice } from '@/lib/shipping-prices'
 import { updateUserProfile } from '@/lib/auth-supabase'
 import PayPalButton from '@/components/PayPalButton'
+import type { PayPalOrderPayload } from '@/app/api/paypal/capture-order/route'
 import { calculateCartWeightAsync } from '@/lib/product-weights'
 import BoxtalRelayMap, { type BoxtalParcelPoint } from '@/components/BoxtalRelayMap'
 import type { ChronopostRelaisPoint } from '@/components/ChronopostRelaisWidget'
@@ -667,6 +668,47 @@ export default function CheckoutPage() {
       return true
     }
     return false
+  }
+
+  /** Payload pour création commande côté serveur (capture-order) — évite perte si onglet fermé */
+  const getOrderPayload = async (): Promise<PayPalOrderPayload | null> => {
+    const orderItems = cartItems.map((item) => ({
+      product_id: item.productId || item.produit || `product-${item.id}`,
+      variant_id: item.variantId || undefined,
+      quantity: item.quantite,
+      price: getItemPrice(item),
+      arome: item.arome,
+      taille: item.taille,
+      couleur: item.couleur,
+      diametre: item.diametre,
+      conditionnement: item.conditionnement,
+      produit: item.produit,
+    }))
+    const currentRef = orderReference || paypalReference
+    const paypalDeliveryType =
+      retraitMode === 'chronopost-relais' ? 'relay'
+      : retraitMode === 'livraison' ? 'home'
+      : retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
+      : retraitMode === 'amicale-blanc' ? 'pickup_apb'
+      : 'home'
+    let paypalPickupPoint: OrderPickupPoint | null = null
+    if (paypalDeliveryType === 'relay') {
+      if (boxtalParcelPoint) paypalPickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
+      else if (chronopostRelaisPoint) paypalPickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
+    }
+    return {
+      reference: currentRef,
+      items: orderItems,
+      total: finalTotal,
+      shippingCost: calculatedShippingCost,
+      deliveryType: paypalDeliveryType,
+      pickupPoint: paypalPickupPoint,
+      userId: user?.id,
+      retraitMode,
+      comment: orderComment.trim() || undefined,
+      customerName: user?.nom || user?.email,
+      customerEmail: user?.email,
+    }
   }
 
   const handleSubmit = async () => {
@@ -1492,53 +1534,80 @@ export default function CheckoutPage() {
                                 setOrderReference(paypalReference)
                               }
                             }}
-                            onSuccess={async (orderId, paymentId) => {
+                            getOrderPayload={getOrderPayload}
+                            onSuccess={async (orderId, paymentId, orderFromServer) => {
                               try {
-                                // Créer la commande après paiement PayPal réussi
-                                const orderItems = cartItems.map((item) => ({
-                                  product_id: item.productId || item.produit || `product-${item.id}`,
-                                  variant_id: item.variantId || undefined,
-                                  quantity: item.quantite,
-                                  price: getItemPrice(item), // Utiliser le prix avec promotion
-                                  arome: item.arome,
-                                  taille: item.taille,
-                                  couleur: item.couleur,
-                                  diametre: item.diametre,
-                                  conditionnement: item.conditionnement,
-                                  produit: item.produit
-                                }))
-
                                 const currentRef = orderReference || paypalReference
-                                const commentValue = orderComment.trim() || undefined
-                                const paypalDeliveryType =
-                                  retraitMode === 'chronopost-relais' ? 'relay'
-                                  : retraitMode === 'livraison' ? 'home'
-                                  : retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
-                                  : retraitMode === 'amicale-blanc' ? 'pickup_apb'
-                                  : 'home'
-                                let paypalPickupPoint: OrderPickupPoint | null = null
-                                if (paypalDeliveryType === 'relay') {
-                                  if (boxtalParcelPoint) paypalPickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
-                                  else if (chronopostRelaisPoint) paypalPickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
-                                }
-                                const paypalResult = await createOrderAction({
-                                  userId: user?.id || '',
-                                  reference: currentRef,
-                                  total: finalTotal,
-                                  items: orderItems,
-                                  paymentMethod: 'paypal',
-                                  shippingCost: calculatedShippingCost,
-                                  comment: commentValue,
-                                  retraitModeForLog: retraitMode,
-                                  deliveryType: paypalDeliveryType,
-                                  pickupPoint: paypalPickupPoint,
-                                })
-                                if (!paypalResult.ok) {
-                                  throw new Error(paypalResult.error)
-                                }
-                                const order = paypalResult.order
+                                let order: { id: string; reference: string; [k: string]: unknown } | null = orderFromServer ?? null
 
-                                if (order.id) {
+                                if (!order?.id) {
+                                  // Fallback : création côté client (si serveur n'a pas créé la commande)
+                                  const orderItems = cartItems.map((item) => ({
+                                    product_id: item.productId || item.produit || `product-${item.id}`,
+                                    variant_id: item.variantId || undefined,
+                                    quantity: item.quantite,
+                                    price: getItemPrice(item),
+                                    arome: item.arome,
+                                    taille: item.taille,
+                                    couleur: item.couleur,
+                                    diametre: item.diametre,
+                                    conditionnement: item.conditionnement,
+                                    produit: item.produit,
+                                  }))
+                                  const paypalDeliveryType =
+                                    retraitMode === 'chronopost-relais' ? 'relay'
+                                    : retraitMode === 'livraison' ? 'home'
+                                    : retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
+                                    : retraitMode === 'amicale-blanc' ? 'pickup_apb'
+                                    : 'home'
+                                  let paypalPickupPoint: OrderPickupPoint | null = null
+                                  if (paypalDeliveryType === 'relay') {
+                                    if (boxtalParcelPoint) paypalPickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
+                                    else if (chronopostRelaisPoint) paypalPickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
+                                  }
+                                  const paypalResult = await createOrderAction({
+                                    userId: user?.id || '',
+                                    reference: currentRef,
+                                    total: finalTotal,
+                                    items: orderItems,
+                                    paymentMethod: 'paypal',
+                                    shippingCost: calculatedShippingCost,
+                                    comment: orderComment.trim() || undefined,
+                                    retraitModeForLog: retraitMode,
+                                    deliveryType: paypalDeliveryType,
+                                    pickupPoint: paypalPickupPoint,
+                                  })
+                                  if (!paypalResult.ok) throw new Error(paypalResult.error)
+                                  order = paypalResult.order
+                                  try {
+                                    await sendNewOrderNotification({
+                                      reference: currentRef,
+                                      total: finalTotal,
+                                      itemCount: cartItems.length,
+                                      customerName: user?.nom || user?.email,
+                                      customerEmail: user?.email,
+                                      shippingCost: calculatedShippingCost,
+                                      retraitMode: retraitMode,
+                                      items: cartItems.map(item => ({
+                                        produit: item.produit,
+                                        quantity: item.quantite,
+                                        price: item.prix,
+                                        arome: item.arome,
+                                        taille: item.taille,
+                                        couleur: item.couleur,
+                                        diametre: item.diametre,
+                                        conditionnement: item.conditionnement,
+                                        forme: item.format,
+                                        saveur: item.arome,
+                                        gamme: item.gamme,
+                                      }))
+                                    })
+                                  } catch (telegramError) {
+                                    console.warn('⚠️ Erreur notification Telegram (fallback):', telegramError)
+                                  }
+                                }
+
+                                if (order?.id) {
                                   // Enregistrer l'utilisation du code promo APRÈS création de la commande
                                   if (promoValidation && promoValidation.valid && promoCode && user?.id) {
                                     const promoCodeObj = await getPromoCodeByCode(promoCode)
@@ -1727,47 +1796,19 @@ export default function CheckoutPage() {
                             } catch (invoiceError) {
                               console.warn('⚠️ Erreur appel API auto-invoice (PayPal):', invoiceError)
                             }
-                            
-                            // Envoyer notification Telegram
-                            try {
-                              await sendNewOrderNotification({
-                                reference: currentRef,
-                                total: finalTotal,
-                                itemCount: cartItems.length,
-                                customerName: user?.nom || user?.email,
-                                customerEmail: user?.email,
-                                shippingCost: calculatedShippingCost,
-                                retraitMode: retraitMode,
-                                items: cartItems.map(item => ({
-                                  produit: item.produit,
-                                  quantity: item.quantite,
-                                  price: item.prix,
-                                  arome: item.arome,
-                                  taille: item.taille,
-                                  couleur: item.couleur,
-                                  diametre: item.diametre,
-                                  conditionnement: item.conditionnement,
-                                  forme: item.format,
-                                  saveur: item.arome, // Pour Pop-up Duo
-                                  gamme: item.gamme,
-                                }))
-                              })
-                            } catch (telegramError) {
-                              console.warn('⚠️ Erreur notification Telegram:', telegramError)
-                            }
-                          }
+                                }
 
-                          clearCart()
-                          router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal`)
-                        } catch (error) {
-                          console.error('Erreur création commande:', error)
-                          alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
-                        }
-                      }}
-                        onError={(error) => {
-                          alert(`Erreur PayPal: ${error}`)
-                        }}
-                      />
+                                clearCart()
+                                router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal`)
+                              } catch (error) {
+                                console.error('Erreur création commande:', error)
+                                alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
+                              }
+                            }}
+                            onError={(error) => {
+                              alert(`Erreur PayPal: ${error}`)
+                            }}
+                          />
                       </div>
                       </div>
                     )}
@@ -1788,62 +1829,89 @@ export default function CheckoutPage() {
                       </div>
                       <div className="flex-1 max-w-xs flex-shrink-0">
                         <PayPalButton
-                      amount={paypalTotal}
-                      itemTotal={paypalItemTotal}
-                      shippingTotal={paypalShippingTotal}
-                      reference={orderReference || paypalReference}
-                      disabled={!isFormValid()}
-                      onBeforePayment={() => {
-                        if (!orderReference) {
-                          setOrderReference(paypalReference)
-                        }
-                      }}
-                      onSuccess={async (orderId, paymentId) => {
-                        try {
-                          const orderItems = cartItems.map((item) => ({
-                            product_id: item.productId || item.produit || `product-${item.id}`,
-                            variant_id: item.variantId || undefined,
-                            quantity: item.quantite,
-                            price: getItemPrice(item),
-                            arome: item.arome,
-                            taille: item.taille,
-                            couleur: item.couleur,
-                            diametre: item.diametre,
-                            conditionnement: item.conditionnement,
-                            produit: item.produit
-                          }))
+                          amount={paypalTotal}
+                          itemTotal={paypalItemTotal}
+                          shippingTotal={paypalShippingTotal}
+                          reference={orderReference || paypalReference}
+                          disabled={!isFormValid()}
+                          onBeforePayment={() => {
+                            if (!orderReference) {
+                              setOrderReference(paypalReference)
+                            }
+                          }}
+                          getOrderPayload={getOrderPayload}
+                          onSuccess={async (orderId, paymentId, orderFromServer) => {
+                            try {
+                              const currentRef = orderReference || paypalReference
+                              let order: { id: string; reference: string; [k: string]: unknown } | null = orderFromServer ?? null
 
-                          const currentRef = orderReference || paypalReference
-                          const commentValue = orderComment.trim() || undefined
-                          const paypal2DeliveryType =
-                            retraitMode === 'chronopost-relais' ? 'relay'
-                            : retraitMode === 'livraison' ? 'home'
-                            : retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
-                            : retraitMode === 'amicale-blanc' ? 'pickup_apb'
-                            : 'home'
-                          let paypal2PickupPoint: OrderPickupPoint | null = null
-                          if (paypal2DeliveryType === 'relay') {
-                            if (boxtalParcelPoint) paypal2PickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
-                            else if (chronopostRelaisPoint) paypal2PickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
-                          }
-                          const paypal2Result = await createOrderAction({
-                            userId: user?.id || '',
-                            reference: currentRef,
-                            total: finalTotal,
-                            items: orderItems,
-                            paymentMethod: 'paypal',
-                            shippingCost: calculatedShippingCost,
-                            comment: commentValue,
-                            retraitModeForLog: retraitMode,
-                            deliveryType: paypal2DeliveryType,
-                            pickupPoint: paypal2PickupPoint,
-                          })
-                          if (!paypal2Result.ok) {
-                            throw new Error(paypal2Result.error)
-                          }
-                          const order = paypal2Result.order
+                              if (!order?.id) {
+                                const orderItems = cartItems.map((item) => ({
+                                  product_id: item.productId || item.produit || `product-${item.id}`,
+                                  variant_id: item.variantId || undefined,
+                                  quantity: item.quantite,
+                                  price: getItemPrice(item),
+                                  arome: item.arome,
+                                  taille: item.taille,
+                                  couleur: item.couleur,
+                                  diametre: item.diametre,
+                                  conditionnement: item.conditionnement,
+                                  produit: item.produit,
+                                }))
+                                const paypal2DeliveryType =
+                                  retraitMode === 'chronopost-relais' ? 'relay'
+                                  : retraitMode === 'livraison' ? 'home'
+                                  : retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
+                                  : retraitMode === 'amicale-blanc' ? 'pickup_apb'
+                                  : 'home'
+                                let paypal2PickupPoint: OrderPickupPoint | null = null
+                                if (paypal2DeliveryType === 'relay') {
+                                  if (boxtalParcelPoint) paypal2PickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
+                                  else if (chronopostRelaisPoint) paypal2PickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
+                                }
+                                const paypal2Result = await createOrderAction({
+                                  userId: user?.id || '',
+                                  reference: currentRef,
+                                  total: finalTotal,
+                                  items: orderItems,
+                                  paymentMethod: 'paypal',
+                                  shippingCost: calculatedShippingCost,
+                                  comment: orderComment.trim() || undefined,
+                                  retraitModeForLog: retraitMode,
+                                  deliveryType: paypal2DeliveryType,
+                                  pickupPoint: paypal2PickupPoint,
+                                })
+                                if (!paypal2Result.ok) throw new Error(paypal2Result.error)
+                                order = paypal2Result.order
+                                try {
+                                  await sendNewOrderNotification({
+                                    reference: currentRef,
+                                    total: finalTotal,
+                                    itemCount: cartItems.length,
+                                    customerName: user?.nom || user?.email,
+                                    customerEmail: user?.email,
+                                    shippingCost: calculatedShippingCost,
+                                    retraitMode: retraitMode,
+                                    items: cartItems.map(item => ({
+                                      produit: item.produit,
+                                      quantity: item.quantite,
+                                      price: item.prix,
+                                      arome: item.arome,
+                                      taille: item.taille,
+                                      couleur: item.couleur,
+                                      diametre: item.diametre,
+                                      conditionnement: item.conditionnement,
+                                      forme: item.format,
+                                      saveur: item.arome,
+                                      gamme: item.gamme,
+                                    }))
+                                  })
+                                } catch (telegramError) {
+                                  console.warn('⚠️ Erreur notification Telegram (fallback 4x):', telegramError)
+                                }
+                              }
 
-                          if (order.id) {
+                              if (order?.id) {
                             // Enregistrer l'utilisation du code promo
                             if (promoValidation && promoValidation.valid && promoCode && user?.id) {
                               const promoCodeObj = await getPromoCodeByCode(promoCode)
@@ -1998,47 +2066,19 @@ export default function CheckoutPage() {
                             } catch (invoiceError) {
                               console.warn('⚠️ Erreur génération facture:', invoiceError)
                             }
-                            
-                            // Notification Telegram
-                            try {
-                              await sendNewOrderNotification({
-                                reference: currentRef,
-                                total: finalTotal,
-                                itemCount: cartItems.length,
-                                customerName: user?.nom || user?.email,
-                                customerEmail: user?.email,
-                                shippingCost: calculatedShippingCost,
-                                retraitMode: retraitMode,
-                                items: cartItems.map(item => ({
-                                  produit: item.produit,
-                                  quantity: item.quantite,
-                                  price: item.prix,
-                                  arome: item.arome,
-                                  taille: item.taille,
-                                  couleur: item.couleur,
-                                  diametre: item.diametre,
-                                  conditionnement: item.conditionnement,
-                                  forme: item.format,
-                                  saveur: item.arome,
-                                  gamme: item.gamme,
-                                }))
-                              })
-                            } catch (telegramError) {
-                              console.warn('⚠️ Erreur notification Telegram:', telegramError)
-                            }
-                          }
+                              }
 
-                          clearCart()
-                          router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal`)
-                        } catch (error) {
-                          console.error('Erreur création commande:', error)
-                          alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
-                        }
-                      }}
-                      onError={(error) => {
-                        alert(`Erreur PayPal 4x: ${error}`)
-                        }}
-                      />
+                              clearCart()
+                              router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal`)
+                            } catch (error) {
+                              console.error('Erreur création commande:', error)
+                              alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
+                            }
+                          }}
+                          onError={(error) => {
+                            alert(`Erreur PayPal 4x: ${error}`)
+                          }}
+                        />
                       </div>
                     </div>
 

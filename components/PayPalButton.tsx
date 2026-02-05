@@ -3,16 +3,21 @@
 import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js'
 import { useState } from 'react'
 import { getPayPalClientId, isPayPalConfigured } from '@/lib/paypal'
+import type { PayPalOrderPayload } from '@/app/api/paypal/capture-order/route'
+
+export type CreatedOrder = { id: string; reference: string; [k: string]: unknown }
 
 interface PayPalButtonProps {
   amount: number
   itemTotal: number
   shippingTotal: number
   reference: string
-  onSuccess: (orderId: string, paymentId: string) => void
+  onSuccess: (orderId: string, paymentId: string, order?: CreatedOrder | null) => void
   onError: (error: string) => void
   disabled?: boolean
   onBeforePayment?: () => void
+  /** Fourni par le checkout : permet de créer la commande côté serveur (évite perte si onglet fermé) */
+  getOrderPayload?: () => Promise<PayPalOrderPayload | null>
 }
 
 export default function PayPalButton({
@@ -24,6 +29,7 @@ export default function PayPalButton({
   onError,
   disabled,
   onBeforePayment,
+  getOrderPayload,
 }: PayPalButtonProps) {
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -58,10 +64,10 @@ export default function PayPalButton({
           createOrder={async () => {
             try {
               setIsProcessing(true)
-              // Appeler onBeforePayment si fourni
               if (onBeforePayment) {
                 onBeforePayment()
               }
+              const orderPayload = getOrderPayload ? await getOrderPayload() : null
               const response = await fetch('/api/paypal/create-order', {
                 method: 'POST',
                 headers: {
@@ -73,6 +79,7 @@ export default function PayPalButton({
                   shippingTotal,
                   reference,
                   currency: 'EUR',
+                  ...(orderPayload && { orderPayload }),
                 }),
               })
 
@@ -95,7 +102,8 @@ export default function PayPalButton({
             try {
               setIsProcessing(true)
               console.log('🔄 Capture PayPal - Order ID:', data.orderID)
-              
+              const orderPayload = getOrderPayload ? await getOrderPayload() : null
+
               const response = await fetch('/api/paypal/capture-order', {
                 method: 'POST',
                 headers: {
@@ -106,38 +114,37 @@ export default function PayPalButton({
                   expectedTotal: amount,
                   expectedItemTotal: itemTotal,
                   expectedShippingTotal: shippingTotal,
+                  ...(orderPayload && { orderPayload }),
                 }),
               })
 
               const captureData = await response.json()
-              
+
               console.log('📦 Capture PayPal - Réponse:', captureData)
 
               if (!response.ok) {
                 console.error('❌ Erreur capture PayPal - Response not OK:', captureData)
                 throw new Error(captureData.error || 'Erreur lors de la capture du paiement')
               }
-              
-              // Vérifier si la capture a réussi
+
+              const createdOrder = captureData.createdOrder ?? (captureData.order?.id ? captureData.order : null)
+
               if (captureData.success) {
                 console.log('✅ Capture PayPal réussie - Payment ID:', captureData.paymentId)
-                onSuccess(data.orderID, captureData.paymentId || data.orderID)
+                onSuccess(data.orderID, captureData.paymentId || data.orderID, createdOrder)
               } else {
-                // Même si success est false, vérifier si le paiement existe
                 const hasPayment = captureData.paymentId || captureData.order?.purchase_units?.[0]?.payments?.captures?.[0]
-                
                 if (hasPayment) {
                   console.warn('⚠️ Capture PayPal - Success false mais paiement existe:', captureData)
-                  // Essayer quand même de continuer si le paiement existe
-                  onSuccess(data.orderID, captureData.paymentId || data.orderID)
+                  onSuccess(data.orderID, captureData.paymentId || data.orderID, createdOrder)
                 } else {
                   console.error('❌ Capture PayPal - Aucun paiement trouvé:', captureData)
                   throw new Error('Le paiement n\'a pas pu être capturé. Statut: ' + (captureData.status || 'inconnu'))
                 }
               }
-            } catch (error: any) {
+            } catch (error: unknown) {
               console.error('❌ Erreur capture PayPal:', error)
-              onError(error?.message || 'Erreur lors de la capture du paiement PayPal')
+              onError(error instanceof Error ? error.message : 'Erreur lors de la capture du paiement PayPal')
             } finally {
               setIsProcessing(false)
             }

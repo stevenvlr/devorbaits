@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createOrderAction } from '@/app/actions/create-order'
+import { sendNewOrderNotification } from '@/lib/telegram-notifications'
+import { createSupabaseAdmin } from '@/lib/supabase/admin'
 
 export const runtime = 'edge'
 
@@ -16,11 +19,52 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
 
+/** Payload pour créer la commande côté serveur (évite perte si l'utilisateur ferme l'onglet) */
+export type PayPalOrderPayload = {
+  reference: string
+  items: Array<{
+    product_id: string
+    variant_id?: string
+    quantity: number
+    price: number
+    arome?: string
+    taille?: string
+    couleur?: string
+    diametre?: string
+    conditionnement?: string
+    produit?: string
+  }>
+  total: number
+  shippingCost?: number
+  deliveryType: 'relay' | 'home' | 'pickup_wavignies' | 'pickup_apb'
+  pickupPoint: {
+    id: string
+    network?: string
+    name?: string
+    address1: string
+    address2?: string
+    zip: string
+    city: string
+    country_code: string
+  } | null
+  userId?: string
+  retraitMode?: string
+  comment?: string
+  customerName?: string
+  customerEmail?: string
+}
+
 // Cette route capture un paiement PayPal après approbation
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { orderId, expectedTotal, expectedItemTotal, expectedShippingTotal } = body
+    const { orderId, expectedTotal, expectedItemTotal, expectedShippingTotal, orderPayload } = body as {
+      orderId?: string
+      expectedTotal?: unknown
+      expectedItemTotal?: unknown
+      expectedShippingTotal?: unknown
+      orderPayload?: PayPalOrderPayload
+    }
 
     if (!orderId) {
       return NextResponse.json(
@@ -185,9 +229,203 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Créer la commande depuis payment_intent (idempotence) ou fallback body orderPayload
+    let createdOrder: { id: string; reference: string; [k: string]: unknown } | null = null
+    const orderTotal = paypalTotal != null ? round2(paypalTotal) : 0
+
+    if (isSuccess) {
+      const supabase = createSupabaseAdmin()
+      const { data: intent } = await supabase
+        .from('payment_intents')
+        .select('id, order_id, payload, status')
+        .eq('paypal_order_id', orderId)
+        .maybeSingle()
+
+      const payload = (intent?.payload as PayPalOrderPayload | null) ?? orderPayload ?? null
+
+      // Idempotence : intent déjà traité → retourner la commande existante
+      if (intent?.order_id) {
+        const { data: existingOrder } = await supabase
+          .from('orders')
+          .select('id, reference')
+          .eq('id', intent.order_id)
+          .single()
+        if (existingOrder) {
+          createdOrder = existingOrder as { id: string; reference: string; [k: string]: unknown }
+          console.log('[ORDER_CREATE] Idempotence: commande déjà créée', intent.order_id)
+        }
+      }
+      // Intent présent sans order_id : créer la commande depuis le payload
+      else if (intent && payload?.reference && Array.isArray(payload.items) && payload.items.length > 0) {
+        const totalForOrder = orderTotal || round2(payload.total ?? 0)
+        try {
+          const result = await createOrderAction({
+            userId: payload.userId ?? undefined,
+            reference: payload.reference,
+            total: totalForOrder,
+            items: payload.items,
+            paymentMethod: 'paypal',
+            shippingCost: typeof payload.shippingCost === 'number' ? payload.shippingCost : undefined,
+            comment: payload.comment?.trim() || undefined,
+            retraitModeForLog: payload.retraitMode ?? null,
+            deliveryType: payload.deliveryType,
+            pickupPoint: payload.pickupPoint ?? null,
+          })
+          if (result.ok) {
+            createdOrder = result.order
+            await supabase
+              .from('payment_intents')
+              .update({
+                status: 'captured',
+                order_id: result.order.id,
+                processed_at: new Date().toISOString(),
+                last_error: null,
+              })
+              .eq('id', intent.id)
+            console.log('[ORDER_CREATE] Commande créée depuis intent (PayPal):', result.order?.id, result.order?.reference)
+            try {
+              await sendNewOrderNotification({
+                reference: payload.reference,
+                total: totalForOrder,
+                itemCount: payload.items.length,
+                customerName: payload.customerName,
+                customerEmail: payload.customerEmail,
+                shippingCost: payload.shippingCost,
+                retraitMode: payload.retraitMode,
+                items: payload.items.map((i) => ({
+                  produit: i.produit,
+                  quantity: i.quantity,
+                  price: i.price,
+                  arome: i.arome,
+                  taille: i.taille,
+                  couleur: i.couleur,
+                  diametre: i.diametre,
+                  conditionnement: i.conditionnement,
+                })),
+              })
+            } catch (telegramErr) {
+              console.warn('⚠️ Notification Telegram (capture-order):', telegramErr)
+            }
+          } else {
+            await supabase
+              .from('payment_intents')
+              .update({
+                status: 'failed',
+                last_error: result.error,
+                processed_at: new Date().toISOString(),
+              })
+              .eq('id', intent.id)
+            console.error('[ORDER_CREATE] Échec création commande après capture PayPal:', result.error)
+            return NextResponse.json(
+              {
+                success: true,
+                order: orderDetails || captureData,
+                capture: captureData,
+                paymentId: hasCapture?.id || captureData.id,
+                orderCreated: false,
+                orderError: result.error,
+              },
+              { status: 200 }
+            )
+          }
+        } catch (orderErr: unknown) {
+          const msg = orderErr instanceof Error ? orderErr.message : String(orderErr)
+          await supabase
+            .from('payment_intents')
+            .update({
+              status: 'failed',
+              last_error: msg,
+              processed_at: new Date().toISOString(),
+            })
+            .eq('id', intent.id)
+          console.error('[ORDER_CREATE] Exception création commande après capture PayPal:', orderErr)
+          return NextResponse.json(
+            {
+              success: true,
+              order: orderDetails || captureData,
+              paymentId: hasCapture?.id || captureData.id,
+              orderCreated: false,
+              orderError: msg,
+            },
+            { status: 200 }
+          )
+        }
+      }
+      // Pas d'intent : fallback sur orderPayload du body (ancien flux)
+      else if (orderPayload?.reference && Array.isArray(orderPayload.items) && orderPayload.items.length > 0) {
+        const totalForOrder = orderTotal || round2(orderPayload.total ?? 0)
+        try {
+          const result = await createOrderAction({
+            userId: orderPayload.userId ?? undefined,
+            reference: orderPayload.reference,
+            total: totalForOrder,
+            items: orderPayload.items,
+            paymentMethod: 'paypal',
+            shippingCost: typeof orderPayload.shippingCost === 'number' ? orderPayload.shippingCost : undefined,
+            comment: orderPayload.comment?.trim() || undefined,
+            retraitModeForLog: orderPayload.retraitMode ?? null,
+            deliveryType: orderPayload.deliveryType,
+            pickupPoint: orderPayload.pickupPoint ?? null,
+          })
+          if (result.ok) {
+            createdOrder = result.order
+            console.log('[ORDER_CREATE] Commande créée depuis body (fallback):', result.order?.id)
+            try {
+              await sendNewOrderNotification({
+                reference: orderPayload.reference,
+                total: totalForOrder,
+                itemCount: orderPayload.items.length,
+                customerName: orderPayload.customerName,
+                customerEmail: orderPayload.customerEmail,
+                shippingCost: orderPayload.shippingCost,
+                retraitMode: orderPayload.retraitMode,
+                items: orderPayload.items.map((i) => ({
+                  produit: i.produit,
+                  quantity: i.quantity,
+                  price: i.price,
+                  arome: i.arome,
+                  taille: i.taille,
+                  couleur: i.couleur,
+                  diametre: i.diametre,
+                  conditionnement: i.conditionnement,
+                })),
+              })
+            } catch (telegramErr) {
+              console.warn('⚠️ Notification Telegram (capture-order):', telegramErr)
+            }
+          } else {
+            return NextResponse.json(
+              {
+                success: true,
+                order: orderDetails || captureData,
+                capture: captureData,
+                paymentId: hasCapture?.id || captureData.id,
+                orderCreated: false,
+                orderError: result.error,
+              },
+              { status: 200 }
+            )
+          }
+        } catch (orderErr: unknown) {
+          const msg = orderErr instanceof Error ? orderErr.message : String(orderErr)
+          return NextResponse.json(
+            {
+              success: true,
+              order: orderDetails || captureData,
+              paymentId: hasCapture?.id || captureData.id,
+              orderCreated: false,
+              orderError: msg,
+            },
+            { status: 200 }
+          )
+        }
+      }
+    }
+
     return NextResponse.json({
       success: isSuccess,
-      order: orderDetails || captureData,
+      order: createdOrder ?? (orderDetails || captureData),
+      createdOrder: createdOrder ?? undefined,
       capture: captureData,
       paymentId: hasCapture?.id || captureData.id,
       amount: hasCapture?.amount?.value || captureData.purchase_units?.[0]?.amount?.value,
@@ -196,12 +434,12 @@ export async function POST(request: NextRequest) {
       amountMismatch: hasMismatch,
       mismatchDetails: hasMismatch ? mismatches : null,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Erreur capture PayPal (catch):', error)
     return NextResponse.json(
-      { 
-        error: error?.message || 'Erreur lors de la capture du paiement PayPal',
-        details: error?.stack 
+      {
+        error: error instanceof Error ? error.message : 'Erreur lors de la capture du paiement PayPal',
+        details: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 }
     )

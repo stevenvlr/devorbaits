@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseAdmin } from '@/lib/supabase/admin'
 
 export const runtime = 'edge'
 
@@ -12,11 +13,53 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
 
-// Cette route crée une commande PayPal côté serveur
+/** Payload stocké dans payment_intents (même forme que capture-order) */
+export type PayPalOrderPayload = {
+  reference: string
+  items: Array<{
+    product_id: string
+    variant_id?: string
+    quantity: number
+    price: number
+    arome?: string
+    taille?: string
+    couleur?: string
+    diametre?: string
+    conditionnement?: string
+    produit?: string
+  }>
+  total: number
+  shippingCost?: number
+  deliveryType: 'relay' | 'home' | 'pickup_wavignies' | 'pickup_apb'
+  pickupPoint: {
+    id: string
+    network?: string
+    name?: string
+    address1: string
+    address2?: string
+    zip: string
+    city: string
+    country_code: string
+  } | null
+  userId?: string
+  retraitMode?: string
+  comment?: string
+  customerName?: string
+  customerEmail?: string
+}
+
+// Cette route crée une commande PayPal côté serveur et enregistre l'intent (payload) pour capture
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { amount, itemTotal, shippingTotal, reference, currency = 'EUR' } = body
+    const { amount, itemTotal, shippingTotal, reference, currency = 'EUR', orderPayload } = body as {
+      amount?: unknown
+      itemTotal?: unknown
+      shippingTotal?: unknown
+      reference?: string
+      currency?: string
+      orderPayload?: PayPalOrderPayload
+    }
 
     // Vérifier que les paramètres sont présents
     if (amount == null || itemTotal == null || shippingTotal == null || !reference) {
@@ -171,14 +214,40 @@ export async function POST(request: NextRequest) {
 
     const order = await orderResponse.json()
 
+    // Stocker l'intent avec le payload pour création de commande à la capture (indépendant du navigateur)
+    if (orderPayload?.reference && Array.isArray(orderPayload.items) && orderPayload.items.length > 0) {
+      try {
+        const supabase = createSupabaseAdmin()
+        const { error: intentError } = await supabase.from('payment_intents').upsert(
+          {
+            provider: 'paypal',
+            paypal_order_id: order.id,
+            status: 'created',
+            order_id: null,
+            payload: orderPayload as unknown as Record<string, unknown>,
+            last_error: null,
+            processed_at: null,
+          },
+          { onConflict: 'paypal_order_id' }
+        )
+        if (intentError) {
+          console.error('[PAYMENT_INTENT] Erreur upsert create-order:', intentError.message)
+        } else {
+          console.log('[PAYMENT_INTENT] Intent enregistré:', order.id)
+        }
+      } catch (e) {
+        console.error('[PAYMENT_INTENT] Exception:', e)
+      }
+    }
+
     return NextResponse.json({
       id: order.id,
       status: order.status,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur création commande PayPal:', error)
     return NextResponse.json(
-      { error: error?.message || 'Erreur lors de la création de la commande PayPal' },
+      { error: error instanceof Error ? error.message : 'Erreur lors de la création de la commande PayPal' },
       { status: 500 }
     )
   }
