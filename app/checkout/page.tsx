@@ -672,8 +672,19 @@ export default function CheckoutPage() {
 
   /** Payload pour création commande côté serveur (capture-order + create-order PayPal). Inclut name et unit_amount pour afficher les articles dans PayPal. */
   const getOrderPayload = async (): Promise<PayPalOrderPayload | null> => {
+    // Avec code promo : les montants envoyés à PayPal doivent avoir une somme = totalWithDiscount pour éviter l'erreur "Le total des articles ne correspond pas"
+    const usePromoAmounts = promoValidation?.valid && promoValidation.appliedItems && promoValidation.appliedItems.length > 0
+
     const orderItems = cartItems.map((item) => {
-      const unitPrice = getItemPrice(item)
+      let unitPrice: number
+      if (usePromoAmounts) {
+        const lineTotalBeforePromo = getItemPrice(item) * item.quantite
+        const promoItemDiscount = promoValidation!.appliedItems!.find((ai) => ai.itemId === item.id)?.discount ?? 0
+        const lineTotalAfterPromo = Math.max(0, lineTotalBeforePromo - promoItemDiscount)
+        unitPrice = item.quantite > 0 ? lineTotalAfterPromo / item.quantite : 0
+      } else {
+        unitPrice = getItemPrice(item)
+      }
       const name = buildProductNameWithVariants({
         produit: item.produit,
         name: item.produit,
@@ -691,7 +702,7 @@ export default function CheckoutPage() {
         product_id: item.productId || item.produit || `product-${item.id}`,
         variant_id: item.variantId || undefined,
         quantity: item.quantite,
-        price: unitPrice,
+        price: round2(unitPrice),
         name,
         unit_amount: { currency_code: 'EUR', value: round2(unitPrice).toFixed(2) },
         arome: item.arome,
@@ -702,6 +713,20 @@ export default function CheckoutPage() {
         produit: item.produit,
       }
     })
+
+    // Corriger une éventuelle erreur d'arrondi d'1 centime pour que la somme = paypalItemTotal (obligatoire pour PayPal)
+    if (usePromoAmounts && orderItems.length > 0) {
+      const sumFromItems = round2(orderItems.reduce((s, it) => s + round2(it.price * it.quantity), 0))
+      const expectedItemTotal = round2(totalWithDiscount)
+      const diff = round2(expectedItemTotal - sumFromItems)
+      if (Math.abs(diff) > 0.001) {
+        const first = orderItems[0]
+        const newFirstTotal = round2(first.price * first.quantity) + diff
+        const newUnit = first.quantity > 0 ? round2(newFirstTotal / first.quantity) : first.price
+        first.price = newUnit
+        first.unit_amount = { currency_code: 'EUR', value: newUnit.toFixed(2) }
+      }
+    }
     const currentRef = orderReference || paypalReference
     const paypalDeliveryType =
       retraitMode === 'chronopost-relais' ? 'relay'
