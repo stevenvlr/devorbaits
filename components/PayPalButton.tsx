@@ -124,6 +124,19 @@ export default function PayPalButton({
 
               if (!response.ok) {
                 console.error('❌ Erreur capture PayPal - Response not OK:', captureData)
+                // Fallback : essayer ensure-order si capture-order échoue
+                try {
+                  console.log('[PAYPAL_BUTTON] Tentative fallback ensure-order pour orderId=%s', data.orderID)
+                  const ensureResponse = await fetch(`/api/paypal/ensure-order?orderId=${encodeURIComponent(data.orderID)}`)
+                  const ensureData = await ensureResponse.json()
+                  if (ensureData.orderCreated && ensureData.orderId) {
+                    console.log('[PAYPAL_BUTTON] Commande créée via ensure-order (fallback): %s', ensureData.orderId)
+                    onSuccess(data.orderID, ensureData.orderId, { id: ensureData.orderId, reference: ensureData.orderReference })
+                    return
+                  }
+                } catch (ensureErr) {
+                  console.error('[PAYPAL_BUTTON] Erreur ensure-order (fallback):', ensureErr)
+                }
                 throw new Error(captureData.error || 'Erreur lors de la capture du paiement')
               }
 

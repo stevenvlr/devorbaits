@@ -70,92 +70,86 @@ function PaymentSuccessContent() {
           setOrderReference(reference)
           setMontant(montant)
           
-          // Récupérer la commande en attente
-          const pendingOrderKey = `pending-order-${reference}`
-          const pendingOrderData = localStorage.getItem(pendingOrderKey)
+          // Charger les produits pour obtenir les noms
+          const allProducts = await loadProducts()
+          setProducts(allProducts)
           
-          if (pendingOrderData) {
-            try {
-              const pendingOrder = JSON.parse(pendingOrderData)
-              const total = parseFloat(montant || '0')
-              
-              // Créer les items de commande avec prix avec promotion
-              const orderItems = pendingOrder.cartItems.map((item: any) => ({
-                product_id: item.productId || item.produit,
-                variant_id: item.variantId,
-                quantity: item.quantite,
-                price: getItemPrice(item), // Utiliser le prix avec promotion
-                arome: item.arome,
-                taille: item.taille,
-                couleur: item.couleur,
-                diametre: item.diametre,
-                conditionnement: item.conditionnement,
-                produit: item.produit
-              }))
-              
-              // Charger les produits pour obtenir les noms
-              const allProducts = await loadProducts()
-              setProducts(allProducts)
-              
-              // Récupérer la commande créée avec ses items
-              let createdOrder = await getOrderByReference(reference)
-              
-              // Si la commande n'est pas trouvée, réessayer après un court délai
-              if (!createdOrder) {
-                await new Promise(resolve => setTimeout(resolve, 500))
-                createdOrder = await getOrderByReference(reference)
+          try {
+            // 1. Essayer de récupérer la commande créée
+            let createdOrder = await getOrderByReference(reference)
+            
+            // 2. Si pas trouvée ET qu'on a orderId PayPal, appeler ensure-order (secours)
+            if (!createdOrder && orderId) {
+              console.log('[PAYMENT_SUCCESS] Commande non trouvée, appel ensure-order pour orderId=%s', orderId)
+              try {
+                const ensureResponse = await fetch(`/api/paypal/ensure-order?orderId=${encodeURIComponent(orderId)}`)
+                const ensureData = await ensureResponse.json()
+                
+                if (ensureData.orderCreated && ensureData.orderId) {
+                  console.log('[PAYMENT_SUCCESS] Commande créée via ensure-order: %s', ensureData.orderId)
+                  // Réessayer de récupérer la commande
+                  await new Promise(resolve => setTimeout(resolve, 500))
+                  createdOrder = await getOrderByReference(reference)
+                } else if (ensureData.alreadyExists && ensureData.orderId) {
+                  console.log('[PAYMENT_SUCCESS] Commande déjà existante: %s', ensureData.orderId)
+                  createdOrder = await getOrderByReference(reference)
+                } else if (ensureData.paid && !ensureData.orderCreated) {
+                  console.warn('[PAYMENT_SUCCESS] Paiement confirmé mais commande non créée: %s', ensureData.error || 'erreur inconnue')
+                } else if (!ensureData.paid) {
+                  console.log('[PAYMENT_SUCCESS] Paiement non encore complété')
+                }
+              } catch (ensureError) {
+                console.error('[PAYMENT_SUCCESS] Erreur ensure-order:', ensureError)
               }
-              
-              // Si toujours pas trouvée, utiliser les données du panier en attente
-              if (createdOrder) {
-                setOrderItems(createdOrder.items)
-                setOrderComment(createdOrder.comment || null)
-              } else if (pendingOrder.cartItems) {
-                const itemsFromCart = pendingOrder.cartItems.map((item: any, index: number) => ({
-                  id: `temp-${index}`,
-                  order_id: 'temp',
-                  product_id: item.productId || item.produit,
-                  variant_id: item.variantId,
-                  quantity: item.quantite,
-                  price: item.prix,
-                  created_at: new Date().toISOString()
-                }))
-                setOrderItems(itemsFromCart)
-              }
-              
-              // Supprimer la commande en attente
-              localStorage.removeItem(pendingOrderKey)
-              
-              // Vider le panier
-              clearCart()
-              setLoading(false)
-            } catch (error) {
-              console.error('Erreur lors du traitement du paiement PayPal:', error)
-              setLoading(false)
             }
-          } else {
-            // Si pas de commande en attente, essayer de récupérer la commande créée
-            try {
-              const allProducts = await loadProducts()
-              setProducts(allProducts)
-              
-              let createdOrder = await getOrderByReference(reference)
-              if (!createdOrder) {
-                await new Promise(resolve => setTimeout(resolve, 500))
-                createdOrder = await getOrderByReference(reference)
-              }
-              
-              if (createdOrder) {
-                setOrderItems(createdOrder.items)
-                setOrderComment(createdOrder.comment || null)
-              }
-              
-              clearCart()
-              setLoading(false)
-            } catch (error) {
-              console.error('Erreur lors de la récupération de la commande:', error)
-              setLoading(false)
+            
+            // 3. Si toujours pas trouvée, réessayer après un court délai
+            if (!createdOrder) {
+              await new Promise(resolve => setTimeout(resolve, 1000))
+              createdOrder = await getOrderByReference(reference)
             }
+            
+            // 4. Si commande trouvée, afficher
+            if (createdOrder) {
+              setOrderItems(createdOrder.items)
+              setOrderComment(createdOrder.comment || null)
+            } else {
+              // 5. Fallback : utiliser les données du panier en attente si disponibles
+              const pendingOrderKey = `pending-order-${reference}`
+              const pendingOrderData = localStorage.getItem(pendingOrderKey)
+              
+              if (pendingOrderData) {
+                try {
+                  const pendingOrder = JSON.parse(pendingOrderData)
+                  if (pendingOrder.cartItems) {
+                    const itemsFromCart = pendingOrder.cartItems.map((item: any, index: number) => ({
+                      id: `temp-${index}`,
+                      order_id: 'temp',
+                      product_id: item.productId || item.produit,
+                      variant_id: item.variantId,
+                      quantity: item.quantite,
+                      price: item.prix,
+                      created_at: new Date().toISOString()
+                    }))
+                    setOrderItems(itemsFromCart)
+                  }
+                  localStorage.removeItem(pendingOrderKey)
+                } catch (e) {
+                  console.error('[PAYMENT_SUCCESS] Erreur parsing pendingOrder:', e)
+                }
+              }
+            }
+            
+            // Supprimer la commande en attente
+            const pendingOrderKey = `pending-order-${reference}`
+            localStorage.removeItem(pendingOrderKey)
+            
+            // Vider le panier
+            clearCart()
+            setLoading(false)
+          } catch (error) {
+            console.error('[PAYMENT_SUCCESS] Erreur lors du traitement du paiement PayPal:', error)
+            setLoading(false)
           }
         } else {
           setLoading(false)

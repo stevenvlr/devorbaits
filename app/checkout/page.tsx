@@ -1817,7 +1817,7 @@ export default function CheckoutPage() {
                                 }
 
                                 clearCart()
-                                router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal`)
+                                router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal&order_id=${orderId}`)
                               } catch (error) {
                                 console.error('Erreur création commande:', error)
                                 alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
@@ -2087,7 +2087,7 @@ export default function CheckoutPage() {
                               }
 
                               clearCart()
-                              router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal`)
+                              router.push(`/payment/success?reference=${currentRef}&montant=${finalTotal.toFixed(2)}&payment_method=paypal&order_id=${orderId}`)
                             } catch (error) {
                               console.error('Erreur création commande:', error)
                               alert('Paiement réussi mais erreur lors de la création de la commande. Contactez le support.')
