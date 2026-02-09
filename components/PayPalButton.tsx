@@ -53,8 +53,7 @@ export default function PayPalButton({
         clientId: clientId,
         currency: 'EUR',
         intent: 'capture',
-        'enable-funding': 'card', // Activer le paiement par carte
-        'disable-funding': 'paylater', // Désactiver paylater
+        'enable-funding': 'card,paylater', // Activer le paiement par carte et Pay Later (4x)
         ...(isTestMode && { 'data-client-token': undefined }),
       }}
     >
