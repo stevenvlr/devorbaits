@@ -1,14 +1,15 @@
 'use client'
 
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react'
-import { createClient } from '@/utils/supabase/client'
+import { getSupabaseClient } from '@/lib/supabase'
 import { reserveStock as reserveStockAmicale, releaseStock as releaseStockAmicale } from '@/lib/amicale-blanc-stock'
 import { reserveStock, releaseStock, getAvailableStock } from '@/lib/stock-manager'
 import { getBouilletteId } from '@/lib/price-utils'
 import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 
-const supabase = createClient()
+const supabase = getSupabaseClient()
+
 
 export interface PromoCharacteristics {
   arome?: string
