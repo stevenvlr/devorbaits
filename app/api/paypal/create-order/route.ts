@@ -9,14 +9,15 @@ function parseMoney(input: unknown): number {
   return Number(input)
 }
 
-function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100
+function toCents(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100)
+}
+function centsToStr(cents: number): string {
+  return (cents / 100).toFixed(2)
 }
 
-/** Unité de montant pour PayPal (currency_code + value string 2 décimales) */
 export type PayPalUnitAmount = { currency_code: string; value: string }
 
-/** Payload stocké dans payment_intents (même forme que capture-order). Pour PayPal, items doit avoir name + quantity + unit_amount. */
 export type PayPalOrderPayload = {
   reference: string
   items: Array<{
@@ -24,15 +25,8 @@ export type PayPalOrderPayload = {
     variant_id?: string
     quantity: number
     price: number
-    /** Nom affiché dans PayPal (obligatoire pour create-order) */
     name?: string
-    /** Montant unitaire pour PayPal (obligatoire pour create-order) */
     unit_amount?: PayPalUnitAmount
-    arome?: string
-    taille?: string
-    couleur?: string
-    diametre?: string
-    conditionnement?: string
     produit?: string
   }>
   total: number
@@ -59,180 +53,118 @@ const PAYPAL_ITEM_NAME_MAX = 127
 const PAYPAL_ITEM_SKU_MAX = 127
 const PAYPAL_ITEMS_MAX = 100
 
-// Cette route crée une commande PayPal côté serveur et enregistre l'intent (payload) pour capture
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { amount, itemTotal, shippingTotal, reference, currency = 'EUR', orderPayload } = body as {
-      amount?: unknown
-      itemTotal?: unknown
-      shippingTotal?: unknown
+    const { reference, currency = 'EUR', orderPayload } = body as {
       reference?: string
       currency?: string
       orderPayload?: PayPalOrderPayload
     }
 
-    // Vérifier que les paramètres sont présents
-    if (amount == null || itemTotal == null || shippingTotal == null || !reference) {
-      return NextResponse.json(
-        { error: 'Montants (amount, itemTotal, shippingTotal) et référence requis' },
-        { status: 400 }
-      )
+    if (!reference) {
+      return NextResponse.json({ error: 'Référence requise' }, { status: 400 })
     }
 
-    // Exiger orderPayload avec items non vides pour afficher le détail dans PayPal
     if (!orderPayload || !Array.isArray(orderPayload.items) || orderPayload.items.length === 0) {
       return NextResponse.json(
-        {
-          error:
-            'Le panier est vide ou les détails de la commande sont incomplets. Veuillez actualiser la page et réessayer.',
-        },
+        { error: 'Panier vide ou détails commande incomplets. Actualise et réessaie.' },
         { status: 400 }
       )
     }
     if (orderPayload.items.length > PAYPAL_ITEMS_MAX) {
-      return NextResponse.json(
-        { error: `Trop d'articles (max ${PAYPAL_ITEMS_MAX}). Réduisez le panier.` },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: `Trop d'articles (max ${PAYPAL_ITEMS_MAX}).` }, { status: 400 })
     }
 
-    // Normaliser les montants (accepte number ou string, point ou virgule)
-    const numericAmount = parseMoney(amount)
-    const numericItemTotal = parseMoney(itemTotal)
-    const numericShippingTotal = parseMoney(shippingTotal)
+    // ✅ On NE fait plus confiance à amount/itemTotal/shippingTotal du front.
+    const shippingCents = toCents(parseMoney(orderPayload.shippingCost ?? 0))
+    const finalTotalCents = toCents(parseMoney(orderPayload.total))
 
-    if (
-      !Number.isFinite(numericAmount) ||
-      !Number.isFinite(numericItemTotal) ||
-      !Number.isFinite(numericShippingTotal) ||
-      numericAmount <= 0 ||
-      numericItemTotal < 0 ||
-      numericShippingTotal < 0
-    ) {
-      return NextResponse.json(
-        { error: 'Montant invalide' },
-        { status: 400 }
-      )
+    if (!Number.isFinite(shippingCents) || shippingCents < 0 || !Number.isFinite(finalTotalCents) || finalTotalCents <= 0) {
+      return NextResponse.json({ error: 'Montants invalides (total/shipping).' }, { status: 400 })
     }
 
-    const computedTotal = round2(numericItemTotal + numericShippingTotal)
-    const expectedTotal = round2(numericAmount)
+    // Construire items PayPal + somme item_total en centimes
+    const paypalItems: Array<{
+      name: string
+      quantity: string
+      unit_amount: { currency_code: string; value: string }
+      sku?: string
+    }> = []
 
-    // Validation serveur: amount doit être = item_total + shipping (arrondi 2 décimales)
-    if (Math.abs(computedTotal - expectedTotal) > 0.01) {
-      console.error('❌ PayPal create-order: montants incohérents', {
-        reference,
-        currency,
-        amountProvided: expectedTotal,
-        itemTotalProvided: round2(numericItemTotal),
-        shippingTotalProvided: round2(numericShippingTotal),
-        computedTotal,
-      })
-      return NextResponse.json(
-        {
-          error:
-            'Montants incohérents: amount doit être égal à itemTotal + shippingTotal (arrondi 2 décimales)',
-        },
-        { status: 400 }
-      )
-    }
+    let itemTotalCents = 0
 
-    // Construire les items PayPal (name, quantity, unit_amount, sku) et vérifier item_total
-    const paypalItems: Array<{ name: string; quantity: string; unit_amount: { currency_code: string; value: string }; sku?: string }> = []
-    let sumItemTotal = 0
     for (const it of orderPayload.items) {
       const qty = Math.max(1, Math.min(999999, Math.floor(Number(it.quantity)) || 1))
-      const unitValue = it.unit_amount?.value != null
-        ? parseMoney(it.unit_amount.value)
-        : Number(it.price)
-      const unitPrice = Number.isFinite(unitValue) ? round2(unitValue) : 0
-      const valueStr = unitPrice.toFixed(2)
+
+      const unitValue = it.unit_amount?.value != null ? parseMoney(it.unit_amount.value) : parseMoney(it.price)
+      const unitCents = toCents(Number.isFinite(unitValue) ? unitValue : 0)
+
+      // Somme item_total
+      itemTotalCents += unitCents * qty
+
       const name =
-        typeof it.name === 'string' && it.name.trim() !== ''
-          ? it.name.trim().slice(0, PAYPAL_ITEM_NAME_MAX)
-          : (it.produit && it.produit.trim() !== '' ? it.produit.trim() : 'Article').slice(0, PAYPAL_ITEM_NAME_MAX)
+        (typeof it.name === 'string' && it.name.trim() !== ''
+          ? it.name.trim()
+          : (it.produit && it.produit.trim() !== '' ? it.produit.trim() : 'Article')
+        ).slice(0, PAYPAL_ITEM_NAME_MAX)
+
       const sku =
         typeof it.product_id === 'string' && it.product_id.trim() !== ''
           ? it.product_id.trim().slice(0, PAYPAL_ITEM_SKU_MAX)
           : undefined
-      sumItemTotal += round2(unitPrice * qty)
+
       paypalItems.push({
         name,
         quantity: String(qty),
-        unit_amount: { currency_code: currency, value: valueStr },
+        unit_amount: { currency_code: currency, value: centsToStr(unitCents) },
         ...(sku && { sku }),
       })
     }
-    const computedItemTotal = round2(sumItemTotal)
-    if (Math.abs(computedItemTotal - round2(numericItemTotal)) > 0.01) {
-      console.error('❌ PayPal create-order: item_total incohérent avec items', {
-        reference,
-        fromItems: computedItemTotal,
-        provided: round2(numericItemTotal),
-      })
+
+    // ✅ Gestion promo / code promo : discount = (items + shipping) - total_final
+    const preDiscountCents = itemTotalCents + shippingCents
+    const discountCents = Math.max(0, preDiscountCents - finalTotalCents)
+
+    // Si total_final > items+shipping => incohérent (sauf si tu gères taxes ailleurs)
+    if (finalTotalCents - preDiscountCents > 1) {
       return NextResponse.json(
-        {
-          error:
-            'Le total des articles ne correspond pas. Veuillez actualiser la page et réessayer.',
-        },
+        { error: 'Total incohérent: total > items + shipping.' },
         { status: 400 }
       )
     }
 
-    // Récupérer les clés PayPal depuis les variables d'environnement
     const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
     const clientSecret = process.env.PAYPAL_SECRET
-
     if (!clientId || !clientSecret) {
-      console.error('PayPal non configuré dans les variables d\'environnement')
-      return NextResponse.json(
-        { error: 'PayPal non configuré. Vérifiez NEXT_PUBLIC_PAYPAL_CLIENT_ID et PAYPAL_SECRET dans .env.local' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'PayPal non configuré (env manquantes).' }, { status: 500 })
     }
 
-    // Déterminer l'URL de base (sandbox pour test, production pour live)
     const baseUrl = process.env.NEXT_PUBLIC_PAYPAL_BASE_URL || 'https://api-m.sandbox.paypal.com'
-    const accessTokenUrl = `${baseUrl}/v1/oauth2/token`
-    // API Orders v2
-    const ordersUrl = `${baseUrl}/v2/checkout/orders`
-
-    // Créer les credentials pour l'authentification Basic (compatible Edge Runtime)
     const credentials = btoa(`${clientId}:${clientSecret}`)
 
-    const tokenResponse = await fetch(accessTokenUrl, {
+    const tokenResponse = await fetch(`${baseUrl}/v1/oauth2/token`, {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Accept-Language': 'en_US',
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${credentials}`,
+        Authorization: `Basic ${credentials}`,
       },
       body: 'grant_type=client_credentials',
     })
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
-      console.error('Erreur authentification PayPal:', errorText)
-      return NextResponse.json(
-        { error: 'Erreur lors de l\'authentification PayPal' },
-        { status: 500 }
-      )
+      console.error('PayPal auth error:', errorText)
+      return NextResponse.json({ error: 'Erreur authentification PayPal' }, { status: 500 })
     }
 
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
+    if (!accessToken) return NextResponse.json({ error: 'Token PayPal manquant' }, { status: 500 })
 
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: 'Token d\'accès PayPal non reçu' },
-        { status: 500 }
-      )
-    }
-
-    // Créer la commande PayPal (items = détail produits affichés dans PayPal)
-    const orderData = {
+    const orderData: any = {
       intent: 'CAPTURE',
       purchase_units: [
         {
@@ -241,16 +173,13 @@ export async function POST(request: NextRequest) {
           items: paypalItems,
           amount: {
             currency_code: currency,
-            value: computedTotal.toFixed(2),
+            value: centsToStr(finalTotalCents),
             breakdown: {
-              item_total: {
-                currency_code: currency,
-                value: computedItemTotal.toFixed(2),
-              },
-              shipping: {
-                currency_code: currency,
-                value: round2(numericShippingTotal).toFixed(2),
-              },
+              item_total: { currency_code: currency, value: centsToStr(itemTotalCents) },
+              shipping: { currency_code: currency, value: centsToStr(shippingCents) },
+              ...(discountCents > 0
+                ? { discount: { currency_code: currency, value: centsToStr(discountCents) } }
+                : {}),
             },
           },
         },
@@ -264,11 +193,11 @@ export async function POST(request: NextRequest) {
       },
     }
 
-    const orderResponse = await fetch(ordersUrl, {
+    const orderResponse = await fetch(`${baseUrl}/v2/checkout/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         'PayPal-Request-Id': reference,
       },
       body: JSON.stringify(orderData),
@@ -276,21 +205,19 @@ export async function POST(request: NextRequest) {
 
     if (!orderResponse.ok) {
       const errorText = await orderResponse.text()
-      console.error('Erreur création commande PayPal:', errorText)
-      return NextResponse.json(
-        { error: 'Erreur lors de la création de la commande PayPal' },
-        { status: 500 }
-      )
+      console.error('PayPal create order error:', errorText)
+      return NextResponse.json({ error: 'Erreur création commande PayPal' }, { status: 500 })
     }
 
     const order = await orderResponse.json()
 
-    // Stocker l'intent avec le payload pour création de commande à la capture (indépendant du navigateur)
+    // Stocker l'intent (inchangé)
     let intentId: string | null = null
-    if (orderPayload?.reference && Array.isArray(orderPayload.items) && orderPayload.items.length > 0) {
-      try {
-        const supabase = createSupabaseAdmin()
-        const { data: intentRow, error: intentError } = await supabase.from('payment_intents').upsert(
+    try {
+      const supabase = createSupabaseAdmin()
+      const { data: intentRow, error: intentError } = await supabase
+        .from('payment_intents')
+        .upsert(
           {
             provider: 'paypal',
             paypal_order_id: order.id,
@@ -301,28 +228,24 @@ export async function POST(request: NextRequest) {
             processed_at: null,
           },
           { onConflict: 'paypal_order_id' }
-        ).select('id').single()
-        if (intentError) {
-          console.error('[PAYPAL_CREATE_ORDER] paypal_order_id=%s intentSaved=false error=%s', order.id, intentError.message)
-        } else {
-          intentId = intentRow?.id ?? null
-          console.log('[PAYPAL_CREATE_ORDER] paypal_order_id=%s intentId=%s', order.id, intentId ?? '(none)')
-        }
-      } catch (e) {
-        console.error('[PAYPAL_CREATE_ORDER] paypal_order_id=%s intentSaved=false exception=%s', order.id, e instanceof Error ? e.message : String(e))
+        )
+        .select('id')
+        .single()
+
+      if (intentError) {
+        console.error('[PAYPAL_CREATE_ORDER] intentSaved=false error=%s', intentError.message)
+      } else {
+        intentId = intentRow?.id ?? null
       }
-    } else {
-      console.log('[PAYPAL_CREATE_ORDER] paypal_order_id=%s intentSkipped=noPayload', order.id)
+    } catch (e) {
+      console.error('[PAYPAL_CREATE_ORDER] intentSaved=false exception=%s', e instanceof Error ? e.message : String(e))
     }
 
-    return NextResponse.json({
-      id: order.id,
-      status: order.status,
-    })
+    return NextResponse.json({ id: order.id, status: order.status })
   } catch (error: unknown) {
     console.error('Erreur création commande PayPal:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Erreur lors de la création de la commande PayPal' },
+      { error: error instanceof Error ? error.message : 'Erreur création commande PayPal' },
       { status: 500 }
     )
   }
