@@ -168,6 +168,8 @@ export async function POST(request: NextRequest) {
     const accessToken = tokenData.access_token
     if (!accessToken) return NextResponse.json({ error: 'Token PayPal manquant' }, { status: 500 })
 
+      const amountCents = itemTotalCents + shippingCents - discountCents
+
     const orderData: any = {
       intent: 'CAPTURE',
       purchase_units: [
@@ -177,7 +179,7 @@ export async function POST(request: NextRequest) {
           items: paypalItems,
           amount: {
             currency_code: currency,
-            value: centsToStr(finalTotalCents),
+            value: centsToStr(amountCents),
             breakdown: {
               item_total: { currency_code: currency, value: centsToStr(itemTotalCents) },
               shipping: { currency_code: currency, value: centsToStr(shippingCents) },
