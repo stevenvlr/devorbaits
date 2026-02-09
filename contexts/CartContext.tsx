@@ -132,6 +132,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // ✅ 1) Charger le panier depuis Supabase au démarrage (si le client est connecté)
   useEffect(() => {
+    // TEMPORAIRE : désactivation sync Supabase
+    // on réactivera proprement après
+  }, [cartItems])
+  
+  
+  
+
+  // ✅ 2) Sauvegarder le panier dans Supabase à chaque changement (auto, avec petite attente)
+  useEffect(() => {
     if (!isLoadedFromDb.current) return
   
     if (saveTimer.current) {
@@ -139,26 +148,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   
     saveTimer.current = setTimeout(() => {
-      ;(async () => {
-        const sb = getSupabaseClient()
-        console.log('[CartSync] sb exists?', !!sb)
-        if (!sb) return
-  
-        const { data: userData, error: userErr } = await sb.auth.getUser()
-        console.log('[CartSync] user', userData?.user?.id, 'err', userErr)
-  
-        const userId = userData?.user?.id
-        if (!userId) return
-  
-        const { error } = await sb.from('carts').upsert({
-          user_id: userId,
-          items: cartItems,
-          updated_at: new Date().toISOString(),
-        })
-  
-        if (error) console.error('[CartSync] upsert error', error)
-        else console.log('[CartSync] upsert OK')
-      })()
+      syncCartToSupabase()
     }, 700)
   
     return () => {
@@ -166,39 +156,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [cartItems])
   
-  
-
-  // ✅ 2) Sauvegarder le panier dans Supabase à chaque changement (auto, avec petite attente)
-  useEffect(() => {
-    if (!isLoadedFromDb.current) return
-    if (!supabase) return
-  
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-  
-      const sb = getSupabaseClient()
-      console.log('[CartSync] sb exists?', !!sb)
-      if (!sb) return
-    
-      const { data: userData, error: userErr } = await sb.auth.getUser()
-      console.log('[CartSync] user', userData?.user?.id, 'err', userErr)
-      const userId = userData?.user?.id
-      if (!userId) return
-    
-      const { error } = await sb.from('carts').upsert({
-        user_id: userId,
-        items: cartItems,
-        updated_at: new Date().toISOString(),
-      })
-    
-      if (error) console.error('[CartSync] upsert error', error)
-      else console.log('[CartSync] upsert OK')
-    
-    }, 700)
-  
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-    }
-  }, [cartItems])
   
 
   const updatePromoItem = (id: string, updates: Partial<CartItem>) => {
