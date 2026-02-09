@@ -9,11 +9,6 @@ import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 
 const supabase = getSupabaseClient()
-if (!supabase) {
-  // Supabase pas prêt/configuré → on ne sync pas le panier
-}
-
-
 
 export interface PromoCharacteristics {
   arome?: string
@@ -139,28 +134,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     ;(async () => {
       try {
-        const { data } = if (!supabase) return
-        await supabase.auth.getUser()
-        
+        if (!supabase) return
+  
+        const { data } = await supabase.auth.getUser()
         const userId = data?.user?.id
         if (!userId) return
-
+  
         const { data: row, error } = await supabase
           .from('carts')
           .select('items')
           .eq('user_id', userId)
           .single()
-
-        // Si pas de panier encore, Supabase peut renvoyer une erreur "no rows"
-        // On ignore, le panier restera vide.
-        if (error) {
-          // tu peux laisser silencieux, ou logguer :
-          // console.log('[CartContext] Aucun panier en base (normal si nouveau client).')
-          isLoadedFromDb.current = true
-          return
-        }
-
-        if (row?.items && Array.isArray(row.items)) {
+  
+        if (!error && row?.items && Array.isArray(row.items)) {
           setCartItems(managePromoItems(row.items as CartItem[]))
         }
       } finally {
@@ -168,31 +154,34 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     })()
   }, [])
+  
 
   // ✅ 2) Sauvegarder le panier dans Supabase à chaque changement (auto, avec petite attente)
   useEffect(() => {
     if (!isLoadedFromDb.current) return
-
+    if (!supabase) return
+  
     if (saveTimer.current) clearTimeout(saveTimer.current)
-
+  
     saveTimer.current = setTimeout(async () => {
-      const { data } = if (!supabase) return
-      await supabase.auth.getUser()
-      
+      if (!supabase) return
+  
+      const { data } = await supabase.auth.getUser()
       const userId = data?.user?.id
       if (!userId) return
-
+  
       await supabase.from('carts').upsert({
         user_id: userId,
         items: cartItems,
         updated_at: new Date().toISOString(),
       })
     }, 700)
-
+  
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
   }, [cartItems])
+  
 
   const updatePromoItem = (id: string, updates: Partial<CartItem>) => {
     setCartItems(prev => {
