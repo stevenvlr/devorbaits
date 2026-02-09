@@ -97,8 +97,12 @@ export async function POST(request: NextRequest) {
     for (const it of orderPayload.items) {
       const qty = Math.max(1, Math.min(999999, Math.floor(Number(it.quantity)) || 1))
 
-      const unitValue = it.unit_amount?.value != null ? parseMoney(it.unit_amount.value) : parseMoney(it.price)
+      const isFree = (it as any).isGratuit === true || parseMoney(it.price) === 0
+
+      // ✅ on ignore unit_amount pour éviter les écarts
+      const unitValue = isFree ? 0 : parseMoney(it.price)
       const unitCents = toCents(Number.isFinite(unitValue) ? unitValue : 0)
+            
 
       // Somme item_total
       itemTotalCents += unitCents * qty
