@@ -163,18 +163,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
   
     if (saveTimer.current) clearTimeout(saveTimer.current)
   
-    saveTimer.current = setTimeout(async () => {
-      if (!supabase) return
-  
-      const { data } = await supabase.auth.getUser()
-      const userId = data?.user?.id
+      const sb = getSupabaseClient()
+      console.log('[CartSync] sb exists?', !!sb)
+      if (!sb) return
+    
+      const { data: userData, error: userErr } = await sb.auth.getUser()
+      console.log('[CartSync] user', userData?.user?.id, 'err', userErr)
+      const userId = userData?.user?.id
       if (!userId) return
-  
-      await supabase.from('carts').upsert({
+    
+      const { error } = await sb.from('carts').upsert({
         user_id: userId,
         items: cartItems,
         updated_at: new Date().toISOString(),
       })
+    
+      if (error) console.error('[CartSync] upsert error', error)
+      else console.log('[CartSync] upsert OK')
+    
     }, 700)
   
     return () => {
