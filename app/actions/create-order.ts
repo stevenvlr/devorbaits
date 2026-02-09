@@ -7,6 +7,7 @@
  */
 import { createSupabaseAdmin } from '@/lib/supabase/admin'
 import type { OrderPickupPoint, OrderDeliveryType, OrderItem } from '@/lib/revenue-supabase'
+import { createShippingDraftForOrder } from '@/lib/create-shipping-draft-for-order'
 
 type OrderItemInput = Omit<OrderItem, 'id' | 'order_id' | 'created_at'>
 
@@ -128,6 +129,12 @@ export async function createOrderAction(params: CreateOrderActionParams): Promis
     }
     if (!orderData) {
       return { ok: false, error: 'Aucune donnée retournée' }
+    }
+    const orderId = (orderData as { id?: string }).id
+    if (orderId) {
+      createShippingDraftForOrder(orderId).catch((e) =>
+        console.error('[ORDER_CREATE] createShippingDraftForOrder', orderId, e)
+      )
     }
     return { ok: true, order: orderData as { id: string; reference: string; [k: string]: unknown } }
   } catch (e: any) {
