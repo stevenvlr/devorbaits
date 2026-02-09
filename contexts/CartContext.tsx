@@ -9,6 +9,10 @@ import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 
 const supabase = getSupabaseClient()
+if (!supabase) {
+  // Supabase pas prêt/configuré → on ne sync pas le panier
+}
+
 
 
 export interface PromoCharacteristics {
@@ -135,7 +139,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     ;(async () => {
       try {
-        const { data } = await supabase.auth.getUser()
+        const { data } = if (!supabase) return
+        await supabase.auth.getUser()
+        
         const userId = data?.user?.id
         if (!userId) return
 
@@ -170,7 +176,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (saveTimer.current) clearTimeout(saveTimer.current)
 
     saveTimer.current = setTimeout(async () => {
-      const { data } = await supabase.auth.getUser()
+      const { data } = if (!supabase) return
+      await supabase.auth.getUser()
+      
       const userId = data?.user?.id
       if (!userId) return
 
