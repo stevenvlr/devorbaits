@@ -210,8 +210,13 @@ export async function POST(request: NextRequest) {
     if (!orderResponse.ok) {
       const errorText = await orderResponse.text()
       console.error('PayPal create order error:', errorText)
-      return NextResponse.json({ error: 'Erreur création commande PayPal' }, { status: 500 })
+    
+      return NextResponse.json(
+        { error: 'PayPal create-order failed', details: errorText },
+        { status: 500 }
+      )
     }
+    
 
     const order = await orderResponse.json()
 
