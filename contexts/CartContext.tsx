@@ -132,28 +132,40 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // ✅ 1) Charger le panier depuis Supabase au démarrage (si le client est connecté)
   useEffect(() => {
-    ;(async () => {
-      try {
-        if (!supabase) return
+    if (!isLoadedFromDb.current) return
   
-        const { data } = await supabase.auth.getUser()
-        const userId = data?.user?.id
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current)
+    }
+  
+    saveTimer.current = setTimeout(() => {
+      ;(async () => {
+        const sb = getSupabaseClient()
+        console.log('[CartSync] sb exists?', !!sb)
+        if (!sb) return
+  
+        const { data: userData, error: userErr } = await sb.auth.getUser()
+        console.log('[CartSync] user', userData?.user?.id, 'err', userErr)
+  
+        const userId = userData?.user?.id
         if (!userId) return
   
-        const { data: row, error } = await supabase
-          .from('carts')
-          .select('items')
-          .eq('user_id', userId)
-          .single()
+        const { error } = await sb.from('carts').upsert({
+          user_id: userId,
+          items: cartItems,
+          updated_at: new Date().toISOString(),
+        })
   
-        if (!error && row?.items && Array.isArray(row.items)) {
-          setCartItems(managePromoItems(row.items as CartItem[]))
-        }
-      } finally {
-        isLoadedFromDb.current = true
-      }
-    })()
-  }, [])
+        if (error) console.error('[CartSync] upsert error', error)
+        else console.log('[CartSync] upsert OK')
+      })()
+    }, 700)
+  
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  }, [cartItems])
+  
   
 
   // ✅ 2) Sauvegarder le panier dans Supabase à chaque changement (auto, avec petite attente)
