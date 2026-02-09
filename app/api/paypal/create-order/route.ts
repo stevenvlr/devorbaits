@@ -252,10 +252,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ id: order.id, status: order.status })
   } catch (error: unknown) {
-    console.error('Erreur création commande PayPal:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Erreur création commande PayPal' },
+      { error: "crash", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }
-}
+  
