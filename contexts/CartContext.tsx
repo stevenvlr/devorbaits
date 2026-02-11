@@ -57,6 +57,18 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
  *  Cross-device cart sync
  *  ========================= */
 const CART_LS_KEY = 'cart:v1'
+const CART_TOKEN_LS_KEY = 'cart:v1:token'
+
+function getOrCreateCartToken() {
+  if (typeof window === 'undefined') return 'server'
+  let t = localStorage.getItem(CART_TOKEN_LS_KEY)
+  if (!t) {
+    t = `ct_${Date.now()}_${Math.random().toString(16).slice(2)}`
+    localStorage.setItem(CART_TOKEN_LS_KEY, t)
+  }
+  return t
+}
+
 const CART_META_LS_KEY = 'cart:v1:meta'
 const SYNC_DEBOUNCE_MS = 700
 
@@ -305,10 +317,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
         const payload = {
           user_id: userId,
+          token: getOrCreateCartToken(),
           items: normalized,
           // refresh 48h à chaque write
           expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
         }
+        
 
         console.log('[CartContext] syncing to supabase...', { userId, count: normalized.length })
 
