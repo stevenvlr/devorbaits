@@ -8,7 +8,7 @@ import { getBouilletteId } from '@/lib/price-utils'
 import { useGlobalPromotion } from '@/hooks/useGlobalPromotion'
 import { applyGlobalPromotion } from '@/lib/global-promotion-manager'
 
-const supabase = getSupabaseClient()
+const supabase = getSupabaseClient()!
 
 export interface PromoCharacteristics {
   arome?: string
@@ -53,6 +53,37 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
+/** =========================
+ *  Cross-device cart sync
+ *  ========================= */
+const CART_LS_KEY = 'cart:v1'
+const CART_META_LS_KEY = 'cart:v1:meta'
+const SYNC_DEBOUNCE_MS = 700
+
+type CartMeta = { updatedAt: number }
+
+function safeJsonParse<T>(value: string | null): T | null {
+  if (!value) return null
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return null
+  }
+}
+
+function readLocalCart() {
+  if (typeof window === 'undefined') return { items: null as CartItem[] | null, updatedAt: 0 }
+  const items = safeJsonParse<CartItem[]>(localStorage.getItem(CART_LS_KEY))
+  const meta = safeJsonParse<CartMeta>(localStorage.getItem(CART_META_LS_KEY))
+  return { items, updatedAt: meta?.updatedAt ?? 0 }
+}
+
+function writeLocalCart(items: CartItem[], updatedAt: number) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(CART_LS_KEY, JSON.stringify(items))
+  localStorage.setItem(CART_META_LS_KEY, JSON.stringify({ updatedAt } satisfies CartMeta))
+}
+
 function normalizeConditionnementFromText(text: string): string | undefined {
   const raw = (text || '').toLowerCase()
   const kg = raw.match(/(\d+(?:[.,]\d+)?)\s*(kg|kilo|kilos)\b/)
@@ -81,9 +112,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const { promotion } = useGlobalPromotion()
 
-  // ⚠️ IMPORTANT : évite d’écraser le panier en base au tout début
-  const isLoadedFromDb = useRef(false)
+  // --- Sync refs (ne casse pas tes fonctions existantes) ---
+  const isHydrating = useRef(true) // évite push supabase pendant les hydratations
+  const isLoadedFromDb = useRef(false) // garde ton comportement : on push seulement après un merge initial connecté
   const saveTimer = useRef<any>(null)
+  const lastAppliedRemoteTs = useRef<number>(0)
+  const lastLocalTs = useRef<number>(0)
 
   // Fonction pour vérifier si un produit est éligible à la promotion 4+1
   const isEligibleForPromo = (produit: string): boolean => {
@@ -130,34 +164,159 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return [...paidItems, ...finalPromoItems]
   }
 
-  // ✅ 1) Charger le panier depuis Supabase au démarrage (si le client est connecté)
+  /** =========================
+   *  0) Hydrate localStorage au boot (toujours)
+   *  ========================= */
   useEffect(() => {
-    // TEMPORAIRE : désactivation sync Supabase
-    // on réactivera proprement après
-  }, [cartItems])
-  
-  
-  
-
-  // ✅ 2) Sauvegarder le panier dans Supabase à chaque changement (auto, avec petite attente)
-  useEffect(() => {
-    if (!isLoadedFromDb.current) return
-  
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current)
+    const local = readLocalCart()
+    if (local.items && Array.isArray(local.items)) {
+      const normalized = managePromoItems(local.items)
+      setCartItems(normalized)
+      lastLocalTs.current = local.updatedAt || 0
     }
-  
-    saveTimer.current = setTimeout(() => {
-      // syncCartToSupabase() // désactivé
-    }, 700)
-    
-  
+    isHydrating.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** =========================
+   *  Helper: user connecté ?
+   *  ========================= */
+  async function getUserId(): Promise<string | null> {
+    const { data } = await supabase.auth.getUser()
+    return data?.user?.id ?? null
+  }
+
+  /** =========================
+   *  1) Merge au login (cross-device)
+   *  “le plus récent gagne” : localStorage.meta.updatedAt vs remote.updated_at
+   *  ========================= */
+  useEffect(() => {
+    let cancelled = false
+
+    ;(async () => {
+      const userId = await getUserId()
+      if (!userId) return // pas connecté => pas de cross-device
+
+      // Récupère le remote le plus récent
+      const { data, error } = await supabase
+        .from('carts')
+        .select('items, updated_at')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      if (error) {
+        console.error('[CartContext] load cart from supabase error:', error)
+        // même en cas d'erreur, on ne bloque pas le local
+        isLoadedFromDb.current = true
+        return
+      }
+
+      const local = readLocalCart()
+      const remoteItems = (data?.items ?? null) as CartItem[] | null
+      const remoteTs = data?.updated_at ? Date.parse(data.updated_at) : 0
+      const localTs = local.updatedAt || 0
+
+      // Aucun panier remote : push local (si existe)
+      if (!remoteItems) {
+        isLoadedFromDb.current = true
+        if (local.items && Array.isArray(local.items) && local.items.length > 0) {
+          // push (debounced via effect cartItems)
+          setCartItems(managePromoItems(local.items))
+        }
+        return
+      }
+
+      // Aucun panier local
+      if (!local.items) {
+        lastAppliedRemoteTs.current = remoteTs
+        const normalized = managePromoItems(remoteItems)
+        setCartItems(normalized)
+        writeLocalCart(normalized, remoteTs)
+        lastLocalTs.current = remoteTs
+        isLoadedFromDb.current = true
+        return
+      }
+
+      // Les deux existent : le plus récent gagne
+      if (remoteTs > localTs) {
+        lastAppliedRemoteTs.current = remoteTs
+        const normalized = managePromoItems(remoteItems)
+        setCartItems(normalized)
+        writeLocalCart(normalized, remoteTs)
+        lastLocalTs.current = remoteTs
+      } else {
+        // local gagne => on garde le local (déjà en state), et on laissera le save effect pousser
+        const normalized = managePromoItems(local.items)
+        setCartItems(normalized)
+        writeLocalCart(normalized, localTs || Date.now())
+        lastLocalTs.current = localTs || Date.now()
+      }
+
+      isLoadedFromDb.current = true
+    })()
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /** =========================
+   *  2) Local persist + Supabase sync (debounce 700ms)
+   *  - Toujours: localStorage
+   *  - Supabase: uniquement si connecté ET après merge initial
+   *  - Ne supprime pas au logout (on ne fait aucun delete)
+   *  ========================= */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (isHydrating.current) return
+
+    // LocalStorage (toujours)
+    const ts = Date.now()
+    const normalized = managePromoItems(cartItems)
+    // évite re-tri en boucle: on ne set pas ici, juste on écrit LS
+    writeLocalCart(normalized, ts)
+    lastLocalTs.current = ts
+
+    // Supabase: seulement si connecté + merge déjà fait
+    if (!isLoadedFromDb.current) return
+
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const userId = await getUserId()
+        if (!userId) return // logout => stop sync, ne supprime rien
+
+        // anti-boucle: si on vient d'appliquer un remote plus récent, ne repousse pas derrière
+        if (ts <= lastAppliedRemoteTs.current) return
+
+        const payload = {
+          user_id: userId,
+          items: normalized,
+          // refresh 48h à chaque write
+          expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+        }
+
+        const { error } = await supabase.from('carts').upsert(payload, { onConflict: 'user_id' })
+
+        if (error) {
+          console.error('[CartContext] sync cart to supabase error:', error)
+        }
+      } catch (e) {
+        console.error('[CartContext] sync cart exception:', e)
+      }
+    }, SYNC_DEBOUNCE_MS)
+
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartItems])
-  
-  
 
   const updatePromoItem = (id: string, updates: Partial<CartItem>) => {
     setCartItems(prev => {
