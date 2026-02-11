@@ -148,8 +148,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   
     saveTimer.current = setTimeout(() => {
-      syncCartToSupabase()
+      // syncCartToSupabase() // désactivé
     }, 700)
+    
   
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
