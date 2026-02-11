@@ -80,6 +80,14 @@ export async function POST(request: NextRequest) {
     const shippingCents = toCents(parseMoney(orderPayload.shippingCost ?? 0))
     const finalTotalCents = toCents(parseMoney(orderPayload.total))
 
+    console.log("CHECK TOTALS", {
+      totalFromPayload: orderPayload.total,
+      shippingFromPayload: orderPayload.shippingCost ?? 0,
+      shippingCents,
+      finalTotalCents,
+      itemsCount: orderPayload.items.length,
+    })
+    
     if (!Number.isFinite(shippingCents) || shippingCents < 0 || !Number.isFinite(finalTotalCents) || finalTotalCents <= 0) {
       return NextResponse.json({ error: 'Montants invalides (total/shipping).' }, { status: 400 })
     }
@@ -130,13 +138,20 @@ export async function POST(request: NextRequest) {
     const preDiscountCents = itemTotalCents + shippingCents
     const discountCents = Math.max(0, preDiscountCents - finalTotalCents)
 
-    // Si total_final > items+shipping => incohérent (sauf si tu gères taxes ailleurs)
-    if (finalTotalCents - preDiscountCents > 1) {
-      return NextResponse.json(
-        { error: 'Total incohérent: total > items + shipping.' },
-        { status: 400 }
-      )
-    }
+ // ✅ Contrôle cohérence : final = (items + shipping) - discount (au centime près)
+const discountCentsSafe = Math.max(0, Math.min(discountCents ?? 0, preDiscountCents))
+const expectedFinalCents = preDiscountCents - discountCentsSafe
+
+// Tolérance 1 centime
+if (Math.abs(finalTotalCents - expectedFinalCents) > 1) {
+  return NextResponse.json(
+    {
+      error: `Total incohérent: final=${finalTotalCents} attendu=${expectedFinalCents} (items+shipping=${preDiscountCents}, discount=${discountCentsSafe})`,
+    },
+    { status: 400 }
+  )
+}
+
 
     const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
     const clientSecret = process.env.PAYPAL_SECRET
