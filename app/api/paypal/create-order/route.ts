@@ -168,37 +168,53 @@ export async function POST(request: NextRequest) {
     const accessToken = tokenData.access_token
     if (!accessToken) return NextResponse.json({ error: 'Token PayPal manquant' }, { status: 500 })
 
-      const amountCents = itemTotalCents + shippingCents - discountCents
 
-    const orderData: any = {
-      intent: 'CAPTURE',
-      purchase_units: [
-        {
-          reference_id: reference,
-          description: `Commande ${reference}`,
-          items: paypalItems,
-          amount: {
-            currency_code: currency,
-            value: centsToStr(amountCents),
-            breakdown: {
-              item_total: { currency_code: currency, value: centsToStr(itemTotalCents) },
-              shipping: { currency_code: currency, value: centsToStr(shippingCents) },
-              ...(discountCents > 0
-                ? { discount: { currency_code: currency, value: centsToStr(discountCents) } }
-                : {}),
+      const itemsSumCents = paypalItems.reduce((sum, it) => {
+        const unitCents = Math.round(parseFloat(it.unit_amount.value) * 100)
+        return sum + unitCents * Number(it.quantity)
+      }, 0)
+      
+      const safeDiscountCents = Math.max(0, Math.min(discountCents, itemsSumCents + shippingCents))
+      const amountCents = itemsSumCents + shippingCents - safeDiscountCents
+      
+      const orderData: any = {
+        intent: 'CAPTURE',
+        purchase_units: [
+          {
+            reference_id: reference,
+            description: `Commande ${reference}`,
+            items: paypalItems,
+            amount: {
+              currency_code: currency,
+              value: centsToStr(amountCents),
+              breakdown: {
+                item_total: { currency_code: currency, value: centsToStr(itemsSumCents) },
+                shipping: { currency_code: currency, value: centsToStr(shippingCents) },
+                ...(safeDiscountCents > 0
+                  ? { discount: { currency_code: currency, value: centsToStr(safeDiscountCents) } }
+                  : {}),
+              },
             },
           },
+        ],
+        application_context: {
+          brand_name: 'Boutique Pêche Carpe',
+          landing_page: 'NO_PREFERENCE',
+          user_action: 'PAY_NOW',
+          return_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/payment/success?payment_method=paypal`,
+          cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/payment/error?payment_method=paypal`,
         },
-      ],
-      application_context: {
-        brand_name: 'Boutique Pêche Carpe',
-        landing_page: 'NO_PREFERENCE',
-        user_action: 'PAY_NOW',
-        return_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/payment/success?payment_method=paypal`,
-        cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/payment/error?payment_method=paypal`,
-      },
-    }
+      }
+      
 
+      console.log("PAYPAL CHECK", {
+        itemsSumCents,
+        shippingCents,
+        safeDiscountCents,
+        amountCents,
+        check: itemsSumCents + shippingCents - safeDiscountCents,
+      })
+      
     const orderResponse = await fetch(`${baseUrl}/v2/checkout/orders`, {
       method: 'POST',
       headers: {
