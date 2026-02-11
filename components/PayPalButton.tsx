@@ -58,29 +58,39 @@ export default function PayPalButton({
       }}
     >
       <div className={disabled || isProcessing ? 'opacity-50 pointer-events-none' : ''}>
-        <PayPalButtons
-          disabled={disabled || isProcessing}
-          createOrder={async () => {
-            try {
-              setIsProcessing(true)
-              if (onBeforePayment) {
-                onBeforePayment()
-              }
-              const orderPayload = getOrderPayload ? await getOrderPayload() : null
-              const response = await fetch('/api/paypal/create-order', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  amount,
-                  itemTotal,
-                  shippingTotal,
-                  reference,
-                  currency: 'EUR',
-                  ...(orderPayload && { orderPayload }),
-                }),
-              })
+  <PayPalButtons
+    disabled={disabled || isProcessing}
+    createOrder={async () => {
+      try {
+        setIsProcessing(true)
+        if (onBeforePayment) {
+          onBeforePayment()
+        }
+
+        const orderPayload = getOrderPayload ? await getOrderPayload() : null
+
+        // ✅ Remise en centimes (amount = total final)
+        const discountCents = Math.max(
+          0,
+          Math.round((Number(itemTotal) + Number(shippingTotal) - Number(amount)) * 100)
+        )
+
+        const response = await fetch('/api/paypal/create-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount,
+            itemTotal,
+            shippingTotal,
+            discountCents, // ✅ envoyé au backend
+            reference,
+            currency: 'EUR',
+            ...(orderPayload && { orderPayload }),
+          }),
+        })
+
 
               if (!response.ok) {
                 const error = await response.json()
