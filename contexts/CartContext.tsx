@@ -191,79 +191,88 @@ export function CartProvider({ children }: { children: ReactNode }) {
    *  “le plus récent gagne” : localStorage.meta.updatedAt vs remote.updated_at
    *  ========================= */
   useEffect(() => {
-    let cancelled = false
-
-    ;(async () => {
-      const userId = await getUserId()
-      if (!userId) return // pas connecté => pas de cross-device
-
-      // Récupère le remote le plus récent
-      const { data, error } = await supabase
+    let subscription: any = null
+  
+    const runMergeAndEnableSync = async () => {
+      const { data } = await supabase.auth.getUser()
+      const userId = data?.user?.id ?? null
+  
+      if (!userId) {
+        isLoadedFromDb.current = false
+        return
+      }
+  
+      const { data: row, error } = await supabase
         .from('carts')
         .select('items, updated_at')
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle()
-
-      if (cancelled) return
-
+  
       if (error) {
-        console.error('[CartContext] load cart from supabase error:', error)
-        // même en cas d'erreur, on ne bloque pas le local
+        console.error('[CartContext] load cart error:', error)
         isLoadedFromDb.current = true
         return
       }
-
+  
       const local = readLocalCart()
-      const remoteItems = (data?.items ?? null) as CartItem[] | null
-      const remoteTs = data?.updated_at ? Date.parse(data.updated_at) : 0
+      const remoteItems = (row?.items ?? null) as CartItem[] | null
+      const remoteTs = row?.updated_at ? Date.parse(row.updated_at) : 0
       const localTs = local.updatedAt || 0
-
-      // Aucun panier remote : push local (si existe)
+  
       if (!remoteItems) {
         isLoadedFromDb.current = true
-        if (local.items && Array.isArray(local.items) && local.items.length > 0) {
-          // push (debounced via effect cartItems)
+        if (local.items && local.items.length > 0) {
           setCartItems(managePromoItems(local.items))
         }
         return
       }
-
-      // Aucun panier local
+  
       if (!local.items) {
         lastAppliedRemoteTs.current = remoteTs
         const normalized = managePromoItems(remoteItems)
         setCartItems(normalized)
         writeLocalCart(normalized, remoteTs)
-        lastLocalTs.current = remoteTs
         isLoadedFromDb.current = true
         return
       }
-
-      // Les deux existent : le plus récent gagne
+  
       if (remoteTs > localTs) {
         lastAppliedRemoteTs.current = remoteTs
         const normalized = managePromoItems(remoteItems)
         setCartItems(normalized)
         writeLocalCart(normalized, remoteTs)
-        lastLocalTs.current = remoteTs
       } else {
-        // local gagne => on garde le local (déjà en state), et on laissera le save effect pousser
         const normalized = managePromoItems(local.items)
         setCartItems(normalized)
         writeLocalCart(normalized, localTs || Date.now())
-        lastLocalTs.current = localTs || Date.now()
       }
-
+  
       isLoadedFromDb.current = true
-    })()
-
+    }
+  
+    // Au démarrage
+    runMergeAndEnableSync()
+  
+    // À chaque login / logout
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        runMergeAndEnableSync()
+      }
+      if (event === 'SIGNED_OUT') {
+        isLoadedFromDb.current = false
+      }
+    })
+  
+    subscription = data?.subscription
+  
     return () => {
-      cancelled = true
+      subscription?.unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  
 
   /** =========================
    *  2) Local persist + Supabase sync (debounce 700ms)
