@@ -292,7 +292,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     lastLocalTs.current = ts
 
     // Supabase: seulement si connecté + merge déjà fait
-    if (!isLoadedFromDb.current) return
 
     if (saveTimer.current) clearTimeout(saveTimer.current)
 
@@ -310,6 +309,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
           // refresh 48h à chaque write
           expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
         }
+
+        console.log('[CartContext] syncing to supabase...', { userId, count: normalized.length })
 
         const { error } = await supabase.from('carts').upsert(payload, { onConflict: 'user_id' })
 
