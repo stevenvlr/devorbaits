@@ -68,14 +68,26 @@ export default function PayPalButton({
         }
 
         const orderPayload = getOrderPayload ? await getOrderPayload() : null
+
+        
         console.log("DEBUG orderPayload =", orderPayload)
         console.log("DEBUG orderPayload.pickupPoint =", orderPayload?.pickupPoint)
+
         
         // ✅ Remise en centimes (amount = total final)
-        const discountCents = Math.max(
-          0,
-          Math.round((Number(itemTotal) + Number(shippingTotal) - Number(amount)) * 100)
-        )
+        const toCents = (v: any) => Math.round(Number(v) * 100)
+
+        const itemTotalCents = toCents(itemTotal)
+        const shippingCents = toCents(shippingTotal)
+        const finalCents = toCents(amount)
+        
+        // discount = (items + shipping) - final
+        const discountCents = Math.max(0, itemTotalCents + shippingCents - finalCents)
+        
+        // (optionnel mais utile) garde une cohérence parfaite
+        const amountNormalized = (finalCents / 100).toFixed(2)
+        
+        console.log("CHECK cents", { itemTotalCents, shippingCents, finalCents, discountCents, amountNormalized })
 
         const response = await fetch('/api/paypal/create-order', {
           method: 'POST',
@@ -83,14 +95,15 @@ export default function PayPalButton({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            amount,
+            amount: amountNormalized,
             itemTotal,
             shippingTotal,
-            discountCents, // ✅ envoyé au backend
+            discountCents,
             reference,
             currency: 'EUR',
             ...(orderPayload && { orderPayload }),
           }),
+          
         })
 
 
