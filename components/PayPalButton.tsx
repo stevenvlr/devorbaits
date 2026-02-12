@@ -80,13 +80,22 @@ export default function PayPalButton({
 
         const itemTotalCents = toCents(itemTotal)
         const shippingCents = toCents(shippingTotal)
-        const finalCents = toCents(amount)
+        
+        let finalCents = toCents(amount)
         
         // discount = (items + shipping) - final
-        const discountCents = Math.max(0, itemTotalCents + shippingCents - finalCents)
+        let discountCents = itemTotalCents + shippingCents - finalCents
         
-        // (optionnel mais utile) garde une cohérence parfaite
+        // ✅ si final est trop haut (arrondi), on force final à la somme et discount à 0
+        if (discountCents < 0) {
+          finalCents = itemTotalCents + shippingCents
+          discountCents = 0
+        } else {
+          discountCents = Math.max(0, discountCents)
+        }
+        
         const amountNormalized = (finalCents / 100).toFixed(2)
+        
         
         console.log("CHECK cents", { itemTotalCents, shippingCents, finalCents, discountCents, amountNormalized })
 
