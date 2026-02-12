@@ -68,6 +68,7 @@ export default function PayPalButton({
         }
 
         const orderPayload = getOrderPayload ? await getOrderPayload() : null
+        console.log("DEBUG pickupPoint =", orderPayload?.pickupPoint)
 
         
         console.log("DEBUG orderPayload =", orderPayload)
@@ -127,6 +128,7 @@ export default function PayPalButton({
               setIsProcessing(true)
               console.log('🔄 Capture PayPal - Order ID:', data.orderID)
               const orderPayload = getOrderPayload ? await getOrderPayload() : null
+              
 
               const response = await fetch('/api/paypal/capture-order', {
                 method: 'POST',
