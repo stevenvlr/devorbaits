@@ -736,9 +736,14 @@ export default function CheckoutPage() {
       : 'home'
     let paypalPickupPoint: OrderPickupPoint | null = null
     if (paypalDeliveryType === 'relay') {
-      if (boxtalParcelPoint) paypalPickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
-      else if (chronopostRelaisPoint) paypalPickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
+      if (boxtalParcelPoint) {
+        paypalPickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
+      } else if (chronopostRelaisPoint) {
+        console.log("DEBUG chronopostRelaisPoint =", chronopostRelaisPoint)
+        paypalPickupPoint = buildOrderPickupPointFromChronopost(chronopostRelaisPoint)
+      }
     }
+    
     return {
       reference: currentRef,
       items: orderItems,
