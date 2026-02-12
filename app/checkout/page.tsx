@@ -734,7 +734,12 @@ export default function CheckoutPage() {
       : retraitMode === 'wavignies-rdv' ? 'pickup_wavignies'
       : retraitMode === 'amicale-blanc' ? 'pickup_apb'
       : 'home'
+    
     let paypalPickupPoint: OrderPickupPoint | null = null
+    
+    // ✅ LOG POUR SAVOIR POURQUOI ÇA NE PASSE PAS
+    console.log("DEBUG relay check =", { retraitMode, paypalDeliveryType, chronopostRelaisPoint, boxtalParcelPoint })
+    
     if (paypalDeliveryType === 'relay') {
       if (boxtalParcelPoint) {
         paypalPickupPoint = buildOrderPickupPointFromBoxtal(boxtalParcelPoint)
