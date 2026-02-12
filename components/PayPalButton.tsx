@@ -68,7 +68,9 @@ export default function PayPalButton({
         }
 
         const orderPayload = getOrderPayload ? await getOrderPayload() : null
-
+        console.log("DEBUG orderPayload =", orderPayload)
+        console.log("DEBUG orderPayload.pickupPoint =", orderPayload?.pickupPoint)
+        
         // ✅ Remise en centimes (amount = total final)
         const discountCents = Math.max(
           0,
