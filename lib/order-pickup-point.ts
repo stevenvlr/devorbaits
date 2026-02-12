@@ -29,10 +29,43 @@ export function buildOrderPickupPointFromBoxtal(p: {
   rawData?: any
 }): OrderPickupPoint {
   const addr = p.address || (p.rawData && p.rawData.address) || {}
-  const street = addr.street || addr.address || (p.rawData && p.rawData.address && p.rawData.address.street) || ''
-  const postalCode = addr.postalCode || addr.postal_code || addr.zipCode || (p.rawData && p.rawData.address && p.rawData.address.postalCode) || ''
-  const city = addr.city || addr.ville || (p.rawData && p.rawData.address && p.rawData.address.city) || ''
-  const country = addr.country || addr.countryCode || (p.rawData && p.rawData.address && p.rawData.address.country) || 'FR'
+  const loc = (p.rawData && (p.rawData.location || (p.rawData.rawData && p.rawData.rawData.location))) || {}
+  
+  // 1) street
+  const street =
+    addr.street ||
+    addr.address ||
+    loc.street ||
+    (p.rawData && p.rawData.address && p.rawData.address.street) ||
+    ''
+  
+  // 2) postal code
+  const postalCode =
+    addr.postalCode ||
+    addr.postal_code ||
+    addr.zipCode ||
+    loc.zipCode ||
+    loc.postalCode ||
+    loc.postal_code ||
+    (p.rawData && p.rawData.address && p.rawData.address.postalCode) ||
+    ''
+  
+  // 3) city
+  const city =
+    addr.city ||
+    addr.ville ||
+    loc.city ||
+    (p.rawData && p.rawData.address && p.rawData.address.city) ||
+    ''
+  
+  // 4) country
+  const country =
+    addr.country ||
+    addr.countryCode ||
+    loc.country ||
+    (p.rawData && p.rawData.address && p.rawData.address.country) ||
+    'FR'
+  
   return {
     id: String(p.code ?? '').trim(),
     network: String(p.network ?? 'mondialrelay').trim() || 'mondialrelay',
