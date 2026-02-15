@@ -143,6 +143,42 @@ export default function Home() {
         </div>
       </section>
 
+{/* Savoir-Faire Artisanal */}
+<section className="py-20 bg-noir-900">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-4xl font-bold text-center mb-12 bg-gradient-to-r from-white via-gray-200 to-white bg-clip-text text-transparent">
+            Notre Savoir-Faire Artisanal
+          </h2>
+          
+          <div className="space-y-8 text-center">
+            <p className="text-gray-300 text-lg leading-relaxed">
+              Chez Devorbaits, nos <span className="font-semibold text-white">bouillettes artisanales</span>, 
+              <span className="font-semibold text-white"> équilibrées</span> et 
+              <span className="font-semibold text-white"> pop-ups duo</span> sont fabriqués entièrement à la main 
+              avec passion et expertise. Notre processus de fabrication artisanale garantit des appâts 
+              de qualité supérieure, conçus spécifiquement pour la pêche à la carpe en France.
+            </p>
+            
+            <div className="h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
+            
+            <p className="text-gray-300 text-lg leading-relaxed">
+              Nos bouillettes artisanales sont élaborées à partir d'ingrédients rigoureusement sélectionnés : 
+              farines de poisson premium et céréales moulues dans notre atelier. 
+              Le roulage artisanal à la main de chaque bouillette assure une densité et une consistance 
+              parfaites pour maximiser vos résultats en session.
+            </p>
+            
+            <div className="h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
+            
+            <p className="text-gray-300 text-lg leading-relaxed">
+              Notre gamme de fabrication artisanale comprend des bouillettes de fond stabilisées, des équilibrées 
+              et nos pop-ups duo flottants. Chaque appât est fabriqué artisanalement à la main en France 
+              pour répondre aux exigences des carpistes les plus passionnés. 
+              <span className="text-yellow-500 font-semibold"> Fabrication 100% artisanale française.</span>
+            </p>
+          </div>
+        </div>
+      </section>
       {/* Categories Preview */}
       <section className="py-20 bg-noir-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
