@@ -41,6 +41,12 @@ const nextConfig = {
         destination: '/bar-popup/',
         permanent: true,
       },
+      // Redirection générique pour tous les autres liens index.php
+      {
+        source: '/index.php',
+        destination: '/',
+        permanent: true,
+      },
     ]
   },
   
