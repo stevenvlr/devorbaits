@@ -12,8 +12,8 @@ import { Suspense } from 'react'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Devorbaits - Fabrication Française',
-  description: 'Gammes, pop-ups, équilibrés, huiles et farines pour la pêche à la carpe. Fabrication française de qualité.',
+  title: 'Bouillettes Artisanales pour Carpe | Devorbaits - Fabrication Française',
+  description: 'Bouillettes artisanales premium pour la pêche à la carpe. Fabrication 100% française, recettes maison, ingrédients de qualité. Livraison rapide.',
 }
 
 export default function RootLayout({
