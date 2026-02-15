@@ -19,7 +19,7 @@ export default function Footer() {
               />
             </div>
             <p className="text-gray-400 text-sm mb-4">
-              Appâts premium pour la pêche à la carpe. Fabrication française de qualité.
+            Bouillettes artisanales premium pour la pêche à la carpe. Fabrication française de qualité.
             </p>
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full">
               <Factory className="w-3 h-3 text-yellow-500" />

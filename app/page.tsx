@@ -80,7 +80,7 @@ export default function Home() {
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-gray-200 to-white bg-clip-text text-transparent">
-            Appâts Premium pour la Pêche à la Carpe
+           Bouillettes Artisanales Premium pour la Pêche à la Carpe
           </h1>
           
           <p className="text-xl md:text-2xl text-gray-400 mb-12 max-w-3xl mx-auto">
@@ -114,9 +114,9 @@ export default function Home() {
               <div className="inline-flex items-center justify-center w-16 h-16 bg-yellow-500/10 rounded-full mb-4">
                 <Factory className="w-8 h-8 text-yellow-500" />
               </div>
-              <h1 className="text-xl font-bold mb-3">Fabrication Française</h1>
+              <h1 className="text-xl font-bold mb-3">Fabrication Artisanale Française</h1>
               <p className="text-gray-400">
-                Tous nos produits sont fabriqués en France avec des ingrédients de qualité supérieure.
+              Toutes nos bouillettes sont fabriquées artisanalement en France avec des ingrédients de qualité supérieure sélectionnés à la main.
               </p>
             </div>
 
@@ -149,7 +149,7 @@ export default function Home() {
           <h2 className="text-4xl font-bold text-center mb-12">Nos Catégories</h2>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { name: 'Gammes', href: '/categories/bouillettes', desc: 'Bouillettes, équilibrées, boosters, huiles, farines...' },
+              { name: 'Gammes', href: '/categories/bouillettes', desc: 'Bouillettes artisanales, équilibrées, boosters, huiles, farines...' },
               { name: 'Pop-up Duo', href: '/categories/popups', desc: 'Appâts flottants personnalisables' },
               { name: 'Huiles et liquides', href: '/categories/huiles', desc: 'Huiles d\'attraction' },
               { name: 'Bar à Pop-up', href: '/bar-popup', desc: 'Personnalisation sur mesure' },
