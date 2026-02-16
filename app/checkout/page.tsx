@@ -1,5 +1,6 @@
 'use client'
 
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -1189,6 +1190,16 @@ export default function CheckoutPage() {
 
   return (
     <>
+<style dangerouslySetInnerHTML={{__html: `
+  @media (max-width: 1023px) {
+    .mobile-flex-container { display: flex !important; flex-direction: column !important; }
+    .mobile-flex-container > .lg\\:col-span-2 { display: contents !important; }
+    .order-1 { order: 1 !important; }
+    .order-2 { order: 2 !important; }
+    .order-3 { order: 3 !important; }
+    .order-4 { order: 4 !important; }
+  }
+`}} />
     <div className="min-h-screen bg-noir-950 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
@@ -1206,14 +1217,13 @@ export default function CheckoutPage() {
           <p className="text-lg text-gray-400">Choisissez comment vous souhaitez recevoir votre commande</p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Colonne principale - Liste des produits et choix de retrait */}
+        <div className="mobile-flex-container flex flex-col lg:grid lg:grid-cols-3 gap-8">
+   {/* Colonne principale - Liste des produits et choix de retrait */}
           <div className="lg:col-span-2 space-y-6">
             {/* Liste des produits */}
-            <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6">
+<div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6 order-1 lg:order-none">
               <h2 className="text-2xl font-bold mb-6">Vos produits</h2>
-              <div className="space-y-4">
-                {cartItems.map((item) => {
+              <div className="space-y-4">                {cartItems.map((item) => {
                   const availableAtAmicale = isAvailableAtAmicale(item)
                   // Trouver la réduction du code promo pour cet article
                   const promoItemDiscount = promoValidation?.appliedItems?.find(ai => ai.itemId === item.id)?.discount || 0
@@ -1294,9 +1304,9 @@ export default function CheckoutPage() {
             </div>
 
             {/* Choix du mode de retrait global */}
-            <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6">
-              <h2 className="text-2xl font-bold mb-6">Mode de retrait</h2>
-              
+<div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6 order-3 lg:order-none">  
+<h2 className="text-2xl font-bold mb-6">Mode de retrait</h2>
+
               {/* Message informatif selon le poids */}
               {(() => {
                 const country = livraisonAddress.pays || 'FR'
@@ -1556,8 +1566,7 @@ export default function CheckoutPage() {
               </div>
 
               {/* Choix du mode de paiement */}
-              <div className={`border-t border-noir-700 pt-8 mt-6 ${moneticoWidget ? 'opacity-30 pointer-events-none' : ''}`}>
-                <h3 className="font-semibold flex items-center gap-3 mb-8 text-2xl">
+              <div className={`border-t border-noir-700 pt-8 mt-6 order-4 lg:order-none ${moneticoWidget ? 'opacity-30 pointer-events-none' : ''}`}>               <h3 className="font-semibold flex items-center gap-3 mb-8 text-2xl">
                   <Wallet className="w-7 h-7 text-yellow-500" />
                   Mode de paiement
                 </h3>
@@ -2307,9 +2316,9 @@ export default function CheckoutPage() {
           </div>
 
           {/* Colonne latérale - Résumé et informations */}
-          <div className="lg:sticky lg:top-24 h-fit">
-            <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6 space-y-6">
-              <h2 className="text-2xl font-bold mb-4">Résumé</h2>
+<div className="lg:sticky lg:top-24 h-fit order-2 lg:order-none">
+  <div className="bg-noir-800/50 border border-noir-700 rounded-xl p-6 space-y-6">
+    <h2 className="text-2xl font-bold mb-4">Résumé</h2>
 
               {/* Code promo */}
               <div className="space-y-3 border-b border-noir-700 pb-4">
